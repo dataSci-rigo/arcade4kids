@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ARCADE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{
+  height:100%;height:100dvh;
+  overflow:hidden;
+  background:#06060e;
+  font-family:'Press Start 2P','Courier New',monospace;
+  color:#fff;
+  user-select:none;-webkit-user-select:none;
+}
+
+/* ═══ SPLASH / MENU ═══ */
+#splash{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:0;
+  z-index:100;
+  overflow-y:auto;
+  padding:20px 16px;
+}
+
+/* Scanline overlay */
+#splash::before{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(
+    0deg,
+    rgba(0,0,0,.12) 0px,
+    rgba(0,0,0,.12) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  pointer-events:none;
+  z-index:200;
+}
+
+/* Animated background grid */
+#bg-canvas{
+  position:fixed;inset:0;
+  z-index:-1;
+}
+
+/* Title block */
+.title-block{
+  text-align:center;
+  margin-bottom:clamp(16px,4vh,40px);
+  animation:fadeDown .6s ease-out both;
+}
+@keyframes fadeDown{
+  from{opacity:0;transform:translateY(-20px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.title-block h1{
+  font-size:clamp(28px,7vw,56px);
+  letter-spacing:.15em;
+  color:#ffee00;
+  text-shadow:
+    0 0 10px rgba(255,238,0,.6),
+    0 0 40px rgba(255,170,0,.3),
+    0 4px 0 #b8a000,
+    0 5px 0 #8a7800;
+  line-height:1.3;
+}
+.title-sub{
+  font-size:clamp(7px,1.8vw,11px);
+  letter-spacing:.35em;
+  color:#556;
+  margin-top:8px;
+}
+
+/* Game cards container */
+.cards{
+  display:flex;
+  gap:clamp(12px,3vw,28px);
+  flex-wrap:wrap;
+  justify-content:center;
+  margin-bottom:clamp(16px,3vh,32px);
+}
+
+/* Individual game card */
+.card{
+  position:relative;
+  width:clamp(150px,40vw,260px);
+  background:#0a0a18;
+  border:2px solid #1a1a3a;
+  border-radius:12px;
+  padding:0;
+  cursor:pointer;
+  outline:none;
+  overflow:hidden;
+  transition:transform .15s,border-color .2s,box-shadow .2s;
+  animation:cardIn .5s ease-out both;
+}
+.card:nth-child(2){animation-delay:.12s}
+@keyframes cardIn{
+  from{opacity:0;transform:translateY(30px) scale(.95)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+.card:hover,.card:focus-visible{
+  transform:translateY(-4px) scale(1.03);
+  border-color:#ffee00;
+  box-shadow:0 0 24px rgba(255,238,0,.15),0 8px 32px rgba(0,0,0,.5);
+}
+.card:active{
+  transform:translateY(-1px) scale(.98);
+}
+
+/* Card preview area */
+.card-preview{
+  height:clamp(90px,22vw,140px);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  overflow:hidden;
+}
+.card-preview canvas{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+}
+
+/* Card info */
+.card-info{
+  padding:clamp(10px,2.5vw,18px) clamp(10px,2.5vw,16px);
+  border-top:1px solid #1a1a3a;
+  background:#08081a;
+}
+.card-title{
+  font-size:clamp(10px,2.6vw,15px);
+  letter-spacing:.12em;
+  margin-bottom:6px;
+}
+.card-desc{
+  font-size:clamp(6px,1.5vw,8px);
+  color:#667;
+  letter-spacing:.06em;
+  line-height:1.6;
+}
+
+/* Card accent stripe */
+.card::after{
+  content:'';
+  position:absolute;bottom:0;left:0;right:0;
+  height:3px;
+  transition:opacity .2s;
+  opacity:.6;
+}
+.card:hover::after,.card:focus-visible::after{opacity:1}
+.card[data-game="racer"]::after{background:linear-gradient(90deg,#33cc33,#ffdd00)}
+.card[data-game="maze"]::after{background:linear-gradient(90deg,#0066ff,#00ccff)}
+
+/* Color accents per game */
+.card[data-game="racer"] .card-title{color:#44ee44}
+.card[data-game="maze"] .card-title{color:#00ccff}
+
+/* Footer hint */
+.footer-hint{
+  font-size:clamp(6px,1.5vw,9px);
+  color:#334;
+  letter-spacing:.2em;
+  text-align:center;
+  animation:fadeDown .6s .3s ease-out both;
+}
+.device-badge{
+  display:inline-block;
+  background:#111;
+  border:1px solid #222;
+  border-radius:4px;
+  padding:3px 8px;
+  margin-top:6px;
+  font-size:clamp(6px,1.4vw,8px);
+  color:#556;
+  letter-spacing:.1em;
+}
+
+/* ═══ GAME FRAME ═══ */
+#game-frame-wrap{
+  position:absolute;inset:0;
+  display:none;
+  flex-direction:column;
+  z-index:50;
+  background:#000;
+}
+#game-frame{
+  flex:1;
+  width:100%;
+  border:none;
+}
+#frame-back{
+  position:absolute;
+  top:max(6px,env(safe-area-inset-top));
+  left:8px;
+  z-index:60;
+  background:rgba(0,0,0,.75);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  border:1px solid #333;
+  border-radius:6px;
+  padding:8px 14px;
+  font-family:'Press Start 2P','Courier New',monospace;
+  font-size:clamp(7px,1.8vw,10px);
+  color:#aaa;
+  letter-spacing:.1em;
+  cursor:pointer;
+  outline:none;
+  transition:color .15s,border-color .15s;
+}
+#frame-back:hover,#frame-back:focus-visible{color:#ffee00;border-color:#ffee00}
+#frame-back:active{transform:scale(.95)}
+</style>
+</head>
+<body>
+
+<!-- ═══ SPLASH SCREEN ═══ -->
+<div id="splash">
+  <canvas id="bg-canvas"></canvas>
+
+  <div class="title-block">
+    <h1>ARCADE</h1>
+    <div class="title-sub">SELECT A GAME TO PLAY</div>
+  </div>
+
+  <div class="cards">
+    <div class="card" data-game="racer" tabindex="0" role="button" aria-label="Play Endless Runner">
+      <div class="card-preview"><canvas id="prev-racer"></canvas></div>
+      <div class="card-info">
+        <div class="card-title">ENDLESS RUNNER</div>
+        <div class="card-desc">3 THEMES · DODGE OBSTACLES<br>SURVIVE THE TUNNEL</div>
+      </div>
+    </div>
+    <div class="card" data-game="maze" tabindex="0" role="button" aria-label="Play Maze Muncher">
+      <div class="card-preview"><canvas id="prev-maze"></canvas></div>
+      <div class="card-info">
+        <div class="card-title">MAZE MUNCHER</div>
+        <div class="card-desc">EAT DOTS · BEAT THE CLOCK<br>FIND THE EXIT</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-hint">
+    TAP A GAME TO PLAY
+    <br>
+    <span class="device-badge" id="device-badge">DETECTING...</span>
+  </div>
+</div>
+
+<!-- ═══ GAME IFRAME ═══ -->
+<div id="game-frame-wrap">
+  <button id="frame-back" aria-label="Back to menu">◀ BACK</button>
+  <iframe id="game-frame" allowfullscreen allow="autoplay"></iframe>
+</div>
+
+<script>
+'use strict';
+
+// ── Device detection ──────────────────────────────────────────────────────────
+const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+
+document.getElementById('device-badge').textContent = isMobile ? '📱 MOBILE MODE' : '🖥️ DESKTOP MODE';
+
+// ── Game file mapping ─────────────────────────────────────────────────────────
+const GAMES = {
+  racer: {
+    desktop: 'racer.html',
+    mobile:  'racer_mobile.html',
+  },
+  maze: {
+    desktop: 'maze_muncher.html',
+    mobile:  'maze_muncher_mobile.html',
+  },
+};
+
+// ── Launch game ───────────────────────────────────────────────────────────────
+const splash     = document.getElementById('splash');
+const frameWrap  = document.getElementById('game-frame-wrap');
+const frame      = document.getElementById('game-frame');
+const backBtn    = document.getElementById('frame-back');
+
+function launchGame(key) {
+  const src = isMobile ? GAMES[key].mobile : GAMES[key].desktop;
+  frame.src = src;
+  splash.style.display = 'none';
+  frameWrap.style.display = 'flex';
+}
+
+function returnToMenu() {
+  frame.src = 'about:blank';
+  frameWrap.style.display = 'none';
+  splash.style.display = 'flex';
+}
+
+document.querySelectorAll('.card').forEach(card => {
+  const handler = () => launchGame(card.dataset.game);
+  card.addEventListener('click', handler);
+  card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
+});
+
+backBtn.addEventListener('click', returnToMenu);
+
+// Keyboard shortcut: Escape returns to menu
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && frameWrap.style.display === 'flex') {
+    e.preventDefault();
+    returnToMenu();
+  }
+});
+
+// ── Background animation ──────────────────────────────────────────────────────
+(function initBG() {
+  const c = document.getElementById('bg-canvas');
+  const ctx = c.getContext('2d');
+  let w, h;
+
+  function resize() {
+    w = c.width  = window.innerWidth;
+    h = c.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Floating particles
+  const PARTICLES = Array.from({length: 50}, () => ({
+    x: Math.random() * 2000,
+    y: Math.random() * 2000,
+    r: Math.random() * 1.5 + 0.5,
+    vx: (Math.random() - 0.5) * 0.3,
+    vy: (Math.random() - 0.5) * 0.3,
+    hue: Math.random() * 60 + 40, // yellow-ish range
+    alpha: Math.random() * 0.15 + 0.05,
+  }));
+
+  function drawBG(t) {
+    ctx.fillStyle = '#06060e';
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(30,30,60,.15)';
+    ctx.lineWidth = 1;
+    const gridSize = 48;
+    const offX = (t * 8) % gridSize;
+    const offY = (t * 5) % gridSize;
+    for (let x = -gridSize + offX; x < w + gridSize; x += gridSize) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = -gridSize + offY; y < h + gridSize; y += gridSize) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    // Particles
+    for (const p of PARTICLES) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < -10) p.x = w + 10;
+      if (p.x > w + 10) p.x = -10;
+      if (p.y < -10) p.y = h + 10;
+      if (p.y > h + 10) p.y = -10;
+
+      const pulse = Math.sin(t * 2 + p.x * 0.01) * 0.5 + 0.5;
+      ctx.fillStyle = `hsla(${p.hue},70%,60%,${p.alpha + pulse * 0.06})`;
+      ctx.beginPath();
+      ctx.arc(p.x % w, p.y % h, p.r + pulse * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(() => drawBG(t + 0.016));
+  }
+  drawBG(0);
+})();
+
+// ── Card preview animations ───────────────────────────────────────────────────
+function initPreview(id, drawFn) {
+  const c = document.getElementById(id);
+  const ctx = c.getContext('2d');
+  const rect = c.parentElement.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width  = Math.round(rect.width * dpr);
+  c.height = Math.round(rect.height * dpr);
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+
+  function loop(t) {
+    drawFn(ctx, w, h, t / 1000);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+
+// Racer preview: scrolling tunnel walls
+initPreview('prev-racer', (ctx, w, h, t) => {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+
+  const rows = 60;
+  for (let i = 0; i < rows; i++) {
+    const y = (i / rows) * h;
+    const rh = h / rows + 1;
+    const drift = Math.sin((i + t * 40) * 0.08) * 20 + Math.sin((i + t * 25) * 0.13) * 12;
+    const gap = 38 + Math.sin(t * 0.5) * 6;
+    const center = w / 2 + drift;
+
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(0, y, center - gap, rh);
+    ctx.fillRect(center + gap, y, w - center - gap, rh);
+
+    // Wall edge highlight
+    ctx.fillStyle = '#444';
+    ctx.fillRect(center - gap - 1, y, 1, rh);
+    ctx.fillRect(center + gap, y, 1, rh);
+  }
+
+  // Fake player
+  const px = w / 2 + Math.sin(t * 2.5) * 16;
+  const py = h * 0.75;
+  ctx.fillStyle = '#44ee44';
+  ctx.fillRect(px - 3, py - 4, 6, 8);
+  ctx.fillStyle = '#33cc33';
+  ctx.fillRect(px - 2, py - 3, 4, 6);
+});
+
+// Maze preview: maze grid with moving pac-dot
+initPreview('prev-maze', (ctx, w, h, t) => {
+  ctx.fillStyle = '#00000e';
+  ctx.fillRect(0, 0, w, h);
+
+  const cols = 15, rows = 9;
+  const cw = w / cols, ch = h / rows;
+
+  // Simple deterministic maze pattern
+  const walls = [
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,
+    1,0,1,0,1,0,1,1,1,0,1,0,1,0,1,
+    1,0,1,0,0,0,0,0,1,0,0,0,1,0,1,
+    1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,
+    1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,
+    1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,
+    1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+  ];
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (walls[r * cols + c]) {
+        ctx.fillStyle = '#001166';
+        ctx.fillRect(c * cw, r * ch, cw, ch);
+        ctx.strokeStyle = '#0033cc';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(c * cw + 2, r * ch + 2, cw - 4, ch - 4);
+      } else {
+        // Dot
+        ctx.fillStyle = '#ccccff';
+        ctx.beginPath();
+        ctx.arc(c * cw + cw / 2, r * ch + ch / 2, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Animated player (pac-man)
+  const path = [{x:1,y:1},{x:3,y:1},{x:3,y:3},{x:5,y:3},{x:5,y:5},{x:7,y:5},{x:9,y:5},{x:9,y:3},{x:11,y:3},{x:13,y:3},{x:13,y:7},{x:1,y:7},{x:1,y:5},{x:1,y:3},{x:1,y:1}];
+  const speed = 1.8;
+  const totalLen = path.length;
+  const idx = (t * speed) % totalLen;
+  const i0 = Math.floor(idx), i1 = (i0 + 1) % totalLen;
+  const frac = idx - i0;
+  const px = (path[i0].x + (path[i1].x - path[i0].x) * frac) * cw + cw / 2;
+  const py = (path[i0].y + (path[i1].y - path[i0].y) * frac) * ch + ch / 2;
+
+  const mouth = 0.15 + Math.sin(t * 12) * 0.15;
+  const dx = path[i1].x - path[i0].x;
+  const dy = path[i1].y - path[i0].y;
+  const facing = Math.atan2(dy, dx);
+
+  ctx.fillStyle = '#ffee00';
+  ctx.shadowColor = '#ffee00';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.arc(px, py, Math.min(cw, ch) * 0.35, facing + mouth, facing + Math.PI * 2 - mouth);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Big Green - 8-bit Platformer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: monospace; }
+canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+#ui { position: absolute; top: 0; left: 50%; transform: translateX(-50%); color: #fff; font-size: 16px; padding: 6px 12px; display: flex; gap: 20px; pointer-events: none; text-shadow: 2px 2px #000; }
+#splash {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: #fff; gap: 18px;
+}
+#splash h1 { font-size: 48px; color: #4f8; text-shadow: 3px 3px #080, 0 0 20px #4f8; letter-spacing: 4px; }
+#splash h2 { font-size: 18px; color: #aaa; }
+.splash-row { display: flex; align-items: center; gap: 12px; font-size: 18px; }
+.splash-row label { color: #ccc; width: 160px; text-align: right; }
+.splash-btn {
+  background: #060; border: 3px solid #4f8; color: #4f8; font-size: 16px;
+  font-family: monospace; padding: 6px 14px; cursor: pointer; border-radius: 0;
+}
+.splash-btn:hover { background: #4f8; color: #000; }
+.lives-ctrl { display: flex; align-items: center; gap: 8px; }
+.lives-ctrl button { background: #333; border: 2px solid #888; color: #fff; font-size: 18px; width: 32px; height: 32px; cursor: pointer; font-family: monospace; }
+.lives-ctrl button:hover { background: #666; }
+#livesDisplay { font-size: 22px; color: #4f8; width: 24px; text-align: center; }
+.toggle-btn { background: #600; border: 3px solid #f44; color: #f44; font-size: 15px; font-family: monospace; padding: 4px 12px; cursor: pointer; min-width: 60px; }
+.toggle-btn.on { background: #060; border-color: #4f8; color: #4f8; }
+#startBtn { font-size: 28px; padding: 12px 48px; margin-top: 10px; background: #040; border: 4px solid #4f8; color: #4f8; font-family: monospace; cursor: pointer; letter-spacing: 2px; }
+#startBtn:hover { background: #4f8; color: #000; }
+#gameOver, #winScreen {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center;
+  color: #fff; gap: 20px;
+}
+#gameOver h1 { font-size: 56px; color: #f44; text-shadow: 3px 3px #800; }
+#winScreen h1 { font-size: 56px; color: #ff4; text-shadow: 3px 3px #880; }
+.screen-score { font-size: 24px; color: #aaa; }
+.restart-btn { font-size: 22px; padding: 10px 36px; background: #222; border: 3px solid #888; color: #fff; font-family: monospace; cursor: pointer; }
+.restart-btn:hover { background: #444; }
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <h1>BIG GREEN</h1>
+  <h2>8-bit Endless Platformer</h2>
+  <div class="splash-row">
+    <label>Lives:</label>
+    <div class="lives-ctrl">
+      <button id="livesDown">-</button>
+      <span id="livesDisplay">3</span>
+      <button id="livesUp">+</button>
+    </div>
+  </div>
+  <div class="splash-row">
+    <label>Crabs take lives:</label>
+    <button class="toggle-btn on" id="crabLivesToggle">YES</button>
+  </div>
+  <button id="startBtn">START GAME</button>
+  <div style="color:#555;font-size:13px;text-align:center;margin-top:8px;">
+    Arrow Keys / WASD: Move &amp; Jump &nbsp;|&nbsp; Z / Space: Throw shell<br>
+    Collect gems • Defeat crabs • Reach the star!
+  </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <span id="uiLives">♥♥♥</span>
+  <span id="uiScore">Score: 0</span>
+  <span id="uiZone">Zone: Surface</span>
+</div>
+
+<div id="gameOver">
+  <h1>GAME OVER</h1>
+  <div class="screen-score" id="goScore"></div>
+  <button class="restart-btn" id="goRestart">Play Again</button>
+</div>
+<div id="winScreen">
+  <h1>YOU WIN!</h1>
+  <div class="screen-score" id="winScore"></div>
+  <button class="restart-btn" id="winRestart">Play Again</button>
+</div>
+
+<script>
+'use strict';
+
+// ─── Audio ────────────────────────────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+function getACtx() {
+  if (!actx) actx = new AudioCtx();
+  return actx;
+}
+function playTone(freq, type, dur, vol=0.18, startFreq=null) {
+  try {
+    const a = getACtx();
+    const osc = a.createOscillator();
+    const gain = a.createGain();
+    osc.connect(gain); gain.connect(a.destination);
+    osc.type = type;
+    if (startFreq) {
+      osc.frequency.setValueAtTime(startFreq, a.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq, a.currentTime + dur * 0.5);
+    } else {
+      osc.frequency.setValueAtTime(freq, a.currentTime);
+    }
+    gain.gain.setValueAtTime(vol, a.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    osc.start(a.currentTime);
+    osc.stop(a.currentTime + dur);
+  } catch(e) {}
+}
+function sfxJump()   { playTone(440, 'square', 0.15, 0.12, 220); }
+function sfxLand()   { playTone(80,  'sawtooth', 0.08, 0.1); }
+function sfxThrow()  { playTone(660, 'square', 0.12, 0.1); playTone(330, 'square', 0.08, 0.08); }
+function sfxGem()    { playTone(880, 'sine', 0.18, 0.12, 660); }
+function sfxCrab()   { playTone(200, 'sawtooth', 0.2, 0.15); playTone(100,'square',0.15,0.1); }
+function sfxHurt()   { playTone(150, 'sawtooth', 0.3, 0.2, 400); }
+function sfxStar()   {
+  [523,659,784,1047].forEach((f,i) => setTimeout(()=>playTone(f,'sine',0.25,0.15), i*100));
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const TILE = 32;
+const COLS = 25; // visible columns
+const ROWS = 16; // visible rows
+const W = COLS * TILE;
+const H = ROWS * TILE;
+const GRAVITY = 0.55;
+const JUMP_FORCE = -13;
+const PLAYER_SPEED = 3.5;
+const SWIM_SPEED = 2.2;
+const LEVEL_LENGTH = 400; // tiles wide
+
+// ─── Canvas setup ─────────────────────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width  = W;
+canvas.height = H;
+// Scale to fit window
+function resize() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width  = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── Game state ───────────────────────────────────────────────────────────────
+let cfg = { lives: 3, crabLives: true };
+let state = {};
+
+function initState() {
+  state = {
+    score: 0,
+    lives: cfg.lives,
+    phase: 'game',     // 'game' | 'dead' | 'win'
+    deadTimer: 0,
+    cameraX: 0,
+    levelWidth: LEVEL_LENGTH * TILE,
+    player: null,
+    platforms: [],
+    caves: [],
+    crabs: [],
+    gems: [],
+    shells: [],
+    particles: [],
+    star: null,
+    // zone info
+    zoneName: 'Surface',
+    blocks: [],        // pushable blocks
+  };
+  generateLevel();
+  spawnPlayer();
+}
+
+// ─── Input ─────────────────────────────────────────────────────────────────────
+const keys = {};
+const justPressed = {};
+window.addEventListener('keydown', e => {
+  if (!keys[e.code]) justPressed[e.code] = true;
+  keys[e.code] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+function clearJust() { for (const k in justPressed) delete justPressed[k]; }
+
+// ─── Level Generation ─────────────────────────────────────────────────────────
+const SURFACE_FLOOR = 11; // row index of main floor (0=top)
+
+function generateLevel() {
+  state.platforms = [];
+  state.caves = [];
+  state.blocks = [];
+  state.crabs = [];
+  state.gems = [];
+  state.shells = [];
+
+  const LW = state.levelWidth;
+  const TW = Math.ceil(LW / TILE);
+
+  // Main floor tiles
+  for (let tx = 0; tx < TW; tx++) {
+    // Floor row
+    state.platforms.push({ x: tx*TILE, y: SURFACE_FLOOR*TILE, w: TILE, h: TILE, type: 'floor' });
+    // Dirt below floor
+    for (let dy = 1; dy < 5; dy++) {
+      state.platforms.push({ x: tx*TILE, y: (SURFACE_FLOOR+dy)*TILE, w: TILE, h: TILE, type: 'dirt' });
+    }
+  }
+
+  // Elevated platforms at random intervals
+  let px = 300;
+  while (px < LW - 600) {
+    const len = 3 + Math.floor(Math.random() * 5);
+    const row = SURFACE_FLOOR - 3 - Math.floor(Math.random() * 3);
+    for (let i = 0; i < len; i++) {
+      state.platforms.push({ x: (px/TILE + i)*TILE, y: row*TILE, w: TILE, h: TILE, type: 'platform' });
+    }
+    // Gem on platform
+    state.gems.push({ x: (px/TILE + Math.floor(len/2))*TILE + 8, y: row*TILE - 24, collected: false });
+    // Sometimes put a pushable block
+    if (Math.random() < 0.4) {
+      state.blocks.push(createBlock((px/TILE + Math.floor(len/2))*TILE, (row-1)*TILE));
+    }
+    px += 200 + Math.floor(Math.random() * 300);
+  }
+
+  // Underground caves
+  let cx = 400;
+  while (cx < LW - 800) {
+    const caveLen = 15 + Math.floor(Math.random() * 20);
+    const caveType = Math.random() < 0.4 ? 'water' : Math.random() < 0.5 ? 'lava' : 'normal';
+    const caveRow = SURFACE_FLOOR + 2;
+    const caveH = 5;
+    const entryCol = Math.floor(cx / TILE);
+
+    state.caves.push({
+      x: cx, y: caveRow * TILE, w: caveLen * TILE, h: caveH * TILE,
+      type: caveType, entryX: cx + TILE, entryY: caveRow * TILE
+    });
+
+    // Floor hole (entry to cave)
+    // Mark tiles in floor area as removed (we'll handle via cave rect)
+    // Remove tiles from surface floor down to cave top for both entry columns
+    for (let fi = 0; fi < 2; fi++) {
+      const holeX = cx + fi * TILE;
+      state.platforms = state.platforms.filter(p =>
+        !(p.x === holeX && p.y >= SURFACE_FLOOR * TILE && p.y < caveRow * TILE)
+      );
+    }
+
+    // Cave walls (sides)
+    for (let row2 = 0; row2 < caveH + 2; row2++) {
+      // Left wall
+      state.platforms.push({ x: cx - TILE, y: (caveRow + row2 - 1)*TILE, w: TILE, h: TILE, type: 'cave_wall' });
+    }
+
+    // Cave ceiling/floor (skip entry columns 0 and 1 so hole stays open)
+    for (let col2 = 0; col2 < caveLen; col2++) {
+      if (col2 >= 2) { // leave entry hole open
+        state.platforms.push({ x: cx + col2*TILE, y: (caveRow-1)*TILE, w: TILE, h: TILE, type: 'cave_ceil' });
+      }
+      state.platforms.push({ x: cx + col2*TILE, y: (caveRow+caveH)*TILE, w: TILE, h: TILE, type: 'cave_floor' });
+      if (caveType === 'lava') {
+        state.platforms.push({ x: cx + col2*TILE, y: (caveRow+caveH-1)*TILE, w: TILE, h: TILE, type: 'lava' });
+      }
+    }
+
+    // Exit hole: remove cave ceiling and all floor/dirt above, same range as entry
+    const exitCol = entryCol + caveLen - 2;
+    state.platforms = state.platforms.filter(p =>
+      !(p.x >= exitCol*TILE && p.x < (exitCol+2)*TILE &&
+        p.y >= SURFACE_FLOOR*TILE && p.y < caveRow*TILE)
+    );
+
+    // Gems in cave
+    for (let g = 0; g < caveLen - 2; g += 3) {
+      if (caveType !== 'lava') {
+        state.gems.push({ x: cx + (g+1)*TILE + 8, y: (caveRow+2)*TILE, collected: false });
+      }
+    }
+
+    cx += (caveLen + 10) * TILE + Math.floor(Math.random() * 400);
+  }
+
+  // Crabs on surface
+  for (let tx = 10; tx < TW - 10; tx += 15 + Math.floor(Math.random() * 15)) {
+    state.crabs.push(createCrab(tx * TILE, SURFACE_FLOOR * TILE - TILE));
+  }
+
+  // Win star
+  state.star = { x: (TW - 5) * TILE, y: (SURFACE_FLOOR - 2) * TILE, pulse: 0 };
+
+  // Extra gems on surface
+  for (let tx = 5; tx < TW - 5; tx += 8 + Math.floor(Math.random() * 6)) {
+    state.gems.push({ x: tx * TILE + 8, y: (SURFACE_FLOOR - 2) * TILE, collected: false });
+  }
+}
+
+function createBlock(x, y) {
+  return { x, y, w: TILE, h: TILE, vx: 0, vy: 0, onGround: false };
+}
+
+function createCrab(x, y) {
+  return { x, y, w: 28, h: 20, vx: -1.2, vy: 0, alive: true, shellTimer: 0, dir: -1 };
+}
+
+function spawnPlayer() {
+  state.player = {
+    x: 80, y: (SURFACE_FLOOR - 2) * TILE,
+    w: 24, h: 32,
+    vx: 0, vy: 0,
+    onGround: false,
+    inWater: false,
+    facingRight: true,
+    carrying: null,   // shell object
+    jumpBuffer: 0,
+    coyoteTime: 0,
+    wasOnGround: false,
+    invincible: 0,    // frames of invincibility
+    spawnX: 80, spawnY: (SURFACE_FLOOR - 2) * TILE,
+  };
+}
+
+// ─── AABB helpers ─────────────────────────────────────────────────────────────
+function overlap(a, b) {
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+function rectOverlap(ax,ay,aw,ah, bx,by,bw,bh) {
+  return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+}
+
+// Solid tile types
+const SOLID_TYPES = new Set(['floor','dirt','platform','cave_wall','cave_ceil','cave_floor','cave_wall_r']);
+
+function getSolidPlatforms() {
+  return state.platforms.filter(p => SOLID_TYPES.has(p.type));
+}
+
+function resolveEntityVsWorld(ent, solidList) {
+  // Move X then Y, resolve collisions
+  ent.x += ent.vx;
+  for (const p of solidList) {
+    if (overlap(ent, p)) {
+      if (ent.vx > 0) { ent.x = p.x - ent.w; ent.vx = 0; }
+      else if (ent.vx < 0) { ent.x = p.x + p.w; ent.vx = 0; }
+    }
+  }
+
+  const wasAbove = ent.vy < 0;
+  ent.y += ent.vy;
+  ent.onGround = false;
+  for (const p of solidList) {
+    if (overlap(ent, p)) {
+      if (ent.vy > 0) {
+        ent.y = p.y - ent.h;
+        ent.vy = 0;
+        ent.onGround = true;
+      } else if (wasAbove) {
+        ent.y = p.y + p.h;
+        ent.vy = 0;
+      }
+    }
+  }
+}
+
+// ─── Player update ────────────────────────────────────────────────────────────
+function updatePlayer(dt) {
+  const pl = state.player;
+  const solids = getSolidPlatforms();
+
+  // Check water/lava zone
+  pl.inWater = false;
+  pl.inLava = false;
+  for (const cave of state.caves) {
+    if (rectOverlap(pl.x, pl.y, pl.w, pl.h, cave.x, cave.y, cave.w, cave.h)) {
+      if (cave.type === 'water') pl.inWater = true;
+      if (cave.type === 'lava') pl.inLava = true;
+    }
+  }
+
+  // Lava damage
+  if (pl.inLava && pl.invincible <= 0) {
+    loseLife(true);
+    return;
+  }
+
+  if (pl.invincible > 0) pl.invincible--;
+
+  // Input
+  const left  = keys['ArrowLeft']  || keys['KeyA'];
+  const right = keys['ArrowRight'] || keys['KeyD'];
+  const jump  = keys['ArrowUp']    || keys['KeyW'] || keys['Space'];
+  const jumpP = justPressed['ArrowUp'] || justPressed['KeyW'] || justPressed['Space'];
+  const throwK = justPressed['KeyZ'] || justPressed['ShiftLeft'];
+
+  // Horizontal movement
+  const spd = pl.inWater ? SWIM_SPEED : PLAYER_SPEED;
+  if (left)  { pl.vx = -spd; pl.facingRight = false; }
+  else if (right) { pl.vx = spd;  pl.facingRight = true; }
+  else pl.vx *= 0.7;
+
+  // Don't allow going left past start
+  if (pl.x < 0) { pl.x = 0; pl.vx = 0; }
+
+  // Gravity
+  if (pl.inWater) {
+    pl.vy += GRAVITY * 0.3;
+    pl.vy = Math.max(-3, Math.min(pl.vy, 3));
+    if (jump) pl.vy -= 0.5;
+  } else {
+    pl.vy += GRAVITY;
+    if (pl.vy > 18) pl.vy = 18;
+  }
+
+  // Coyote time & jump buffer
+  if (pl.onGround) pl.coyoteTime = 8;
+  else if (pl.coyoteTime > 0) pl.coyoteTime--;
+
+  if (jumpP) pl.jumpBuffer = 8;
+  else if (pl.jumpBuffer > 0) pl.jumpBuffer--;
+
+  if (pl.jumpBuffer > 0 && pl.coyoteTime > 0 && !pl.inWater) {
+    pl.vy = JUMP_FORCE;
+    pl.coyoteTime = 0;
+    pl.jumpBuffer = 0;
+    sfxJump();
+  }
+
+  // Landing sound
+  const wasOnGround = pl.wasOnGround;
+
+  // Blocks interaction - player can push blocks
+  for (const blk of state.blocks) {
+    if (overlap(pl, blk)) {
+      if (pl.vx > 0 && pl.x + pl.w - pl.vx <= blk.x) {
+        blk.vx = pl.vx * 0.8;
+      } else if (pl.vx < 0 && pl.x - pl.vx >= blk.x + blk.w) {
+        blk.vx = pl.vx * 0.8;
+      }
+    }
+  }
+
+  resolveEntityVsWorld(pl, solids);
+
+  // Also resolve vs blocks (player on top of block)
+  for (const blk of state.blocks) {
+    const bRect = { x: blk.x, y: blk.y, w: blk.w, h: blk.h };
+    if (overlap(pl, bRect)) {
+      if (pl.vy > 0 && pl.y + pl.h - pl.vy * 1.1 <= blk.y) {
+        pl.y = blk.y - pl.h;
+        pl.vy = 0;
+        pl.onGround = true;
+      } else if (pl.vy < 0) {
+        pl.y = blk.y + blk.h;
+        pl.vy = 0;
+      } else if (pl.vx > 0) {
+        pl.x = blk.x - pl.w;
+        pl.vx = 0;
+        blk.vx = 2;
+      } else if (pl.vx < 0) {
+        pl.x = blk.x + blk.w;
+        pl.vx = 0;
+        blk.vx = -2;
+      }
+    }
+  }
+
+  if (!wasOnGround && pl.onGround) sfxLand();
+  pl.wasOnGround = pl.onGround;
+
+  // Throw shell
+  if (throwK && pl.carrying) {
+    const sh = pl.carrying;
+    sh.x = pl.x + (pl.facingRight ? pl.w + 2 : -sh.w - 2);
+    sh.y = pl.y + 8;
+    sh.vx = pl.facingRight ? 10 : -10;
+    sh.vy = -3;
+    sh.thrown = true;
+    sh.carrier = null;
+    pl.carrying = null;
+    sfxThrow();
+  }
+
+  // Pick up shell
+  if (!pl.carrying) {
+    for (const sh of state.shells) {
+      if (!sh.thrown && !sh.carrier && overlap(pl, sh)) {
+        sh.carrier = pl;
+        pl.carrying = sh;
+        break;
+      }
+    }
+  }
+
+  // Position carried shell
+  if (pl.carrying) {
+    const sh = pl.carrying;
+    sh.x = pl.x + (pl.facingRight ? pl.w - 4 : -sh.w + 4);
+    sh.y = pl.y + 10;
+  }
+
+  // Update carrying reference
+  if (pl.carrying && pl.carrying.carrier !== pl) {
+    pl.carrying = null;
+  }
+
+  // Collect gems
+  for (const g of state.gems) {
+    if (!g.collected && rectOverlap(pl.x,pl.y,pl.w,pl.h, g.x,g.y,16,16)) {
+      g.collected = true;
+      state.score += 100;
+      sfxGem();
+      spawnParticles(g.x+8, g.y+8, '#ff0', 8);
+    }
+  }
+
+  // Win condition
+  const st = state.star;
+  if (rectOverlap(pl.x,pl.y,pl.w,pl.h, st.x,st.y,32,32)) {
+    sfxStar();
+    endGame('win');
+  }
+
+  // Fall off screen
+  if (pl.y > H * 2) loseLife(false);
+}
+
+function updateBlocks() {
+  const solids = getSolidPlatforms();
+  for (const blk of state.blocks) {
+    blk.vy += GRAVITY;
+    if (blk.vy > 18) blk.vy = 18;
+    blk.vx *= 0.85;
+    resolveEntityVsWorld(blk, solids);
+    // Clamp
+    if (blk.x < 0) { blk.x = 0; blk.vx = 0; }
+  }
+}
+
+function updateCrabs() {
+  const solids = getSolidPlatforms();
+  for (const crab of state.crabs) {
+    if (!crab.alive) continue;
+    crab.vy += GRAVITY;
+    if (crab.vy > 18) crab.vy = 18;
+
+    crab.x += crab.vx;
+    // Check walls
+    for (const p of solids) {
+      if (overlap(crab, p)) {
+        if (crab.vx > 0) { crab.x = p.x - crab.w; crab.vx *= -1; }
+        else { crab.x = p.x + p.w; crab.vx *= -1; }
+      }
+    }
+    // Turn at edges: if no floor tile ahead, reverse
+    const aheadX = crab.vx > 0 ? crab.x + crab.w + 2 : crab.x - 2;
+    const belowY = (SURFACE_FLOOR + 1) * TILE;
+    const hasFloorAhead = solids.some(p => p.y === belowY && p.x < aheadX && p.x + p.w > aheadX);
+    if (crab.onGround && !hasFloorAhead) crab.vx *= -1;
+    if (crab.x < 20) { crab.vx = Math.abs(crab.vx); }
+    if (crab.x + crab.w > state.levelWidth - 20) { crab.vx = -Math.abs(crab.vx); }
+
+    crab.y += crab.vy;
+    crab.onGround = false;
+    for (const p of solids) {
+      if (overlap(crab, p)) {
+        if (crab.vy > 0) { crab.y = p.y - crab.h; crab.vy = 0; crab.onGround = true; }
+        else { crab.y = p.y + p.h; crab.vy = 0; }
+      }
+    }
+
+    // Player vs crab
+    const pl = state.player;
+    if (pl.invincible <= 0 && overlap(pl, crab)) {
+      // Stomp from above?
+      if (pl.vy > 0 && pl.y + pl.h - pl.vy * 1.1 < crab.y + crab.h * 0.4) {
+        killCrab(crab, pl.x + pl.w/2, crab.y);
+        pl.vy = JUMP_FORCE * 0.6;
+      } else {
+        if (cfg.crabLives) loseLife(false);
+        else {
+          pl.vx = pl.x < crab.x ? -5 : 5;
+          pl.vy = -6;
+          pl.invincible = 90;
+        }
+      }
+    }
+
+    // Shell vs crab
+    for (const sh of state.shells) {
+      if (sh.thrown && overlap(sh, crab)) {
+        killCrab(crab, sh.x + sh.w/2, crab.y);
+        sh.thrown = false; sh.vx = 0;
+      }
+    }
+  }
+}
+
+function killCrab(crab, px, py) {
+  crab.alive = false;
+  state.score += 200;
+  sfxCrab();
+  spawnParticles(px, py, '#f80', 10);
+  // Drop shell
+  state.shells.push({ x: crab.x, y: crab.y, w: 20, h: 16, vx: 0, vy: -4, thrown: false, carrier: null });
+}
+
+function updateShells() {
+  const solids = getSolidPlatforms();
+  for (const sh of state.shells) {
+    if (sh.carrier) continue;
+    sh.vy += GRAVITY * 0.7;
+    if (sh.vy > 12) sh.vy = 12;
+    resolveEntityVsWorld(sh, solids);
+    if (sh.onGround) { sh.vx *= 0.6; if (Math.abs(sh.vx) < 0.2) sh.vx = 0; }
+    // Remove if thrown and off screen far
+    if (sh.x < state.cameraX - 200 || sh.x > state.cameraX + W + 200) sh.thrown = false;
+  }
+}
+
+function updateParticles() {
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.2;
+    p.life--;
+    if (p.life <= 0) state.particles.splice(i, 1);
+  }
+}
+
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    state.particles.push({
+      x, y, vx: (Math.random()-0.5)*5, vy: (Math.random()-2)*4,
+      color, life: 20 + Math.floor(Math.random()*20), size: 4 + Math.floor(Math.random()*4)
+    });
+  }
+}
+
+function loseLife(isLava) {
+  sfxHurt();
+  spawnParticles(state.player.x + 12, state.player.y + 16, '#f44', 12);
+  state.lives--;
+  updateHUD();
+  if (state.lives <= 0) {
+    endGame('lose');
+  } else {
+    // Respawn
+    const pl = state.player;
+    pl.x = pl.spawnX; pl.y = pl.spawnY;
+    pl.vx = 0; pl.vy = 0;
+    pl.carrying = null;
+    pl.invincible = 120;
+    state.cameraX = Math.max(0, pl.x - W/3);
+  }
+}
+
+function endGame(result) {
+  state.phase = result;
+  if (result === 'win') {
+    document.getElementById('winScore').textContent = 'Score: ' + state.score;
+    document.getElementById('winScreen').style.display = 'flex';
+  } else {
+    document.getElementById('goScore').textContent = 'Score: ' + state.score;
+    document.getElementById('gameOver').style.display = 'flex';
+  }
+}
+
+// ─── Camera ───────────────────────────────────────────────────────────────────
+function updateCamera() {
+  const pl = state.player;
+  const targetX = pl.x - W * 0.3;
+  state.cameraX += (targetX - state.cameraX) * 0.1;
+  state.cameraX = Math.max(0, Math.min(state.cameraX, state.levelWidth - W));
+}
+
+// ─── HUD ──────────────────────────────────────────────────────────────────────
+function updateHUD() {
+  document.getElementById('uiLives').textContent = '♥'.repeat(Math.max(0, state.lives));
+  document.getElementById('uiScore').textContent = 'Score: ' + state.score;
+  // Zone
+  const pl = state.player;
+  let zone = 'Surface';
+  for (const cave of state.caves) {
+    if (pl && rectOverlap(pl.x, pl.y, pl.w, pl.h, cave.x, cave.y, cave.w, cave.h)) {
+      zone = cave.type === 'water' ? 'Water Cave' : cave.type === 'lava' ? 'Lava Cave' : 'Cave';
+    }
+  }
+  document.getElementById('uiZone').textContent = 'Zone: ' + zone;
+}
+
+// ─── Drawing ──────────────────────────────────────────────────────────────────
+// Pixel-art palette colors
+const COL = {
+  sky:      '#5090d8',
+  skyDark:  '#203870',
+  floor:    '#7b5c2e',
+  floorTop: '#4db35b',
+  dirt:     '#6a4a25',
+  platform: '#a07840',
+  platTop:  '#d4a460',
+  caveWall: '#3a2a1a',
+  caveCeil: '#2e2010',
+  caveFloor:'#3a2a1a',
+  water:    'rgba(20,80,200,0.5)',
+  waterDeep:'rgba(10,50,140,0.7)',
+  lava:     '#ff4400',
+  lavaGlow: '#ff8800',
+  gem:      '#ffdd00',
+  shell:    '#e8c87a',
+  crabBody: '#e05020',
+  crabEye:  '#fff',
+  star:     '#ffff00',
+  particle: '#fff',
+  bgMtn1:   '#304060',
+  bgMtn2:   '#203050',
+};
+
+function drawBackground() {
+  // Sky gradient (simple)
+  ctx.fillStyle = COL.sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // Simple clouds
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  const camOff = state.cameraX * 0.3;
+  for (let i = 0; i < 8; i++) {
+    const cx2 = ((i * 317 - camOff) % (W + 80)) - 40;
+    const cy2 = 40 + (i * 53) % 80;
+    drawCloud(cx2, cy2, 60 + (i*23)%40);
+  }
+
+  // Background mountains
+  ctx.fillStyle = COL.bgMtn2;
+  for (let i = 0; i < 6; i++) {
+    const mx = ((i * 380 - state.cameraX * 0.15) % (W + 120)) - 60;
+    drawMountain(mx, 160, 120, 100);
+  }
+  ctx.fillStyle = COL.bgMtn1;
+  for (let i = 0; i < 8; i++) {
+    const mx = ((i * 270 + 80 - state.cameraX * 0.25) % (W + 100)) - 50;
+    drawMountain(mx, 200, 90, 70);
+  }
+}
+
+function drawCloud(x, y, w) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, w/2, 18, 0, 0, Math.PI*2);
+  ctx.ellipse(x+w*0.25, y-10, w*0.3, 14, 0, 0, Math.PI*2);
+  ctx.ellipse(x-w*0.2, y-6, w*0.25, 12, 0, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function drawMountain(x, y, w, h) {
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w/2, y - h);
+  ctx.lineTo(x + w, y);
+  ctx.fill();
+}
+
+function drawTile(type, sx, sy) {
+  switch(type) {
+    case 'floor':
+      ctx.fillStyle = COL.floorTop;
+      ctx.fillRect(sx, sy, TILE, 6);
+      ctx.fillStyle = COL.floor;
+      ctx.fillRect(sx, sy+6, TILE, TILE-6);
+      // pixel detail
+      ctx.fillStyle = '#3a9a47';
+      ctx.fillRect(sx+2, sy+1, 4, 3);
+      ctx.fillRect(sx+14, sy+2, 5, 2);
+      break;
+    case 'dirt':
+      ctx.fillStyle = COL.dirt;
+      ctx.fillRect(sx, sy, TILE, TILE);
+      ctx.fillStyle = '#5a3c1c';
+      ctx.fillRect(sx+4, sy+8, 6, 4);
+      ctx.fillRect(sx+18, sy+18, 5, 3);
+      break;
+    case 'platform':
+      ctx.fillStyle = COL.platTop;
+      ctx.fillRect(sx, sy, TILE, 8);
+      ctx.fillStyle = COL.platform;
+      ctx.fillRect(sx, sy+8, TILE, TILE-8);
+      ctx.fillStyle = '#c09050';
+      ctx.fillRect(sx+2, sy+2, TILE-4, 3);
+      break;
+    case 'cave_wall':
+    case 'cave_wall_r':
+    case 'cave_ceil':
+    case 'cave_floor':
+      ctx.fillStyle = COL.caveWall;
+      ctx.fillRect(sx, sy, TILE, TILE);
+      ctx.fillStyle = '#2a1808';
+      ctx.fillRect(sx+4, sy+6, 8, 5);
+      ctx.fillRect(sx+16, sy+18, 7, 4);
+      break;
+    case 'lava':
+      const t = Date.now() / 200;
+      ctx.fillStyle = COL.lava;
+      ctx.fillRect(sx, sy, TILE, TILE);
+      ctx.fillStyle = COL.lavaGlow;
+      ctx.fillRect(sx+2+(Math.sin(t+sx*0.05)*3)|0, sy+2, 6, 4);
+      ctx.fillRect(sx+16+(Math.cos(t+sx*0.07)*3)|0, sy+6, 8, 4);
+      break;
+  }
+}
+
+function worldToScreen(wx, wy) {
+  return { sx: wx - state.cameraX, sy: wy };
+}
+
+function drawPlatforms() {
+  const cx = state.cameraX;
+  for (const p of state.platforms) {
+    if (p.x + p.w < cx - 10 || p.x > cx + W + 10) continue;
+    const sx = p.x - cx;
+    drawTile(p.type, sx, p.y);
+  }
+}
+
+function drawCaves() {
+  const cx = state.cameraX;
+  for (const cave of state.caves) {
+    if (cave.x + cave.w < cx || cave.x > cx + W) continue;
+    const sx = cave.x - cx;
+    if (cave.type === 'water') {
+      ctx.fillStyle = COL.waterDeep;
+      ctx.fillRect(sx, cave.y, cave.w, cave.h);
+      // Animated water surface
+      ctx.fillStyle = COL.water;
+      const t = Date.now() / 400;
+      for (let wi = 0; wi < cave.w; wi += 8) {
+        const wh = 6 + Math.sin(t + wi * 0.2) * 3;
+        ctx.fillRect(sx + wi, cave.y, 8, wh);
+      }
+    } else if (cave.type === 'lava') {
+      ctx.fillStyle = '#1a0800';
+      ctx.fillRect(sx, cave.y, cave.w, cave.h);
+    } else {
+      ctx.fillStyle = '#160e06';
+      ctx.fillRect(sx, cave.y, cave.w, cave.h);
+    }
+  }
+}
+
+function drawBlocks() {
+  const cx = state.cameraX;
+  for (const blk of state.blocks) {
+    if (blk.x + blk.w < cx || blk.x > cx + W) continue;
+    const sx = blk.x - cx;
+    ctx.fillStyle = '#8080c0';
+    ctx.fillRect(sx, blk.y, blk.w, blk.h);
+    ctx.fillStyle = '#a0a0e0';
+    ctx.fillRect(sx+2, blk.y+2, blk.w-4, 6);
+    ctx.fillStyle = '#6060a0';
+    ctx.fillRect(sx, blk.y+blk.h-4, blk.w, 4);
+    // "?" or face pixel art
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(sx+12, blk.y+8, 8, 16);
+    ctx.fillStyle = '#8080c0';
+    ctx.fillRect(sx+14, blk.y+10, 4, 4);
+    ctx.fillRect(sx+14, blk.y+18, 4, 2);
+  }
+}
+
+function drawGems() {
+  const cx = state.cameraX;
+  const t = Date.now() / 300;
+  for (const g of state.gems) {
+    if (g.collected) continue;
+    if (g.x + 16 < cx || g.x > cx + W) continue;
+    const sx = g.x - cx;
+    const bob = Math.sin(t + g.x * 0.05) * 3;
+    // Diamond shape
+    ctx.fillStyle = '#ffee00';
+    ctx.beginPath();
+    ctx.moveTo(sx+8, g.y + bob);
+    ctx.lineTo(sx+16, g.y+8 + bob);
+    ctx.lineTo(sx+8, g.y+16 + bob);
+    ctx.lineTo(sx, g.y+8 + bob);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff8a0';
+    ctx.fillRect(sx+5, g.y+5 + bob, 4, 4);
+  }
+}
+
+function drawShells() {
+  const cx = state.cameraX;
+  for (const sh of state.shells) {
+    if (sh.x + sh.w < cx || sh.x > cx + W) continue;
+    const sx = sh.x - cx;
+    ctx.fillStyle = COL.shell;
+    ctx.beginPath();
+    ctx.ellipse(sx + sh.w/2, sh.y + sh.h/2, sh.w/2, sh.h/2, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#c8a060';
+    ctx.beginPath();
+    ctx.ellipse(sx + sh.w/2, sh.y + sh.h/2, sh.w/4, sh.h/4, 0, 0, Math.PI*2);
+    ctx.fill();
+    // spiral
+    ctx.strokeStyle = '#a08040'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(sx+sh.w/2, sh.y+sh.h/2, sh.w*0.3, 0, Math.PI*1.5);
+    ctx.stroke();
+  }
+}
+
+function drawCrabs() {
+  const cx = state.cameraX;
+  for (const crab of state.crabs) {
+    if (!crab.alive) continue;
+    if (crab.x + crab.w < cx || crab.x > cx + W) continue;
+    const sx = crab.x - cx;
+    const t = Date.now() / 100;
+    const flip = crab.vx < 0 ? -1 : 1;
+
+    ctx.save();
+    ctx.translate(sx + crab.w/2, crab.y + crab.h/2);
+    ctx.scale(flip, 1);
+
+    // Small body
+    ctx.fillStyle = COL.crabBody;
+    ctx.fillRect(-8, -4, 16, 10);
+    // Shell/back (smaller ellipse)
+    ctx.fillStyle = '#c04010';
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 7, 5, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Eyes on stalks
+    ctx.fillStyle = COL.crabBody;
+    ctx.fillRect(-7, -10, 2, 6);  // left stalk
+    ctx.fillRect(5, -10, 2, 6);   // right stalk
+    ctx.fillStyle = COL.crabEye;
+    ctx.fillRect(-9, -12, 6, 6);  // left eye
+    ctx.fillRect(3, -12, 6, 6);   // right eye
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-8, -11, 4, 4);
+    ctx.fillRect(4, -11, 4, 4);
+    ctx.fillStyle = '#fff';        // shine
+    ctx.fillRect(-7, -11, 1, 1);
+    ctx.fillRect(5, -11, 1, 1);
+    // Big claws (animated)
+    const clawAnim = Math.sin(t) * 5;
+    ctx.fillStyle = COL.crabBody;
+    // Left big claw — arm + pincer
+    ctx.fillRect(-22, -4 + clawAnim, 14, 6);   // arm
+    ctx.fillRect(-28, -8 + clawAnim, 8, 5);    // upper pincer
+    ctx.fillRect(-28,  0 + clawAnim, 8, 5);    // lower pincer
+    // Right big claw
+    ctx.fillRect(8, -4 - clawAnim, 14, 6);
+    ctx.fillRect(20, -8 - clawAnim, 8, 5);
+    ctx.fillRect(20,  0 - clawAnim, 8, 5);
+    // Claw highlight
+    ctx.fillStyle = '#e06030';
+    ctx.fillRect(-27, -7 + clawAnim, 6, 3);
+    ctx.fillRect(21, -7 - clawAnim, 6, 3);
+    // Legs (3 pairs, small)
+    for (let i = 0; i < 3; i++) {
+      const legAnim = Math.sin(t + i * 1.2) * 3;
+      ctx.fillStyle = '#c04010';
+      ctx.fillRect(-6+i*5, 6, 2, 6 + legAnim);
+    }
+
+    ctx.restore();
+  }
+}
+
+function drawPlayer() {
+  const pl = state.player;
+  const cx = state.cameraX;
+  const sx = pl.x - cx;
+
+  if (pl.invincible > 0 && Math.floor(pl.invincible / 4) % 2 === 0) return;
+
+  ctx.save();
+  ctx.translate(sx + pl.w/2, pl.y + pl.h/2);
+  if (!pl.facingRight) ctx.scale(-1, 1);
+
+  // Body - Big Green is a big green character
+  // Legs (animated when moving)
+  const t = Date.now() / 120;
+  const legSwing = pl.onGround && Math.abs(pl.vx) > 0.5 ? Math.sin(t) * 6 : 0;
+
+  // Small legs
+  ctx.fillStyle = '#1a6020';
+  ctx.fillRect(-5, 8, 5, 8 + Math.max(0,-legSwing));
+  ctx.fillRect(-5, 16 + Math.max(0,-legSwing), 7, 3); // back foot
+  ctx.fillRect(0, 8, 5, 8 + Math.max(0, legSwing));
+  ctx.fillRect(0, 16 + Math.max(0, legSwing), 7, 3);  // front foot
+
+  // Small body
+  ctx.fillStyle = '#2d8c38';
+  ctx.fillRect(-8, -2, 17, 12);
+  // Belly highlight
+  ctx.fillStyle = '#3ab048';
+  ctx.fillRect(-5, 0, 11, 7);
+
+  // Arms
+  ctx.fillStyle = '#1a6020';
+  if (pl.carrying) {
+    ctx.fillRect(8, 0, 5, 8);
+  } else {
+    const armSwing = pl.onGround && Math.abs(pl.vx) > 0.5 ? Math.sin(t + Math.PI) * 5 : 0;
+    ctx.fillRect(8, 0 + armSwing, 4, 7);
+  }
+  ctx.fillRect(-11, 0, 4, 7); // other arm
+
+  // Big head
+  ctx.fillStyle = '#2d8c38';
+  ctx.fillRect(-13, -26, 27, 26);
+  // Face highlight
+  ctx.fillStyle = '#3ab048';
+  ctx.fillRect(-10, -24, 21, 19);
+
+  // Big eyes (left then right, white sclera + dark iris + shine)
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-9, -22, 8, 8);   // left eye white
+  ctx.fillRect(1, -22, 8, 8);    // right eye white
+  ctx.fillStyle = '#000';
+  ctx.fillRect(-7, -21, 5, 5);   // left iris
+  ctx.fillRect(3, -21, 5, 5);    // right iris
+  ctx.fillStyle = '#4488ff';
+  ctx.fillRect(-6, -20, 3, 3);   // left pupil color
+  ctx.fillRect(4, -20, 3, 3);    // right pupil color
+  ctx.fillStyle = '#000';
+  ctx.fillRect(-5, -20, 2, 2);   // left pupil dark
+  ctx.fillRect(5, -20, 2, 2);    // right pupil dark
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-7, -21, 2, 2);   // left shine
+  ctx.fillRect(3, -21, 2, 2);    // right shine
+
+  // Nose
+  ctx.fillStyle = '#1a6020';
+  ctx.fillRect(-1, -13, 3, 2);
+  // Mouth (smile)
+  ctx.fillStyle = '#1a6020';
+  ctx.fillRect(-6, -9, 13, 2);
+  ctx.fillRect(-6, -9, 2, 4);    // left corner down
+  ctx.fillRect(5, -9, 2, 4);     // right corner down
+
+  ctx.restore();
+}
+
+function drawStar() {
+  const st = state.star;
+  const cx = state.cameraX;
+  if (st.x + 32 < cx || st.x > cx + W) return;
+  const sx = st.x - cx;
+  st.pulse = (st.pulse + 0.05) % (Math.PI * 2);
+  const glow = 0.7 + Math.sin(st.pulse) * 0.3;
+  const bob = Math.sin(st.pulse * 2) * 4;
+
+  ctx.save();
+  ctx.globalAlpha = glow;
+  // Glow effect
+  const grad = ctx.createRadialGradient(sx+16, st.y+16+bob, 2, sx+16, st.y+16+bob, 30);
+  grad.addColorStop(0, '#ffff00');
+  grad.addColorStop(1, 'rgba(255,220,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(sx-14, st.y+bob-14, 60, 60);
+  ctx.globalAlpha = 1;
+
+  // Star shape (5-point pixel art)
+  ctx.fillStyle = '#ffee00';
+  ctx.save();
+  ctx.translate(sx+16, st.y+16+bob);
+  ctx.rotate(st.pulse * 0.3);
+  drawStarShape(0, 0, 14, 6, 5);
+  ctx.restore();
+
+  ctx.restore();
+}
+
+function drawStarShape(cx2, cy2, outerR, innerR, points) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const angle = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+    const x = cx2 + Math.cos(angle) * r;
+    const y = cy2 + Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#fff8a0';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function drawParticles() {
+  const cx = state.cameraX;
+  for (const p of state.particles) {
+    ctx.globalAlpha = p.life / 40;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - cx - p.size/2, p.y - p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ─── Main game loop ───────────────────────────────────────────────────────────
+let lastTime = 0;
+let animId = null;
+
+function gameLoop(ts) {
+  const dt = Math.min((ts - lastTime) / 16.67, 3);
+  lastTime = ts;
+
+  if (state.phase === 'game') {
+    updatePlayer(dt);
+    updateBlocks();
+    updateCrabs();
+    updateShells();
+    updateParticles();
+    updateCamera();
+    updateHUD();
+    clearJust();
+  }
+
+  // Draw
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();
+  drawCaves();
+  drawPlatforms();
+  drawBlocks();
+  drawGems();
+  drawShells();
+  drawCrabs();
+  drawStar();
+  drawPlayer();
+  drawParticles();
+
+  animId = requestAnimationFrame(gameLoop);
+}
+
+// ─── Splash screen controls ───────────────────────────────────────────────────
+let splashLives = 3;
+let splashCrabLives = true;
+
+document.getElementById('livesDown').addEventListener('click', () => {
+  if (splashLives > 1) { splashLives--; document.getElementById('livesDisplay').textContent = splashLives; }
+});
+document.getElementById('livesUp').addEventListener('click', () => {
+  if (splashLives < 5) { splashLives++; document.getElementById('livesDisplay').textContent = splashLives; }
+});
+document.getElementById('crabLivesToggle').addEventListener('click', function() {
+  splashCrabLives = !splashCrabLives;
+  this.textContent = splashCrabLives ? 'YES' : 'NO';
+  this.className = 'toggle-btn' + (splashCrabLives ? ' on' : '');
+});
+
+function startGame() {
+  cfg.lives = splashLives;
+  cfg.crabLives = splashCrabLives;
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('gameOver').style.display = 'none';
+  document.getElementById('winScreen').style.display = 'none';
+  initState();
+  updateHUD();
+  if (animId) cancelAnimationFrame(animId);
+  lastTime = performance.now();
+  animId = requestAnimationFrame(gameLoop);
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('goRestart').addEventListener('click', startGame);
+document.getElementById('winRestart').addEventListener('click', startGame);
+</script>
+</body>
+</html>

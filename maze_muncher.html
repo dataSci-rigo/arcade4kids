@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Maze Muncher</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#00000e;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;font-family:'Courier New',monospace;color:#fff;
+  overflow:hidden;user-select:none;-webkit-user-select:none;
+}
+#wrap{
+  position:relative;display:flex;flex-direction:column;
+  width:100%;max-width:920px;height:100vh;
+}
+#hud{
+  display:flex;justify-content:space-around;align-items:center;
+  padding:5px 10px;background:#000022;border-bottom:2px solid #0044dd;
+  flex-shrink:0;gap:4px;
+}
+.hi{display:flex;flex-direction:column;align-items:center;min-width:56px}
+.hl{font-size:9px;color:#6688bb;text-transform:uppercase;letter-spacing:1px}
+.hv{font-size:17px;font-weight:bold;color:#ddeeff;min-width:56px;text-align:center}
+#timerVal.warn{color:#ff2200;animation:blink .4s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+canvas{display:block;flex:1;width:100%}
+#overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:rgba(0,0,14,.94);z-index:20;gap:10px;padding:24px;
+}
+.ot{font-size:clamp(26px,6vw,52px);color:#ffee00;letter-spacing:4px;
+  text-shadow:0 0 20px #ffaa00,0 0 40px #ff6600;text-align:center}
+.os{font-size:clamp(18px,4vw,30px);color:#00ccff;letter-spacing:2px;
+  text-shadow:0 0 12px #0088ff}
+.oi{font-size:clamp(11px,2.2vw,15px);color:#9999cc;text-align:center;line-height:1.7}
+.ob{font-size:clamp(12px,2.5vw,17px);color:#8899dd;text-align:center}
+.osc{font-size:clamp(22px,5vw,38px);color:#ffee00;font-weight:bold}
+.ok{color:#ffee00;font-weight:bold}
+button{
+  margin-top:8px;padding:10px 34px;font-size:clamp(13px,3vw,19px);
+  font-family:inherit;background:#003399;color:#fff;
+  border:2px solid #0066ff;border-radius:4px;cursor:pointer;
+  text-transform:uppercase;letter-spacing:2px;
+  transition:background .15s,box-shadow .15s;
+}
+button:hover,button:active{background:#0055cc;box-shadow:0 0 18px #0066ff}
+.opts{display:flex;flex-direction:column;gap:6px;margin:4px 0;width:100%;max-width:380px}
+.opt{
+  padding:7px 18px;font-family:inherit;font-size:clamp(10px,2vw,13px);
+  background:rgba(0,20,80,.4);border:1.5px solid #1a3366;
+  border-radius:20px;color:#5566aa;cursor:pointer;
+  letter-spacing:.5px;transition:all .15s;text-align:center;
+}
+.opt:hover{border-color:#2244aa;color:#7799cc}
+.opt.on{background:rgba(0,60,200,.32);border-color:#0055dd;color:#88aaee}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div class="hi"><span class="hl">Score</span><span class="hv" id="scoreVal">0</span></div>
+    <div class="hi"><span class="hl">Level</span><span class="hv" id="levelVal">1</span></div>
+    <div class="hi"><span class="hl">Time</span><span class="hv" id="timerVal">00:00</span></div>
+    <div class="hi"><span class="hl">Dots</span><span class="hv" id="dotsVal">0/0</span></div>
+    <div class="hi"><span class="hl">+10s [SPC]</span><span class="hv" id="boostVal">×3</span></div>
+    <div class="hi"><span class="hl">Best</span><span class="hv" id="bestVal">0</span></div>
+  </div>
+  <canvas id="c"></canvas>
+  <div id="overlay">
+    <div class="ot">MAZE MUNCHER</div>
+    <div class="oi">
+      <strong>Arrow keys</strong> to move &nbsp;·&nbsp; Power dots <span style="color:#ffcc00">⬤</span> = +50pts &amp; +3s<br>
+      <strong>Space</strong> = buy +10 seconds (up to 3×)
+    </div>
+    <div class="opts">
+      <button class="opt" id="optExit">EXIT: Eat all dots first</button>
+      <button class="opt" id="optTimer">TIMER: Countdown</button>
+    </div>
+    <div class="oi" style="margin-top:6px;font-size:clamp(13px,3vw,20px);color:#ffee00;letter-spacing:2px;animation:blink .8s step-end infinite">PRESS SPACE TO PLAY</div>
+    <button id="btnStart" style="margin-top:4px">▶ START GAME</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ── Tile types ────────────────────────────────────────────────────────────────
+const WALL=0,PATH=1,DOT=2,PDOT=3,EXIT=4,ENTER=5;
+const TILE=32, PXSPEED=TILE*4; // 4 tiles/sec
+
+// ── Canvas ────────────────────────────────────────────────────────────────────
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let CW=0,CH=0;
+function resizeCanvas(){
+  const hud=document.getElementById('hud');
+  CW=canvas.width =Math.floor(Math.min(window.innerWidth,920));
+  CH=canvas.height=Math.floor(Math.max(280,window.innerHeight-hud.offsetHeight-4));
+}
+resizeCanvas();
+window.addEventListener('resize',resizeCanvas);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let gstate='title'; // title | playing | complete | gameover
+let level=1,score=0,best=0;
+let timeLeft=0,timerAcc=0;
+let freeExit=false,noTimer=false; // game-mode options
+let maze=[],mW=0,mH=0;
+let exitGX=0,exitGY=0,exitOpen=false;
+let dotsTotal=0,dotsEaten=0;
+let cam={x:0,y:0};
+
+// Player
+const P={
+  gx:1,gy:1,           // current grid
+  tx:1,ty:1,           // target grid
+  px:TILE,py:TILE,     // pixel top-left
+  moving:false,
+  dir:{x:0,y:0},
+  nextDir:{x:1,y:0},
+  facing:0,            // radians 0=right
+  mouth:0.15,mouthD:1
+};
+
+// Time-buy state (3 per level, 10s each)
+let timeBuys=0;
+const MAX_BUYS=3;
+
+// Animation vars
+let exitPulse=0,dotPulse=0,lastTS=0,timeBuyFlash=0;
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+// ── Maze generation (recursive backtracker) ───────────────────────────────────
+function mazeDims(lvl){
+  // base 11x11, grow 2 per level, capped
+  const b=11+Math.min((lvl-1)*2,22);
+  const w=b%2===0?b+1:b;
+  const h=Math.max(11,w-2); // slightly shorter than wide
+  return{w:w%2===0?w+1:w, h:h%2===0?h+1:h};
+}
+
+function buildMaze(w,h){
+  const g=Array.from({length:h},()=>new Uint8Array(w)); // all WALL(0)
+  const vis=Array.from({length:h},()=>new Uint8Array(w));
+
+  function carve(cx,cy){
+    vis[cy][cx]=1; g[cy][cx]=PATH;
+    for(const [dx,dy] of shuffle([[0,-2],[0,2],[-2,0],[2,0]])){
+      const nx=cx+dx,ny=cy+dy;
+      if(nx>0&&nx<w-1&&ny>0&&ny<h-1&&!vis[ny][nx]){
+        g[cy+dy/2|0][cx+dx/2|0]=PATH;
+        carve(nx,ny);
+      }
+    }
+  }
+  carve(1,1);
+
+  // Entrance at top-left cell, exit at bottom-right cell
+  g[1][1]=ENTER;
+  // Bottom-right corner cell (w-2,h-2) is always carved (both odd when w,h odd)
+  const ex=w-2, ey=h-2;
+  g[ey][ex]=EXIT;
+
+  // Dots on all remaining PATH tiles
+  let dots=0;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++)
+    if(g[y][x]===PATH){g[y][x]=DOT;dots++;}
+
+  // Power dots: ~5%, min 3
+  const need=Math.max(3,Math.floor(dots*.05));
+  let pdots=0;
+  for(let tries=need*40;tries>0&&pdots<need;tries--){
+    const rx=1+(Math.random()*(w-2)|0),ry=1+(Math.random()*(h-2)|0);
+    if(g[ry][rx]===DOT){g[ry][rx]=PDOT;pdots++;}
+  }
+
+  return{g,ex,ey,totalDots:dots};
+}
+
+// ── Level init ────────────────────────────────────────────────────────────────
+function startLevel(lvl){
+  const{w,h}=mazeDims(lvl);
+  mW=w;mH=h;
+  const built=buildMaze(w,h);
+  maze=built.g;
+  exitGX=built.ex;exitGY=built.ey;
+  dotsTotal=built.totalDots;dotsEaten=0;
+  exitOpen=freeExit;timerAcc=0;timeBuys=0;
+
+  // Timer: area * ratio, tighter each level
+  const ratio=Math.max(0.17,0.33-(lvl-1)*.012);
+  timeLeft=Math.floor(w*h*ratio);
+
+  P.gx=1;P.gy=1;P.tx=1;P.ty=1;
+  P.px=TILE;P.py=TILE;
+  P.moving=false;
+  P.dir={x:0,y:0};P.nextDir={x:1,y:0};
+  P.facing=0;P.mouth=0.15;P.mouthD=1;
+
+  cam.x=0;cam.y=0;
+  gstate='playing';
+  updateHUD();
+}
+
+// ── HUD ───────────────────────────────────────────────────────────────────────
+function updateHUD(){
+  document.getElementById('scoreVal').textContent=score;
+  document.getElementById('levelVal').textContent=level;
+  document.getElementById('dotsVal').textContent=`${dotsEaten}/${dotsTotal}`;
+  document.getElementById('bestVal').textContent=best;
+  // Timer display
+  const el=document.getElementById('timerVal');
+  if(noTimer){
+    el.textContent='∞';el.className='hv';
+  }else{
+    const t=Math.max(0,Math.ceil(timeLeft));
+    const m=(t/60|0),s=t%60;
+    el.textContent=`${('0'+m).slice(-2)}:${('0'+s).slice(-2)}`;
+    el.className=timeLeft<=10&&timeLeft>0?'hv warn':'hv';
+  }
+  // Boost display
+  const rem=MAX_BUYS-timeBuys;
+  const bv=document.getElementById('boostVal');
+  bv.textContent=noTimer?'—':`×${rem}`;
+  bv.style.color=(!noTimer&&rem>0)?'#ddeeff':'#334455';
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+const DIRMAP={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0}};
+document.addEventListener('keydown',e=>{
+  if(e.key===' '){
+    e.preventDefault();
+    if(gstate==='title') startGame();
+    else if(gstate==='playing') buyTime();
+    return;
+  }
+  if(gstate!=='playing') return;
+  if(DIRMAP[e.key]){P.nextDir={...DIRMAP[e.key]};e.preventDefault();}
+});
+
+function buyTime(){
+  if(noTimer||timeBuys>=MAX_BUYS)return;
+  timeBuys++;
+  timeLeft=Math.min(timeLeft+10,9999);
+  timeBuyFlash=2.0; // seconds to show the toast
+  updateHUD();
+  // Chirp sound
+  const ac=getAC();if(!ac)return;
+  const o=ac.createOscillator(),g=ac.createGain();
+  o.connect(g);g.connect(ac.destination);
+  o.type='sine';
+  o.frequency.setValueAtTime(500,ac.currentTime);
+  o.frequency.exponentialRampToValueAtTime(900,ac.currentTime+.15);
+  g.gain.setValueAtTime(.12,ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.2);
+  o.start();o.stop(ac.currentTime+.2);
+}
+let t0=null;
+canvas.addEventListener('touchstart',e=>{t0={x:e.touches[0].clientX,y:e.touches[0].clientY};e.preventDefault();},{passive:false});
+canvas.addEventListener('touchend',e=>{
+  if(!t0||gstate!=='playing')return;
+  const dx=e.changedTouches[0].clientX-t0.x,dy=e.changedTouches[0].clientY-t0.y;
+  if(Math.abs(dx)<8&&Math.abs(dy)<8)return;
+  P.nextDir=Math.abs(dx)>Math.abs(dy)?{x:dx>0?1:-1,y:0}:{x:0,y:dy>0?1:-1};
+  t0=null;e.preventDefault();
+},{passive:false});
+
+// ── Player movement ───────────────────────────────────────────────────────────
+function walkable(gx,gy){
+  if(gx<0||gy<0||gx>=mW||gy>=mH)return false;
+  return maze[gy][gx]!==WALL;
+}
+
+function updatePlayer(dt){
+  if(!P.moving){
+    for(const d of[P.nextDir,P.dir]){
+      if(!d.x&&!d.y)continue;
+      const nx=P.gx+d.x,ny=P.gy+d.y;
+      if(walkable(nx,ny)){
+        P.tx=nx;P.ty=ny;
+        P.dir={...d};
+        if(d===P.nextDir)P.nextDir={x:0,y:0};
+        P.facing=d.x===1?0:d.x===-1?Math.PI:d.y===1?Math.PI/2:-Math.PI/2;
+        P.moving=true;
+        break;
+      }
+    }
+  }
+  if(P.moving){
+    const tpx=P.tx*TILE,tpy=P.ty*TILE;
+    const ddx=tpx-P.px,ddy=tpy-P.py;
+    const dist=Math.hypot(ddx,ddy);
+    const step=PXSPEED*dt;
+    if(step>=dist){
+      P.px=tpx;P.py=tpy;
+      P.gx=P.tx;P.gy=P.ty;
+      P.moving=false;
+      onArrive(P.gx,P.gy);
+    }else{
+      const r=step/dist;
+      P.px+=ddx*r;P.py+=ddy*r;
+    }
+  }
+  // Mouth animation (faster when moving)
+  const mspd=P.moving?4.5:2;
+  P.mouth+=P.mouthD*mspd*dt;
+  if(P.mouth>0.38)P.mouthD=-1;
+  if(P.mouth<0.02)P.mouthD=1;
+}
+
+function onArrive(gx,gy){
+  const cell=maze[gy][gx];
+  if(cell===DOT){
+    maze[gy][gx]=PATH;score+=10;dotsEaten++;
+    checkExit();updateHUD();waka(false);
+  }else if(cell===PDOT){
+    maze[gy][gx]=PATH;score+=50;dotsEaten++;
+    timeLeft=Math.min(timeLeft+3,9999);
+    checkExit();updateHUD();waka(true);
+  }else if(cell===EXIT&&exitOpen){
+    levelDone();
+  }
+}
+
+function checkExit(){
+  if(freeExit)return; // always open from startLevel
+  if(dotsEaten>=dotsTotal&&!exitOpen)exitOpen=true;
+}
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+function updateCam(){
+  const tx=P.px+TILE/2-CW/2;
+  const ty=P.py+TILE/2-CH/2;
+  const maxX=Math.max(0,mW*TILE-CW);
+  const maxY=Math.max(0,mH*TILE-CH);
+  const cx=Math.min(maxX,Math.max(0,tx));
+  const cy=Math.min(maxY,Math.max(0,ty));
+  cam.x+=(cx-cam.x)*0.14;
+  cam.y+=(cy-cam.y)*0.14;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(dt){
+  exitPulse=(exitPulse+dt*2.2)%(Math.PI*2);
+  dotPulse=(dotPulse+dt*3.5)%(Math.PI*2);
+
+  ctx.fillStyle='#00000e';
+  ctx.fillRect(0,0,CW,CH);
+
+  ctx.save();
+  ctx.translate(-(cam.x|0),-(cam.y|0));
+
+  // Culling
+  const x0=Math.max(0,(cam.x/TILE|0)-1);
+  const y0=Math.max(0,(cam.y/TILE|0)-1);
+  const x1=Math.min(mW-1,((cam.x+CW)/TILE|0)+2);
+  const y1=Math.min(mH-1,((cam.y+CH)/TILE|0)+2);
+
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) renderTile(x,y);
+
+  renderPlayer();
+  ctx.restore();
+
+  if(level>=5)renderMinimap();
+
+  if(timeBuyFlash>0){
+    const a=Math.min(1,timeBuyFlash)*Math.min(1,(timeBuyFlash/0.4));
+    ctx.save();
+    ctx.globalAlpha=a;
+    ctx.font=`bold ${clamp(22,4.5,36)}px 'Courier New',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='#00ffcc';
+    ctx.shadowColor='#00ffcc';ctx.shadowBlur=16;
+    ctx.fillText('+10 SECONDS',CW/2,CH/2-24);
+    ctx.shadowBlur=0;
+    ctx.restore();
+  }
+}
+
+function clamp(min,vw,max){
+  return Math.min(max,Math.max(min,window.innerWidth*vw/100));
+}
+
+function renderTile(gx,gy){
+  const px=gx*TILE,py=gy*TILE,t=maze[gy][gx];
+
+  if(t===WALL){
+    ctx.fillStyle='#001166';
+    ctx.fillRect(px,py,TILE,TILE);
+    ctx.shadowColor='#0055ff';
+    ctx.shadowBlur=7;
+    ctx.strokeStyle='#0044ee';
+    ctx.lineWidth=2.5;
+    ctx.beginPath();
+    roundRect(ctx,px+3,py+3,TILE-6,TILE-6,5);
+    ctx.stroke();
+    ctx.shadowBlur=0;
+    return;
+  }
+
+  // Floor for all non-wall tiles
+  ctx.fillStyle='#00030c';
+  ctx.fillRect(px,py,TILE,TILE);
+
+  if(t===DOT){
+    ctx.fillStyle='#ccccff';
+    ctx.shadowColor='#8888ff';
+    ctx.shadowBlur=5;
+    ctx.beginPath();
+    ctx.arc(px+TILE/2,py+TILE/2,2.8,0,Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur=0;
+
+  }else if(t===PDOT){
+    const pulse=Math.sin(dotPulse);
+    const r=7+2*pulse;
+    ctx.shadowColor='#ffaa00';
+    ctx.shadowBlur=16+8*pulse;
+    ctx.fillStyle='#ffcc00';
+    ctx.beginPath();
+    ctx.arc(px+TILE/2,py+TILE/2,r,0,Math.PI*2);
+    ctx.fill();
+    // Inner white core
+    ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,255,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(px+TILE/2,py+TILE/2,r*.4,0,Math.PI*2);
+    ctx.fill();
+
+  }else if(t===EXIT){
+    if(exitOpen){
+      const a=0.55+0.45*Math.sin(exitPulse);
+      ctx.shadowColor='#00ff88';
+      ctx.shadowBlur=22*a;
+      ctx.fillStyle=`rgba(0,220,90,${a})`;
+      ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
+      ctx.shadowBlur=0;
+      // Star
+      ctx.fillStyle='#ffffff';
+      ctx.shadowColor='#ffffff';
+      ctx.shadowBlur=8;
+      ctx.font=`bold ${TILE-8}px sans-serif`;
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText('★',px+TILE/2,py+TILE/2+1);
+      ctx.shadowBlur=0;
+    }else{
+      // Closed / locked
+      ctx.fillStyle='#1a0000';
+      ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
+      ctx.strokeStyle='#550000';
+      ctx.lineWidth=1.5;
+      ctx.strokeRect(px+3,py+3,TILE-6,TILE-6);
+      // Draw simple lock icon
+      drawLock(ctx,px+TILE/2,py+TILE/2,8);
+    }
+
+  }else if(t===ENTER){
+    // Entrance: subtle blue highlight
+    ctx.fillStyle='rgba(0,80,255,0.12)';
+    ctx.fillRect(px+1,py+1,TILE-2,TILE-2);
+  }
+}
+
+function drawLock(ctx,cx,cy,r){
+  ctx.strokeStyle='#993333';
+  ctx.lineWidth=2;
+  // Shackle
+  ctx.beginPath();
+  ctx.arc(cx,cy-r*.3,r*.55,Math.PI,0);
+  ctx.stroke();
+  // Body
+  ctx.fillStyle='#772222';
+  ctx.fillRect(cx-r*.7,cy-r*.2,r*1.4,r*1.2);
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function renderPlayer(){
+  const cx=P.px+TILE/2,cy=P.py+TILE/2,r=TILE/2-2;
+  const m=P.mouth;
+
+  ctx.shadowColor='#ffee00';
+  ctx.shadowBlur=14;
+  ctx.fillStyle='#ffee00';
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.arc(cx,cy,r,P.facing+m,P.facing+Math.PI*2-m);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur=0;
+
+  // Eye
+  const ea=P.facing-Math.PI*.28;
+  ctx.fillStyle='#111';
+  ctx.beginPath();
+  ctx.arc(cx+Math.cos(ea)*r*.55,cy+Math.sin(ea)*r*.55,2.5,0,Math.PI*2);
+  ctx.fill();
+}
+
+function renderMinimap(){
+  const mmW=134,mmH=90,pad=10;
+  const sx=CW-mmW-pad,sy=pad;
+  const scx=mmW/(mW*TILE),scy=mmH/(mH*TILE);
+
+  ctx.save();
+  ctx.globalAlpha=0.88;
+  ctx.fillStyle='#00001a';
+  ctx.fillRect(sx-1,sy-1,mmW+2,mmH+2);
+  ctx.fillStyle='#000010';
+  ctx.fillRect(sx,sy,mmW,mmH);
+
+  for(let y=0;y<mH;y++) for(let x=0;x<mW;x++){
+    const t=maze[y][x];
+    ctx.fillStyle=
+      t===WALL?'#003ab0':
+      t===EXIT?(exitOpen?'#00ee77':'#550000'):
+      (t===DOT||t===PDOT)?'#111133':'#00030c';
+    const fx=sx+x*TILE*scx, fy=sy+y*TILE*scy;
+    const fw=Math.max(1,TILE*scx+.5),fh=Math.max(1,TILE*scy+.5);
+    ctx.fillRect(fx,fy,fw,fh);
+  }
+
+  // Viewport rectangle
+  ctx.strokeStyle='rgba(255,255,255,.3)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(sx+cam.x*scx,sy+cam.y*scy,CW*scx,CH*scy);
+
+  // Player blip
+  ctx.fillStyle='#ffee00';
+  ctx.shadowColor='#ffee00';
+  ctx.shadowBlur=4;
+  ctx.beginPath();
+  ctx.arc(sx+(P.px+TILE/2)*scx,sy+(P.py+TILE/2)*scy,3.5,0,Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur=0;
+
+  // Border
+  ctx.strokeStyle='#0044cc';
+  ctx.lineWidth=1.5;
+  ctx.strokeRect(sx,sy,mmW,mmH);
+  ctx.restore();
+}
+
+// ── Overlay helpers ───────────────────────────────────────────────────────────
+const overlayEl=document.getElementById('overlay');
+function showOv(html){overlayEl.innerHTML=html;overlayEl.style.display='flex';}
+function hideOv(){overlayEl.style.display='none';}
+
+// ── Level done ────────────────────────────────────────────────────────────────
+function levelDone(){
+  if(gstate!=='playing')return;
+  gstate='complete';
+  const bonus=noTimer?0:Math.floor(timeLeft)*25;
+  score+=bonus;
+  if(score>best)best=score;
+  updateHUD();
+  const timeLine=noTimer?'':
+    `<div class="ob">Time bonus: ${Math.floor(timeLeft)}s × 25 = <span class="ok">+${bonus} pts</span></div>`;
+  showOv(`
+    <div class="os">LEVEL ${level} COMPLETE!</div>
+    <div class="ob">Dots: ${dotsEaten} / ${dotsTotal}</div>
+    ${timeLine}
+    <div class="osc">Score: ${score}</div>
+    <button id="btnNext">NEXT LEVEL ▶</button>
+  `);
+  document.getElementById('btnNext').onclick=()=>{hideOv();level++;startLevel(level);};
+}
+
+// ── Game over ─────────────────────────────────────────────────────────────────
+function gameOver(){
+  if(gstate!=='playing')return;
+  gstate='gameover';
+  if(score>best)best=score;
+  updateHUD();
+  showOv(`
+    <div class="ot">GAME OVER</div>
+    <div class="ob">Level ${level} &nbsp;·&nbsp; Dots: ${dotsEaten}</div>
+    <div class="osc">Score: ${score}</div>
+    <div class="ob" style="color:#7788bb">Best: ${best}</div>
+    ${optionsHTML()}
+    <button id="btnRetry">PLAY AGAIN</button>
+  `);
+  bindOpts();
+  document.getElementById('btnRetry').onclick=()=>{score=0;level=1;hideOv();startLevel(1);};
+}
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let AudioCtx=null;
+function getAC(){
+  if(!AudioCtx)try{AudioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  return AudioCtx;
+}
+let wakaFlip=false;
+function waka(power){
+  const ac=getAC();if(!ac)return;
+  const osc=ac.createOscillator(),gain=ac.createGain();
+  osc.connect(gain);gain.connect(ac.destination);
+  const now=ac.currentTime;
+  if(power){
+    osc.type='sawtooth';
+    osc.frequency.setValueAtTime(260,now);
+    osc.frequency.exponentialRampToValueAtTime(680,now+.2);
+    gain.gain.setValueAtTime(.14,now);
+    gain.gain.exponentialRampToValueAtTime(.001,now+.24);
+    osc.start(now);osc.stop(now+.24);
+  }else{
+    osc.type='sine';
+    osc.frequency.value=wakaFlip?360:480;wakaFlip=!wakaFlip;
+    gain.gain.setValueAtTime(.07,now);
+    gain.gain.exponentialRampToValueAtTime(.001,now+.07);
+    osc.start(now);osc.stop(now+.07);
+  }
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+function loop(ts){
+  const dt=Math.min((ts-lastTS)/1000,.05);
+  lastTS=ts;
+
+  if(gstate==='playing'){
+    if(!noTimer){
+      timerAcc+=dt;
+      if(timerAcc>=1){
+        timerAcc-=1;
+        timeLeft=Math.max(0,timeLeft-1);
+        updateHUD();
+        if(timeLeft<=0){gameOver();}
+      }
+    }
+    if(timeBuyFlash>0)timeBuyFlash=Math.max(0,timeBuyFlash-dt);
+    updatePlayer(dt);
+    updateCam();
+    render(dt);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ── Title screen idle animation ───────────────────────────────────────────────
+(function titleAnim(ts){
+  if(gstate!=='title')return;
+  ctx.fillStyle='#00000e';
+  ctx.fillRect(0,0,CW,CH);
+  const t=ts/1000;
+  for(let i=0;i<28;i++){
+    const x=(Math.sin(i*1.87+t*.38)*0.5+0.5)*CW;
+    const y=(Math.cos(i*2.63+t*.22)*0.5+0.5)*CH;
+    const a=.12+.12*Math.sin(i*1.3+t);
+    ctx.fillStyle=`rgba(255,255,255,${a})`;
+    ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill();
+  }
+  // A few fake power dots
+  for(let i=0;i<6;i++){
+    const x=(Math.sin(i*2.5+t*.5)*0.4+0.5)*CW;
+    const y=(Math.cos(i*3.1+t*.3)*0.4+0.5)*CH;
+    const pulse=Math.sin(t*3+i);
+    ctx.fillStyle=`rgba(255,204,0,${.15+.12*pulse})`;
+    ctx.beginPath();ctx.arc(x,y,5+2*pulse,0,Math.PI*2);ctx.fill();
+  }
+  requestAnimationFrame(titleAnim);
+})(0);
+
+// ── Options ───────────────────────────────────────────────────────────────────
+function optionsHTML(){
+  return `<div class="opts">
+    <button class="opt${freeExit?' on':''}" id="optExit">EXIT: ${freeExit?'Reach freely — no dots needed':'Eat all dots first'}</button>
+    <button class="opt${noTimer?' on':''}" id="optTimer">TIMER: ${noTimer?'Off — no time limit':'On — countdown'}</button>
+  </div>`;
+}
+function refreshOpts(){
+  const oe=document.getElementById('optExit'),ot=document.getElementById('optTimer');
+  if(oe){oe.textContent=`EXIT: ${freeExit?'Reach freely — no dots needed':'Eat all dots first'}`;oe.classList.toggle('on',freeExit);}
+  if(ot){ot.textContent=`TIMER: ${noTimer?'Off — no time limit':'On — countdown'}`;ot.classList.toggle('on',noTimer);}
+}
+function bindOpts(){
+  const oe=document.getElementById('optExit'),ot=document.getElementById('optTimer');
+  if(oe) oe.onclick=()=>{freeExit=!freeExit;refreshOpts();};
+  if(ot) ot.onclick=()=>{noTimer=!noTimer;refreshOpts();};
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+function startGame(){
+  if(gstate!=='title')return;
+  hideOv();score=0;level=1;
+  startLevel(1);
+  lastTS=performance.now();
+  requestAnimationFrame(loop);
+}
+document.getElementById('btnStart').onclick=startGame;
+bindOpts(); // wire the title screen toggles
+</script>
+</body>
+</html>

@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#00000e">
+<title>Maze Muncher</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%;height:-webkit-fill-available}
+body{
+  height:100vh;height:100dvh;
+  background:#00000e;
+  font-family:'Courier New',monospace;
+  color:#fff;
+  overflow:hidden;
+  user-select:none;-webkit-user-select:none;
+  touch-action:none;
+  display:flex;justify-content:center;
+}
+#wrap{
+  position:relative;
+  display:flex;flex-direction:column;
+  width:100%;max-width:540px;
+  height:100%;
+}
+
+/* ── HUD ─────────────────────────────────────────────────────────────────── */
+#hud{
+  display:flex;justify-content:space-around;align-items:center;
+  padding:4px 6px;
+  background:#000022;border-bottom:2px solid #0044dd;
+  flex-shrink:0;
+  padding-top:max(4px,env(safe-area-inset-top));
+}
+.hi{display:flex;flex-direction:column;align-items:center}
+.hl{font-size:7px;color:#5577aa;text-transform:uppercase;letter-spacing:.5px}
+.hv{font-size:14px;font-weight:bold;color:#ddeeff;min-width:40px;text-align:center}
+#timerVal.warn{color:#ff2200;animation:blink .4s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ── Canvas ──────────────────────────────────────────────────────────────── */
+canvas{display:block;flex:1;width:100%;touch-action:none}
+
+/* ── Controls ────────────────────────────────────────────────────────────── */
+#controls{
+  flex-shrink:0;
+  background:#000018;border-top:2px solid #002288;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px;
+  padding-bottom:max(10px,env(safe-area-inset-bottom));
+  gap:12px;
+  touch-action:none;
+}
+.dpad{
+  display:grid;
+  grid-template-columns:repeat(3,58px);
+  grid-template-rows:repeat(3,58px);
+  gap:4px;
+}
+.dbtn{
+  background:rgba(0,40,160,.38);
+  border:2px solid rgba(0,90,220,.45);
+  border-radius:13px;
+  color:#99bbee;
+  font-size:20px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;touch-action:none;
+  transition:background .08s,border-color .08s;
+  -webkit-tap-highlight-color:transparent;
+}
+.dbtn:active,.dbtn.active{
+  background:rgba(0,100,255,.58);
+  border-color:#0088ff;
+  color:#fff;
+}
+.dpad-mid{background:rgba(0,20,60,.2);border-radius:50%;border:1px solid rgba(0,60,160,.2)}
+
+.ctrl-right{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  flex-shrink:0;
+}
+#btnBuy{
+  background:rgba(0,160,110,.28);
+  border:2px solid rgba(0,210,140,.48);
+  border-radius:14px;
+  color:#00ffcc;
+  font-family:inherit;font-weight:bold;
+  font-size:11px;letter-spacing:.5px;
+  text-transform:uppercase;
+  width:80px;height:80px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;touch-action:none;
+  transition:background .08s;
+}
+#btnBuy:active{background:rgba(0,210,140,.48)}
+#btnBuy.out{background:rgba(10,10,20,.35);border-color:rgba(50,50,80,.3);color:#2a3a44}
+#buyLeft{font-size:22px;font-weight:bold}
+
+/* ── Overlay ─────────────────────────────────────────────────────────────── */
+#overlay{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(0,0,14,.95);
+  z-index:30;gap:12px;padding:24px;
+  touch-action:auto;
+}
+.ot{font-size:clamp(30px,9vw,52px);color:#ffee00;letter-spacing:4px;
+  text-shadow:0 0 20px #ffaa00,0 0 40px #ff6600;text-align:center}
+.os{font-size:clamp(19px,5.5vw,28px);color:#00ccff;letter-spacing:2px;
+  text-shadow:0 0 10px #0088ff}
+.oi{font-size:clamp(12px,3.2vw,15px);color:#9999cc;text-align:center;line-height:1.9}
+.ob{font-size:clamp(13px,3.5vw,16px);color:#8899dd;text-align:center}
+.osc{font-size:clamp(26px,7vw,42px);color:#ffee00;font-weight:bold}
+.ok{color:#ffee00;font-weight:bold}
+.tap-hint{
+  font-size:clamp(15px,4.5vw,22px);
+  color:#ffee00;letter-spacing:2px;
+  margin-top:4px;
+  animation:blink .8s step-end infinite;
+}
+.ov-btn{
+  margin-top:8px;padding:14px 40px;
+  font-size:clamp(16px,4.5vw,22px);
+  font-family:inherit;background:#003399;color:#fff;
+  border:2px solid #0066ff;border-radius:6px;cursor:pointer;
+  text-transform:uppercase;letter-spacing:2px;
+  -webkit-tap-highlight-color:transparent;
+}
+.ov-btn:active{background:#0055cc}
+.opts{display:flex;flex-direction:column;gap:7px;margin:4px 0;width:100%;max-width:320px}
+.opt{
+  padding:9px 16px;font-family:inherit;font-size:clamp(11px,3.2vw,14px);
+  background:rgba(0,20,80,.4);border:1.5px solid #1a3366;
+  border-radius:20px;color:#5566aa;cursor:pointer;
+  letter-spacing:.5px;transition:all .15s;text-align:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.opt.on{background:rgba(0,60,200,.32);border-color:#0055dd;color:#88aaee}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div class="hi"><span class="hl">Score</span><span class="hv" id="scoreVal">0</span></div>
+    <div class="hi"><span class="hl">Lvl</span><span class="hv" id="levelVal">1</span></div>
+    <div class="hi"><span class="hl">Time</span><span class="hv" id="timerVal">00:00</span></div>
+    <div class="hi"><span class="hl">Dots</span><span class="hv" id="dotsVal">0/0</span></div>
+    <div class="hi"><span class="hl">Best</span><span class="hv" id="bestVal">0</span></div>
+  </div>
+
+  <canvas id="c"></canvas>
+
+  <div id="controls">
+    <!-- D-pad: 3×3 grid, arrows in the 4 cardinal slots -->
+    <div class="dpad">
+      <div></div>
+      <button class="dbtn" id="dU" aria-label="Up">▲</button>
+      <div></div>
+      <button class="dbtn" id="dL" aria-label="Left">◀</button>
+      <div class="dpad-mid"></div>
+      <button class="dbtn" id="dR" aria-label="Right">▶</button>
+      <div></div>
+      <button class="dbtn" id="dD" aria-label="Down">▼</button>
+      <div></div>
+    </div>
+
+    <div class="ctrl-right">
+      <button id="btnBuy" aria-label="Buy 10 seconds">
+        <span>+10s</span>
+        <span id="buyLeft">×3</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div class="ot">MAZE<br>MUNCHER</div>
+    <div class="oi">
+      D-pad to move &nbsp;·&nbsp; Power dots <span style="color:#ffcc00">⬤</span> = +50pts &amp; +3s<br>
+      Tap <strong>+10s</strong> to buy more time (×3)
+    </div>
+    <div class="opts">
+      <button class="opt" id="optExit">EXIT: Eat all dots first</button>
+      <button class="opt" id="optTimer">TIMER: Countdown</button>
+    </div>
+    <div class="tap-hint">TAP TO START</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Tile types ────────────────────────────────────────────────────────────────
+const WALL=0,PATH=1,DOT=2,PDOT=3,EXIT=4,ENTER=5;
+const TILE=26, PXSPEED=TILE*4.5;
+
+// ── Canvas ────────────────────────────────────────────────────────────────────
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let CW=1,CH=1;
+
+function resizeCanvas(){
+  // Match CSS layout size exactly
+  const r=window.devicePixelRatio||1;
+  const w=canvas.offsetWidth, h=canvas.offsetHeight;
+  if(w===0||h===0)return;
+  canvas.width=Math.round(w*r);
+  canvas.height=Math.round(h*r);
+  ctx.scale(r,r);
+  CW=w; CH=h;
+}
+new ResizeObserver(()=>{ctx.resetTransform?.();resizeCanvas();}).observe(canvas);
+resizeCanvas();
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let gstate='title'; // title | playing | complete | gameover
+let level=1,score=0,best=0;
+let timeLeft=0,timerAcc=0;
+let freeExit=false,noTimer=false; // game-mode options
+let maze=[],mW=0,mH=0;
+let exitGX=0,exitGY=0,exitOpen=false;
+let dotsTotal=0,dotsEaten=0;
+let cam={x:0,y:0};
+let timeBuys=0;
+const MAX_BUYS=3;
+
+// Player
+const P={
+  gx:1,gy:1, tx:1,ty:1,
+  px:TILE,py:TILE,
+  moving:false,
+  dir:{x:0,y:0}, nextDir:{x:1,y:0},
+  facing:0, mouth:0.15, mouthD:1
+};
+
+let exitPulse=0,dotPulse=0,lastTS=0,timeBuyFlash=0;
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+
+// ── Maze generation (recursive backtracker) ───────────────────────────────────
+function mazeDims(lvl){
+  const b=11+Math.min((lvl-1)*2,22);
+  const w=b%2===0?b+1:b;
+  const h=Math.max(11,w-2);
+  return{w:w%2===0?w+1:w, h:h%2===0?h+1:h};
+}
+
+function buildMaze(w,h){
+  const g=Array.from({length:h},()=>new Uint8Array(w));
+  const vis=Array.from({length:h},()=>new Uint8Array(w));
+
+  function carve(cx,cy){
+    vis[cy][cx]=1; g[cy][cx]=PATH;
+    for(const [dx,dy] of shuffle([[0,-2],[0,2],[-2,0],[2,0]])){
+      const nx=cx+dx, ny=cy+dy;
+      if(nx>0&&nx<w-1&&ny>0&&ny<h-1&&!vis[ny][nx]){
+        g[cy+dy/2|0][cx+dx/2|0]=PATH;
+        carve(nx,ny);
+      }
+    }
+  }
+  carve(1,1);
+
+  g[1][1]=ENTER;
+  const ex=w-2, ey=h-2;
+  g[ey][ex]=EXIT;
+
+  let dots=0;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++)
+    if(g[y][x]===PATH){g[y][x]=DOT;dots++;}
+
+  const need=Math.max(3,Math.floor(dots*.05));
+  let pdots=0;
+  for(let tries=need*40;tries>0&&pdots<need;tries--){
+    const rx=1+(Math.random()*(w-2)|0), ry=1+(Math.random()*(h-2)|0);
+    if(g[ry][rx]===DOT){g[ry][rx]=PDOT;pdots++;}
+  }
+  return{g,ex,ey,totalDots:dots};
+}
+
+// ── Level init ────────────────────────────────────────────────────────────────
+function startLevel(lvl){
+  const{w,h}=mazeDims(lvl);
+  mW=w; mH=h;
+  const built=buildMaze(w,h);
+  maze=built.g;
+  exitGX=built.ex; exitGY=built.ey;
+  dotsTotal=built.totalDots; dotsEaten=0;
+  exitOpen=freeExit; timerAcc=0; timeBuys=0; timeBuyFlash=0;
+
+  const ratio=Math.max(0.17,0.33-(lvl-1)*.012);
+  timeLeft=Math.floor(w*h*ratio);
+
+  P.gx=1;P.gy=1;P.tx=1;P.ty=1;
+  P.px=TILE;P.py=TILE;
+  P.moving=false;
+  P.dir={x:0,y:0}; P.nextDir={x:1,y:0};
+  P.facing=0; P.mouth=0.15; P.mouthD=1;
+  cam.x=0; cam.y=0;
+  gstate='playing';
+  updateHUD();
+}
+
+// ── HUD ───────────────────────────────────────────────────────────────────────
+function updateHUD(){
+  document.getElementById('scoreVal').textContent=score;
+  document.getElementById('levelVal').textContent=level;
+  document.getElementById('dotsVal').textContent=`${dotsEaten}/${dotsTotal}`;
+  document.getElementById('bestVal').textContent=best;
+  // Timer display
+  const el=document.getElementById('timerVal');
+  if(noTimer){
+    el.textContent='∞';el.className='hv';
+  }else{
+    const t=Math.max(0,Math.ceil(timeLeft));
+    const m=t/60|0,s=t%60;
+    el.textContent=`${('0'+m).slice(-2)}:${('0'+s).slice(-2)}`;
+    el.className=timeLeft<=10&&timeLeft>0?'hv warn':'hv';
+  }
+  // Boost button
+  const rem=MAX_BUYS-timeBuys;
+  document.getElementById('buyLeft').textContent=noTimer?'—':`×${rem}`;
+  document.getElementById('btnBuy').className=(noTimer||rem<=0)?'out':'';
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+// D-pad: touchstart for instant response, mousedown for desktop testing
+const DPAD_MAP={dU:{x:0,y:-1},dD:{x:0,y:1},dL:{x:-1,y:0},dR:{x:1,y:0}};
+
+for(const [id,dir] of Object.entries(DPAD_MAP)){
+  const el=document.getElementById(id);
+  // touchstart fires immediately, no 300ms delay
+  el.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    if(gstate==='playing') P.nextDir={...dir};
+    el.classList.add('active');
+  },{passive:false});
+  el.addEventListener('touchend',()=>el.classList.remove('active'),{passive:true});
+  el.addEventListener('mousedown',()=>{if(gstate==='playing') P.nextDir={...dir};});
+}
+
+document.getElementById('btnBuy').addEventListener('touchstart',e=>{
+  e.preventDefault();
+  if(gstate==='playing') buyTime();
+},{passive:false});
+document.getElementById('btnBuy').addEventListener('mousedown',()=>{
+  if(gstate==='playing') buyTime();
+});
+
+// Keyboard fallback (useful during development / on tablets with keyboard)
+document.addEventListener('keydown',e=>{
+  if(e.key===' '){
+    e.preventDefault();
+    if(gstate==='title') startGame();
+    else if(gstate==='playing') buyTime();
+    return;
+  }
+  if(gstate!=='playing') return;
+  const map={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0}};
+  if(map[e.key]){P.nextDir={...map[e.key]};e.preventDefault();}
+});
+
+function buyTime(){
+  if(noTimer||timeBuys>=MAX_BUYS) return;
+  timeBuys++;
+  timeLeft=Math.min(timeLeft+10,9999);
+  timeBuyFlash=2.0;
+  updateHUD();
+  playChirp();
+}
+
+// ── Player movement ───────────────────────────────────────────────────────────
+function walkable(gx,gy){
+  if(gx<0||gy<0||gx>=mW||gy>=mH) return false;
+  return maze[gy][gx]!==WALL;
+}
+
+function updatePlayer(dt){
+  if(!P.moving){
+    for(const d of [P.nextDir,P.dir]){
+      if(!d.x&&!d.y) continue;
+      const nx=P.gx+d.x, ny=P.gy+d.y;
+      if(walkable(nx,ny)){
+        P.tx=nx; P.ty=ny;
+        P.dir={...d};
+        if(d===P.nextDir) P.nextDir={x:0,y:0};
+        P.facing=d.x===1?0:d.x===-1?Math.PI:d.y===1?Math.PI/2:-Math.PI/2;
+        P.moving=true;
+        break;
+      }
+    }
+  }
+  if(P.moving){
+    const tpx=P.tx*TILE, tpy=P.ty*TILE;
+    const ddx=tpx-P.px, ddy=tpy-P.py;
+    const dist=Math.hypot(ddx,ddy);
+    const step=PXSPEED*dt;
+    if(step>=dist){
+      P.px=tpx; P.py=tpy;
+      P.gx=P.tx; P.gy=P.ty;
+      P.moving=false;
+      onArrive(P.gx,P.gy);
+    }else{
+      const r=step/dist;
+      P.px+=ddx*r; P.py+=ddy*r;
+    }
+  }
+  const mspd=P.moving?4.5:2;
+  P.mouth+=P.mouthD*mspd*dt;
+  if(P.mouth>0.38) P.mouthD=-1;
+  if(P.mouth<0.02) P.mouthD=1;
+}
+
+function onArrive(gx,gy){
+  const cell=maze[gy][gx];
+  if(cell===DOT){
+    maze[gy][gx]=PATH; score+=10; dotsEaten++;
+    checkExit(); updateHUD(); playWaka(false);
+  }else if(cell===PDOT){
+    maze[gy][gx]=PATH; score+=50; dotsEaten++;
+    timeLeft=Math.min(timeLeft+3,9999);
+    checkExit(); updateHUD(); playWaka(true);
+  }else if(cell===EXIT&&exitOpen){
+    levelDone();
+  }
+}
+
+function checkExit(){
+  if(freeExit) return; // always open from startLevel
+  if(dotsEaten>=dotsTotal&&!exitOpen) exitOpen=true;
+}
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+function updateCam(){
+  const tx=P.px+TILE/2-CW/2;
+  const ty=P.py+TILE/2-CH/2;
+  const maxX=Math.max(0,mW*TILE-CW);
+  const maxY=Math.max(0,mH*TILE-CH);
+  cam.x+=(Math.min(maxX,Math.max(0,tx))-cam.x)*.15;
+  cam.y+=(Math.min(maxY,Math.max(0,ty))-cam.y)*.15;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(dt){
+  exitPulse=(exitPulse+dt*2.2)%(Math.PI*2);
+  dotPulse=(dotPulse+dt*3.5)%(Math.PI*2);
+
+  ctx.fillStyle='#00000e';
+  ctx.fillRect(0,0,CW,CH);
+
+  ctx.save();
+  ctx.translate(-(cam.x|0),-(cam.y|0));
+
+  const x0=Math.max(0,(cam.x/TILE|0)-1);
+  const y0=Math.max(0,(cam.y/TILE|0)-1);
+  const x1=Math.min(mW-1,((cam.x+CW)/TILE|0)+2);
+  const y1=Math.min(mH-1,((cam.y+CH)/TILE|0)+2);
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) drawTile(x,y);
+
+  drawPlayer();
+  ctx.restore();
+
+  // Minimap from level 3+
+  if(level>=3) drawMinimap();
+
+  // "+10 SECONDS" flash toast
+  if(timeBuyFlash>0){
+    const a=Math.min(1,timeBuyFlash)*Math.min(1,timeBuyFlash/.4);
+    ctx.save();
+    ctx.globalAlpha=a;
+    ctx.font=`bold 18px 'Courier New',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle='#00ffcc';
+    ctx.shadowColor='#00ffcc'; ctx.shadowBlur=10;
+    ctx.fillText('+10 SECONDS',CW/2,CH*.42);
+    ctx.shadowBlur=0;
+    ctx.restore();
+  }
+}
+
+function drawTile(gx,gy){
+  const px=gx*TILE, py=gy*TILE, t=maze[gy][gx];
+
+  if(t===WALL){
+    ctx.fillStyle='#001166';
+    ctx.fillRect(px,py,TILE,TILE);
+    ctx.shadowColor='#0044ee'; ctx.shadowBlur=5;
+    ctx.strokeStyle='#0033cc'; ctx.lineWidth=2;
+    ctx.beginPath(); rrect(ctx,px+2,py+2,TILE-4,TILE-4,4); ctx.stroke();
+    ctx.shadowBlur=0;
+    return;
+  }
+
+  ctx.fillStyle='#00030c';
+  ctx.fillRect(px,py,TILE,TILE);
+
+  if(t===DOT){
+    ctx.fillStyle='#ccccff'; ctx.shadowColor='#8888ff'; ctx.shadowBlur=4;
+    ctx.beginPath(); ctx.arc(px+TILE/2,py+TILE/2,2.2,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+
+  }else if(t===PDOT){
+    const p=Math.sin(dotPulse), r=5.5+1.5*p;
+    ctx.shadowColor='#ffaa00'; ctx.shadowBlur=12+5*p;
+    ctx.fillStyle='#ffcc00';
+    ctx.beginPath(); ctx.arc(px+TILE/2,py+TILE/2,r,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.arc(px+TILE/2,py+TILE/2,r*.38,0,Math.PI*2); ctx.fill();
+
+  }else if(t===EXIT){
+    if(exitOpen){
+      const a=.55+.45*Math.sin(exitPulse);
+      ctx.shadowColor='#00ff88'; ctx.shadowBlur=16*a;
+      ctx.fillStyle=`rgba(0,200,80,${a})`;
+      ctx.fillRect(px+2,py+2,TILE-4,TILE-4);
+      ctx.shadowBlur=0;
+      ctx.fillStyle='#fff'; ctx.shadowColor='#fff'; ctx.shadowBlur=5;
+      ctx.font=`bold ${TILE-6}px sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('★',px+TILE/2,py+TILE/2+1);
+      ctx.shadowBlur=0;
+    }else{
+      ctx.fillStyle='#1a0000';
+      ctx.fillRect(px+2,py+2,TILE-4,TILE-4);
+      ctx.strokeStyle='#550000'; ctx.lineWidth=1.5;
+      ctx.strokeRect(px+2,py+2,TILE-4,TILE-4);
+      // small lock icon
+      const cx=px+TILE/2, cy=py+TILE/2;
+      ctx.strokeStyle='#883333'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(cx,cy-3,3.5,Math.PI,0); ctx.stroke();
+      ctx.fillStyle='#662222';
+      ctx.fillRect(cx-5,cy-1,10,8);
+    }
+
+  }else if(t===ENTER){
+    ctx.fillStyle='rgba(0,80,255,.1)';
+    ctx.fillRect(px+1,py+1,TILE-2,TILE-2);
+  }
+}
+
+function rrect(ctx,x,y,w,h,r){
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function drawPlayer(){
+  const cx=P.px+TILE/2, cy=P.py+TILE/2, r=TILE/2-1.5;
+  ctx.shadowColor='#ffee00'; ctx.shadowBlur=12;
+  ctx.fillStyle='#ffee00';
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.arc(cx,cy,r,P.facing+P.mouth,P.facing+Math.PI*2-P.mouth);
+  ctx.closePath(); ctx.fill();
+  ctx.shadowBlur=0;
+  const ea=P.facing-Math.PI*.28;
+  ctx.fillStyle='#111';
+  ctx.beginPath();
+  ctx.arc(cx+Math.cos(ea)*r*.55,cy+Math.sin(ea)*r*.55,2,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawMinimap(){
+  const mmW=88, mmH=66, pad=7;
+  const sx=CW-mmW-pad, sy=pad;
+  const scx=mmW/(mW*TILE), scy=mmH/(mH*TILE);
+
+  ctx.save();
+  ctx.globalAlpha=.87;
+  ctx.fillStyle='#00000f'; ctx.fillRect(sx,sy,mmW,mmH);
+  for(let y=0;y<mH;y++) for(let x=0;x<mW;x++){
+    const t=maze[y][x];
+    ctx.fillStyle=
+      t===WALL?'#0033a0':
+      t===EXIT?(exitOpen?'#00ee77':'#550000'):
+      '#00030c';
+    ctx.fillRect(
+      sx+x*TILE*scx, sy+y*TILE*scy,
+      Math.max(1,TILE*scx+.4), Math.max(1,TILE*scy+.4)
+    );
+  }
+  // Viewport rect
+  ctx.strokeStyle='rgba(255,255,255,.28)'; ctx.lineWidth=1;
+  ctx.strokeRect(sx+cam.x*scx,sy+cam.y*scy,CW*scx,CH*scy);
+  // Player blip
+  ctx.fillStyle='#ffee00'; ctx.shadowColor='#ffee00'; ctx.shadowBlur=3;
+  ctx.beginPath();
+  ctx.arc(sx+(P.px+TILE/2)*scx,sy+(P.py+TILE/2)*scy,3,0,Math.PI*2);
+  ctx.fill(); ctx.shadowBlur=0;
+  // Border
+  ctx.strokeStyle='#003fbb'; ctx.lineWidth=1.2;
+  ctx.strokeRect(sx,sy,mmW,mmH);
+  ctx.restore();
+}
+
+// ── Overlay helpers ───────────────────────────────────────────────────────────
+const overlayEl=document.getElementById('overlay');
+function showOv(html){overlayEl.innerHTML=html;overlayEl.style.display='flex';}
+function hideOv(){overlayEl.style.display='none';}
+
+// Wire up overlay buttons — needs both touchstart (fast) and click (desktop)
+function ovBtn(id,fn){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
+  el.addEventListener('click',fn);
+}
+
+// ── Level done ────────────────────────────────────────────────────────────────
+function levelDone(){
+  if(gstate!=='playing') return;
+  gstate='complete';
+  const bonus=noTimer?0:Math.floor(timeLeft)*25;
+  score+=bonus;
+  if(score>best) best=score;
+  updateHUD();
+  const timeLine=noTimer?'':
+    `<div class="ob">Time bonus: ${Math.floor(timeLeft)}s × 25<br>= <span class="ok">+${bonus} pts</span></div>`;
+  showOv(`
+    <div class="os">LEVEL ${level}<br>COMPLETE!</div>
+    <div class="ob">Dots: ${dotsEaten}/${dotsTotal}</div>
+    ${timeLine}
+    <div class="osc">${score}</div>
+    <button class="ov-btn" id="btnNext">NEXT ▶</button>
+  `);
+  ovBtn('btnNext',()=>{hideOv();level++;startLevel(level);});
+}
+
+// ── Game over ─────────────────────────────────────────────────────────────────
+function gameOver(){
+  if(gstate!=='playing') return;
+  gstate='gameover';
+  if(score>best) best=score;
+  updateHUD();
+  showOv(`
+    <div class="ot">GAME<br>OVER</div>
+    <div class="ob">Level ${level} · Dots: ${dotsEaten}</div>
+    <div class="osc">${score}</div>
+    <div class="ob" style="color:#6677aa">Best: ${best}</div>
+    ${optionsHTML()}
+    <button class="ov-btn" id="btnRetry">PLAY AGAIN</button>
+  `);
+  bindOpts();
+  ovBtn('btnRetry',()=>{score=0;level=1;hideOv();startLevel(1);});
+}
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let AudioCtx=null;
+function getAC(){
+  if(!AudioCtx) try{AudioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  return AudioCtx;
+}
+let wakaFlip=false;
+function playWaka(power){
+  const ac=getAC(); if(!ac) return;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  const now=ac.currentTime;
+  if(power){
+    o.type='sawtooth';
+    o.frequency.setValueAtTime(260,now); o.frequency.exponentialRampToValueAtTime(680,now+.2);
+    g.gain.setValueAtTime(.13,now); g.gain.exponentialRampToValueAtTime(.001,now+.24);
+    o.start(now); o.stop(now+.24);
+  }else{
+    o.type='sine'; o.frequency.value=wakaFlip?360:480; wakaFlip=!wakaFlip;
+    g.gain.setValueAtTime(.06,now); g.gain.exponentialRampToValueAtTime(.001,now+.07);
+    o.start(now); o.stop(now+.07);
+  }
+}
+function playChirp(){
+  const ac=getAC(); if(!ac) return;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  const now=ac.currentTime;
+  o.type='sine';
+  o.frequency.setValueAtTime(520,now); o.frequency.exponentialRampToValueAtTime(960,now+.16);
+  g.gain.setValueAtTime(.11,now); g.gain.exponentialRampToValueAtTime(.001,now+.2);
+  o.start(now); o.stop(now+.2);
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+function loop(ts){
+  const dt=Math.min((ts-lastTS)/1000,.05);
+  lastTS=ts;
+
+  if(gstate==='playing'){
+    if(!noTimer){
+      timerAcc+=dt;
+      if(timerAcc>=1){
+        timerAcc-=1;
+        timeLeft=Math.max(0,timeLeft-1);
+        updateHUD();
+        if(timeLeft<=0){gameOver();}
+      }
+    }
+    if(timeBuyFlash>0) timeBuyFlash=Math.max(0,timeBuyFlash-dt);
+    updatePlayer(dt);
+    updateCam();
+    render(dt);
+  }
+  requestAnimationFrame(loop);
+}
+
+// ── Title animation ───────────────────────────────────────────────────────────
+(function titleAnim(ts){
+  if(gstate!=='title') return;
+  ctx.fillStyle='#00000e';
+  ctx.fillRect(0,0,CW,CH);
+  const t=ts/1000;
+  for(let i=0;i<24;i++){
+    const x=(Math.sin(i*1.87+t*.38)*.5+.5)*CW;
+    const y=(Math.cos(i*2.63+t*.22)*.5+.5)*CH;
+    ctx.fillStyle=`rgba(255,255,255,${.08+.09*Math.sin(i*1.3+t)})`;
+    ctx.beginPath(); ctx.arc(x,y,2,0,Math.PI*2); ctx.fill();
+  }
+  for(let i=0;i<5;i++){
+    const x=(Math.sin(i*2.5+t*.5)*.4+.5)*CW;
+    const y=(Math.cos(i*3.1+t*.3)*.4+.5)*CH;
+    const p=Math.sin(t*3+i);
+    ctx.fillStyle=`rgba(255,204,0,${.12+.1*p})`;
+    ctx.beginPath(); ctx.arc(x,y,4+1.5*p,0,Math.PI*2); ctx.fill();
+  }
+  requestAnimationFrame(titleAnim);
+})(0);
+
+// ── Options ───────────────────────────────────────────────────────────────────
+function optionsHTML(){
+  return `<div class="opts">
+    <button class="opt${freeExit?' on':''}" id="optExit">EXIT: ${freeExit?'Reach freely — no dots needed':'Eat all dots first'}</button>
+    <button class="opt${noTimer?' on':''}" id="optTimer">TIMER: ${noTimer?'Off — no time limit':'On — countdown'}</button>
+  </div>`;
+}
+function refreshOpts(){
+  const oe=document.getElementById('optExit'),ot=document.getElementById('optTimer');
+  if(oe){oe.textContent=`EXIT: ${freeExit?'Reach freely — no dots needed':'Eat all dots first'}`;oe.classList.toggle('on',freeExit);}
+  if(ot){ot.textContent=`TIMER: ${noTimer?'Off — no time limit':'On — countdown'}`;ot.classList.toggle('on',noTimer);}
+}
+function bindOpts(){
+  const oe=document.getElementById('optExit'),ot=document.getElementById('optTimer');
+  if(oe){
+    // stopPropagation prevents the overlay touchstart from triggering startGame
+    oe.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+    oe.onclick=()=>{freeExit=!freeExit;refreshOpts();};
+  }
+  if(ot){
+    ot.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+    ot.onclick=()=>{noTimer=!noTimer;refreshOpts();};
+  }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+function startGame(){
+  if(gstate!=='title') return;
+  hideOv();
+  score=0; level=1;
+  startLevel(1);
+  lastTS=performance.now();
+  requestAnimationFrame(loop);
+}
+
+// Tap anywhere on the title overlay to start
+overlayEl.addEventListener('touchstart',e=>{
+  if(gstate==='title'){e.preventDefault();startGame();}
+},{passive:false});
+overlayEl.addEventListener('click',()=>{if(gstate==='title')startGame();});
+bindOpts(); // wire the title screen toggles
+</script>
+</body>
+</html>
