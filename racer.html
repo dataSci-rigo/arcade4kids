@@ -2,20 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Endless Runner</title>
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
   background: #0a0a0a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
   font-family: monospace;
   color: #ccc;
-  overflow: hidden;
-  touch-action: none;
+  height: -webkit-fill-available;
+  min-height: 100dvh;
+  overscroll-behavior: none;
+  touch-action: pan-y;
 }
 
 /* ── MENU ── */
@@ -23,96 +25,133 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  user-select: none;
-  max-height: 100vh;
+  gap: 18px;
+  width: 100%;
+  padding: 20px 16px 28px;
   overflow-y: auto;
-  padding: 16px 0;
+  -webkit-overflow-scrolling: touch;
 }
 #menu h1 {
-  font-size: 1.8rem;
-  letter-spacing: 0.35em;
+  font-size: 1.6rem;
+  letter-spacing: 0.32em;
   color: #ffdd00;
   text-shadow: 0 0 20px rgba(255,221,0,0.4);
   text-align: center;
 }
-#menu .sub { font-size: 0.6rem; letter-spacing: 0.25em; color: #333; text-align: center; margin-top: 4px; }
+#menu .sub { font-size: 0.58rem; letter-spacing: 0.22em; color: #333; text-align: center; margin-top: 4px; }
 
 /* Game tabs */
-.game-tabs { display: flex; gap: 6px; }
+.game-tabs { display: flex; gap: 8px; width: 100%; max-width: 520px; }
 .g-tab {
+  flex: 1;
   background: #111; color: #555; border: 2px solid #222;
-  padding: 10px 18px; font-family: monospace; font-size: 0.68rem;
-  letter-spacing: 0.08em; border-radius: 4px; cursor: pointer; outline: none;
-  transition: .12s;
+  padding: 12px 6px; font-family: monospace; font-size: 0.68rem;
+  letter-spacing: 0.05em; border-radius: 6px; cursor: pointer;
+  outline: none; transition: .12s; text-align: center; min-height: 52px;
 }
-.g-tab:hover { background: #1a1a1a; color: #999; border-color: #444; }
+.g-tab:hover  { background: #1a1a1a; color: #999; border-color: #444; }
+.g-tab:active { background: #1a1a1a; }
 .g-tab.active { background: #0d1f0d; color: #44ee44; border-color: #33cc33; }
 
-/* Settings panel */
-#settings-panel {
-  display: flex; gap: 24px;
-  background: #0e0e0e; border: 1px solid #1e1e1e;
-  border-radius: 6px; padding: 16px 20px;
+.section-label {
+  font-size: 0.58rem; letter-spacing: 0.22em; color: #333;
+  margin-bottom: -4px;
 }
-.settings-col { display: flex; flex-direction: column; gap: 10px; }
 
-.slider-row {
-  display: flex; align-items: center; gap: 8px;
+/* Settings panel — desktop: two columns */
+#settings-panel {
+  display: flex;
+  gap: 24px;
+  background: #0e0e0e; border: 1px solid #1e1e1e;
+  border-radius: 8px; padding: 16px 20px;
+  width: 100%; max-width: 600px;
 }
-.slider-row label {
-  font-size: 0.6rem; letter-spacing: 0.1em; color: #555;
-  width: 140px; text-align: right;
+/* Mobile: single column */
+@media (max-width: 540px) {
+  #settings-panel { flex-direction: column; gap: 12px; padding: 14px 14px; }
 }
+.settings-col { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+.settings-divider { width: 1px; background: #1e1e1e; margin: 0 2px; }
+@media (max-width: 540px) { .settings-divider { width: auto; height: 1px; margin: 2px 0; } }
+
+/* Slider rows */
+.slider-row { display: flex; align-items: center; gap: 8px; }
+.slider-row label { font-size: 0.6rem; letter-spacing: 0.1em; color: #555; width: 140px; text-align: right; }
+.slider-val { font-size: 0.62rem; color: #ffdd00; width: 44px; text-align: right; }
+/* Mobile slider rows */
+@media (max-width: 540px) {
+  .slider-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .slider-row label { width: auto; text-align: left; }
+  .slider-val { width: auto; text-align: right; }
+  .slider-head { display: flex; justify-content: space-between; align-items: center; }
+}
+
 input[type=range] {
   -webkit-appearance: none; appearance: none;
-  width: 120px; height: 3px;
+  width: 120px; height: 4px;
   background: #2a2a2a; outline: none; border-radius: 2px; cursor: pointer;
 }
+@media (max-width: 540px) { input[type=range] { width: 100%; } }
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 11px; height: 11px;
+  width: 12px; height: 12px;
   background: #ffdd00; border-radius: 50%; cursor: pointer;
 }
 input[type=range]::-moz-range-thumb {
-  width: 11px; height: 11px;
+  width: 12px; height: 12px;
   background: #ffdd00; border-radius: 50%; cursor: pointer; border: none;
 }
-.slider-val { font-size: 0.62rem; color: #ffdd00; width: 38px; }
+@media (max-width: 540px) {
+  input[type=range]::-webkit-slider-thumb { width: 28px; height: 28px; margin-top: -12px; }
+  input[type=range]::-moz-range-thumb     { width: 28px; height: 28px; }
+}
+input[type=range]::-webkit-slider-runnable-track { height: 4px; }
+input[type=range]::-moz-range-track { height: 4px; background: #2a2a2a; border-radius: 2px; }
 
-/* Switches */
+/* Switch rows */
 .sw-row { display: flex; align-items: center; gap: 8px; }
 .sw-row .sw-label { font-size: 0.6rem; letter-spacing: 0.1em; color: #555; width: 110px; text-align: right; }
+@media (max-width: 540px) {
+  .sw-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .sw-row .sw-label { width: auto; text-align: left; font-size: 0.62rem; }
+}
 .sw-pair { display: flex; }
+@media (max-width: 540px) { .sw-pair { width: 100%; } }
 .sw-opt {
   background: #111; color: #444; border: 1px solid #222;
   padding: 5px 11px; font-family: monospace; font-size: 0.6rem; letter-spacing: 0.08em;
-  cursor: pointer; outline: none; transition: .1s;
+  cursor: pointer; outline: none; transition: .1s; min-height: 34px;
+}
+@media (max-width: 540px) {
+  .sw-opt { flex: 1; padding: 10px 6px; font-size: 0.68rem; min-height: 44px; text-align: center; }
 }
 .sw-opt:first-child { border-radius: 3px 0 0 3px; }
 .sw-opt:last-child  { border-radius: 0 3px 3px 0; border-left: none; }
-.sw-opt:hover { background: #1a1a1a; color: #888; }
+.sw-opt:hover  { background: #1a1a1a; color: #888; }
+.sw-opt:active { background: #1a1a1a; }
 .sw-opt.active { background: #111a2a; color: #88aaff; border-color: #4466cc; z-index: 1; }
-
-/* Divider */
-.settings-divider { width: 1px; background: #1e1e1e; margin: 0 4px; }
 
 /* Play button */
 #play-btn {
   background: #33cc33; color: #000; border: none;
   padding: 13px 56px; font-family: monospace; font-size: 0.9rem;
-  letter-spacing: 0.3em; font-weight: bold; border-radius: 5px;
+  letter-spacing: 0.3em; font-weight: bold; border-radius: 6px;
   cursor: pointer; outline: none; transition: background .1s, transform .07s;
+  min-height: 50px;
 }
-#play-btn:hover { background: #55ee55; transform: scale(1.04); }
-#play-btn:active { transform: scale(0.96); }
+@media (max-width: 540px) {
+  #play-btn { width: 100%; max-width: 520px; padding: 16px; font-size: 1rem; border-radius: 8px; }
+}
+#play-btn:hover  { background: #55ee55; transform: scale(1.04); }
+#play-btn:active { background: #44aa44; transform: scale(0.96); }
 .play-hint { font-size: 0.55rem; color: #333; letter-spacing: 0.2em; }
 
 /* ── GAME SCREEN ── */
 #game-screen {
-  display: none; flex-direction: column; align-items: center; gap: 8px;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  width: 100%; height: 100dvh; overflow: hidden; touch-action: none;
 }
-#wrap { position: relative; border: 2px solid #1a1a1a; }
+#wrap { position: relative; border: 2px solid #1a1a1a; flex-shrink: 0; }
 canvas {
   display: block;
   image-rendering: pixelated;
@@ -120,28 +159,32 @@ canvas {
   image-rendering: crisp-edges;
 }
 #touch-left, #touch-right {
-  position: absolute; top: 0; width: 50%; height: 100%; z-index: 10; opacity: 0;
+  position: absolute; top: 0; width: 50%; height: 100%;
+  z-index: 10; opacity: 0; touch-action: none;
 }
 #touch-left { left: 0; } #touch-right { right: 0; }
 #back-btn {
   background: #111; color: #444; border: 1px solid #222;
-  padding: 6px 16px; font-family: monospace; font-size: 0.6rem;
-  letter-spacing: 0.2em; border-radius: 3px; cursor: pointer; outline: none; transition: .1s;
+  padding: 8px 18px; font-family: monospace; font-size: 0.6rem;
+  letter-spacing: 0.18em; border-radius: 4px; cursor: pointer;
+  outline: none; margin-top: 6px; min-height: 38px; transition: .1s;
 }
-#back-btn:hover { color: #999; border-color: #555; }
+#back-btn:hover  { color: #999; border-color: #555; }
+#back-btn:active { color: #999; }
 </style>
 </head>
 <body>
 
 <!-- ══ MAIN MENU ══ -->
 <div id="menu">
-  <div>
+  <div style="width:100%;text-align:center">
     <h1>ENDLESS RUNNER</h1>
-    <p class="sub">CONFIGURE &amp; PLAY</p>
+    <p class="sub" id="menu-sub">CONFIGURE &amp; PLAY</p>
   </div>
 
-  <div>
-    <div style="font-size:.6rem;letter-spacing:.2em;color:#333;text-align:center;margin-bottom:8px">— SELECT GAME —</div>
+  <div style="width:100%;max-width:520px">
+    <div class="section-label">— SELECT GAME —</div>
+    <div style="height:8px"></div>
     <div class="game-tabs">
       <button class="g-tab active" data-theme="tunnel">TUNNEL<br>CLASSIC</button>
       <button class="g-tab" data-theme="road">ROAD<br>RACER</button>
@@ -149,15 +192,11 @@ canvas {
     </div>
   </div>
 
-  <div id="settings-panel">
-    <div class="settings-col" id="sliders-col"></div>
-    <div class="settings-divider"></div>
-    <div class="settings-col" id="switches-col"></div>
-  </div>
+  <div id="settings-panel"></div>
 
-  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;max-width:520px">
     <button id="play-btn">▶  PLAY</button>
-    <p class="play-hint">PRESS ENTER TO START</p>
+    <p class="play-hint" id="play-hint">PRESS ENTER TO START</p>
   </div>
 </div>
 
@@ -168,10 +207,14 @@ canvas {
     <div id="touch-left"></div>
     <div id="touch-right"></div>
   </div>
-  <button id="back-btn">◀  BACK TO MENU  (ESC)</button>
+  <button id="back-btn" id="back-btn">◀  BACK TO MENU  (ESC)</button>
 </div>
 
 <script>
+'use strict';
+
+const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
 // ============================================================
 //  SPRITES
 // ============================================================
@@ -204,6 +247,11 @@ const SPRITES = {
     [1,0,0,0,0,0,0,1],[2,1,0,0,0,0,1,2],[2,2,1,0,0,1,2,2],[2,2,1,3,3,1,2,2],
     [0,2,2,3,3,2,2,0],[0,0,2,2,2,2,0,0],[0,0,0,2,2,0,0,0],[0,0,0,0,0,0,0,0],
   ],
+  semiTruck:[
+    [0,0,1,1,1,1,0,0],[0,1,2,2,2,2,1,0],[3,1,2,4,4,2,1,3],[3,1,2,4,4,2,1,3],
+    [3,1,1,2,2,1,1,3],[3,1,2,2,2,2,1,3],[3,1,2,2,2,2,1,3],[3,1,2,2,2,2,1,3],
+    [3,1,2,2,2,2,1,3],[3,1,2,2,2,2,1,3],[0,1,2,2,2,2,1,0],[0,0,1,3,3,1,0,0],
+  ],
   gem:[
     [0,0,1,1,1,1,0,0],[0,1,4,5,5,4,1,0],[1,4,5,5,5,5,4,1],[1,5,5,5,5,5,5,1],
     [0,1,5,5,5,5,1,0],[0,0,1,5,5,1,0,0],[0,0,0,1,1,0,0,0],[0,0,0,0,0,0,0,0],
@@ -215,80 +263,82 @@ const SPRITES = {
 // ============================================================
 const THEMES = {
   tunnel:{
-    name:"Tunnel",background:"#000",wallColor:"#555",wallAccent:"#333",wallStyle:"rocky",
+    name:'Tunnel',background:'#000',wallColor:'#555',wallAccent:'#333',wallStyle:'rocky',
     player:SPRITES.tunnelPlayer,
-    palette:["transparent","#FFF","#999","#666","#444","#CCC"],
-    obstacles:[{sprite:SPRITES.rock,freq:0.018,palette:["transparent","#666","#888","#AAA","#BBB","#999"]}],
+    palette:['transparent','#FFF','#999','#666','#444','#CCC'],
+    obstacles:[{sprite:SPRITES.rock,freq:0.018,palette:['transparent','#666','#888','#AAA','#BBB','#999']}],
     collectibles:[],
-    scrollDir:"vertical",
+    scrollDir:'vertical',
     startGap:110,minGap:36,narrowRate:0.04,
     speedStart:1.4,speedMax:5.5,speedAccel:0.0008,
-    hudColor:"#FFF",lineColor:null,buildingColors:null,
+    hudColor:'#FFF',lineColor:null,buildingColors:null,
   },
   road:{
-    name:"Road Racer",background:"#1a1a1a",wallColor:"#2a2a2a",wallAccent:"#3a3a3a",wallStyle:"buildings",
+    name:'Road Racer',background:'#1a1a1a',wallColor:'#2a2a2a',wallAccent:'#3a3a3a',wallStyle:'buildings',
     player:SPRITES.car,
-    palette:["transparent","#222","#FFD700","#FF4444","#1E90FF","#EEE"],
-    obstacles:[{sprite:SPRITES.enemyCar,freq:0.02,palette:["transparent","#333","#FF3333","#DD2222","#EE5555","#FF6666"]}],
-    collectibles:[{sprite:SPRITES.fuel,freq:0.008,palette:["transparent","#333","#FF4444","#FF6600","#FFAA00","#FFDD00"],bonus:75}],
-    scrollDir:"vertical",
+    palette:['transparent','#222','#FFD700','#FF4444','#1E90FF','#EEE'],
+    obstacles:[
+      {sprite:SPRITES.enemyCar,  freq:0.02,  palette:['transparent','#333','#FF3333','#DD2222','#EE5555','#FF6666'], hw:6, hh:6},
+      {sprite:SPRITES.semiTruck, freq:0.008, palette:['transparent','#444','#774422','#FF5500','#CCAA44','#996633'], hw:9, hh:8, drawOfsY:6},
+    ],
+    collectibles:[{sprite:SPRITES.fuel,freq:0.008,palette:['transparent','#333','#FF4444','#FF6600','#FFAA00','#FFDD00'],bonus:75}],
+    scrollDir:'vertical',
     startGap:100,minGap:40,narrowRate:0.03,
     speedStart:1.6,speedMax:6,speedAccel:0.001,
-    hudColor:"#FFDD00",lineColor:"#FFDD00",buildingColors:["#111","#1a1a2e","#16213e","#0f3460","#222","#2a1a2e"],
+    hudColor:'#FFDD00',lineColor:'#FFDD00',buildingColors:['#111','#1a1a2e','#16213e','#0f3460','#222','#2a1a2e'],
   },
   cave:{
-    name:"Cave Flyer",background:"#0d0806",wallColor:"#3b2510",wallAccent:"#2a1a0a",wallStyle:"jagged",
+    name:'Cave Flyer',background:'#0d0806',wallColor:'#3b2510',wallAccent:'#2a1a0a',wallStyle:'jagged',
     player:SPRITES.plane,
-    palette:["transparent","#444","#88CCFF","#6699CC","#AADDFF","#DDEEFF"],
-    obstacles:[{sprite:SPRITES.bat,freq:0.02,palette:["transparent","#222","#553388","#7744AA","#442266","#664499"]}],
-    collectibles:[{sprite:SPRITES.gem,freq:0.009,palette:["transparent","#336","#44DDAA","#33CC99","#66EEBB","#88FFDD"],bonus:60}],
-    scrollDir:"horizontal",
+    palette:['transparent','#444','#88CCFF','#6699CC','#AADDFF','#DDEEFF'],
+    obstacles:[{sprite:SPRITES.bat,freq:0.02,palette:['transparent','#222','#553388','#7744AA','#442266','#664499']}],
+    collectibles:[{sprite:SPRITES.gem,freq:0.009,palette:['transparent','#336','#44DDAA','#33CC99','#66EEBB','#88FFDD'],bonus:60}],
+    scrollDir:'horizontal',
     startGap:105,minGap:38,narrowRate:0.035,
     speedStart:1.5,speedMax:5.5,speedAccel:0.0009,
-    hudColor:"#FFCC66",lineColor:null,buildingColors:null,
+    hudColor:'#FFCC66',lineColor:null,buildingColors:null,
   },
 };
 
 // ============================================================
-//  SETTINGS SYSTEM
+//  SETTINGS
 // ============================================================
 const SLIDER_DEFS = [
-  {key:'obstacleDensity',   label:'OBSTACLE DENSITY',    min:0,   max:3,   step:0.1,  fmt:v=>v.toFixed(1)+'x', def:1.0},
-  {key:'collectDensity',    label:'COLLECTIBLE DENSITY', min:0,   max:3,   step:0.1,  fmt:v=>v.toFixed(1)+'x', def:1.0},
-  {key:'invincFrames',      label:'INVINCIBILITY TIME',  min:0,   max:360, step:10,   fmt:v=>(v/60).toFixed(1)+'s', def:120},
-  {key:'hitPoints',         label:'HITS TO DIE',         min:1,   max:10,  step:1,    fmt:v=>v===1?'1 (instant)':String(v), def:1},
-  {key:'speed',             label:'SPEED',               min:0.3, max:3,   step:0.1,  fmt:v=>v.toFixed(1)+'x', def:1.0},
-  {key:'speedAccelRate',    label:'SPEED ACCEL RATE',    min:0,   max:5,   step:0.1,  fmt:v=>v.toFixed(1)+'x', def:1.0},
-  {key:'gapSize',           label:'GAP SIZE',            min:0.4, max:2.5, step:0.1,  fmt:v=>v.toFixed(1)+'x', def:1.0},
-  {key:'gapNarrowRate',     label:'GAP NARROW RATE',     min:0,   max:5,   step:0.1,  fmt:v=>v.toFixed(1)+'x', def:1.0},
-  {key:'maxUndulation',     label:'MAX UNDULATION',      min:0,   max:5,   step:0.1,  fmt:v=>v.toFixed(1),     def:1.5},
-  {key:'undulationSpeed',   label:'UNDULATION SPEED',    min:0,   max:3,   step:0.1,  fmt:v=>v.toFixed(1)+'x', def:1.0},
+  {key:'obstacleDensity', label:'OBSTACLE DENSITY',    min:0,   max:3,   step:0.1, fmt:v=>v.toFixed(1)+'x',              def:1.0},
+  {key:'collectDensity',  label:'COLLECTIBLE DENSITY', min:0,   max:3,   step:0.1, fmt:v=>v.toFixed(1)+'x',              def:1.0},
+  {key:'invincFrames',    label:'INVINCIBILITY TIME',  min:0,   max:360, step:10,  fmt:v=>(v/60).toFixed(1)+'s',         def:120},
+  {key:'hitPoints',       label:'HITS TO DIE',         min:1,   max:10,  step:1,   fmt:v=>v===1?'1 (instant)':String(v), def:1},
+  {key:'speed',           label:'SPEED',               min:0.3, max:3,   step:0.1, fmt:v=>v.toFixed(1)+'x',              def:1.0},
+  {key:'speedAccelRate',  label:'SPEED ACCEL RATE',    min:0,   max:5,   step:0.1, fmt:v=>v.toFixed(1)+'x',              def:1.0},
+  {key:'gapSize',         label:'GAP SIZE',            min:0.4, max:2.5, step:0.1, fmt:v=>v.toFixed(1)+'x',              def:1.0},
+  {key:'gapNarrowRate',   label:'GAP NARROW RATE',     min:0,   max:5,   step:0.1, fmt:v=>v.toFixed(1)+'x',              def:1.0},
+  {key:'maxUndulation',   label:'MAX UNDULATION',      min:0,   max:5,   step:0.1, fmt:v=>v.toFixed(1),                  def:1.5},
+  {key:'undulationSpeed', label:'UNDULATION SPEED',    min:0,   max:3,   step:0.1, fmt:v=>v.toFixed(1)+'x',              def:1.0},
 ];
 
 function defaultSettings(themeKey) {
   const t = THEMES[themeKey];
   const s = {};
   for (const d of SLIDER_DEFS) s[d.key] = d.def;
-  s.scrollDir  = t.scrollDir;
-  s.direction  = 'normal';
-  s.placement  = 'end';
+  s.scrollDir = isMobile ? 'vertical' : t.scrollDir;
+  s.direction = 'normal';
+  s.placement = 'end';
   s.wallDeath  = 'on';
   return s;
 }
 
 function loadSettings(themeKey) {
   try {
-    const raw = localStorage.getItem('runner_cfg_' + themeKey);
+    const raw = localStorage.getItem((isMobile ? 'runner_mob_cfg_' : 'runner_cfg_') + themeKey);
     if (raw) return Object.assign(defaultSettings(themeKey), JSON.parse(raw));
   } catch(e) {}
   return defaultSettings(themeKey);
 }
 
 function saveSettings(themeKey, s) {
-  try { localStorage.setItem('runner_cfg_' + themeKey, JSON.stringify(s)); } catch(e) {}
+  try { localStorage.setItem((isMobile ? 'runner_mob_cfg_' : 'runner_cfg_') + themeKey, JSON.stringify(s)); } catch(e) {}
 }
 
-// ── live settings per game (loaded from storage) ──
 const gameSettings = {
   tunnel: loadSettings('tunnel'),
   road:   loadSettings('road'),
@@ -296,24 +346,39 @@ const gameSettings = {
 };
 
 let selectedTheme = 'tunnel';
-let currentSettings = gameSettings[selectedTheme];
 
 // ============================================================
 //  ENGINE SETUP
 // ============================================================
-const W = 256, H = 192, SCALE = 3;
+const W = 256, H = 192;
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 canvas.width = W; canvas.height = H;
-canvas.style.width  = W * SCALE + 'px';
-canvas.style.height = H * SCALE + 'px';
-document.getElementById('wrap').style.width  = W * SCALE + 'px';
-document.getElementById('wrap').style.height = H * SCALE + 'px';
 
 let theme, state;
 let currentScreen = 'menu';
-let input = {left:false, right:false};
-const hiScores = {tunnel:0, road:0, cave:0};
+let input = {left:false, right:false, action:false};
+const _hiKey = (isMobile ? 'runner_mob_hi' : 'runner_hi');
+const hiScores = (() => {
+  try { return Object.assign({tunnel:0,road:0,cave:0}, JSON.parse(localStorage.getItem(_hiKey))); }
+  catch(e) { return {tunnel:0,road:0,cave:0}; }
+})();
+
+function resizeCanvas() {
+  const pad = 8, btnH = 50;
+  const avW = window.innerWidth  - pad * 2;
+  const avH = window.innerHeight - btnH - pad * 2;
+  const rawScale = Math.min(avW / W, avH / H);
+  const scale = isMobile ? rawScale : Math.max(3, Math.floor(rawScale));
+  const cw = Math.floor(W * scale);
+  const ch = Math.floor(H * scale);
+  canvas.style.width  = cw + 'px';
+  canvas.style.height = ch + 'px';
+  const wrap = document.getElementById('wrap');
+  wrap.style.width  = cw + 'px';
+  wrap.style.height = ch + 'px';
+}
+window.addEventListener('resize', resizeCanvas);
 
 function drawSprite(sprArr, pal, x, y, sc) {
   for (let r = 0; r < sprArr.length; r++)
@@ -332,18 +397,18 @@ function smoothRand(prev, drift) { return prev + (Math.random() - 0.5) * drift; 
 // ============================================================
 function initState() {
   theme = THEMES[selectedTheme];
-  const cfg = gameSettings[selectedTheme]; // snapshot for this run
+  const cfg = gameSettings[selectedTheme];
+  if (isMobile) cfg.scrollDir = 'vertical';
 
-  const isH      = cfg.scrollDir === 'horizontal';
-  const flipped   = cfg.direction === 'flipped';
-  const atStart   = cfg.placement === 'start';
-  const len       = isH ? W : H;
-  const startGap  = theme.startGap * cfg.gapSize;
-  const pFixed    = atStart ? 20 : (isH ? W : H) - 20;
+  const isH     = cfg.scrollDir === 'horizontal';
+  const flipped  = cfg.direction === 'flipped';
+  const atStart  = cfg.placement === 'start';
+  const len      = isH ? W : H;
+  const startGap = theme.startGap * cfg.gapSize;
+  const pFixed   = atStart ? 20 : (isH ? W : H) - 20;
 
   const rows = [];
-  let center = isH ? H/2 : W/2;
-  let gap = startGap;
+  let center = isH ? H/2 : W/2, gap = startGap;
   for (let i = 0; i < len + 20; i++) {
     center = clampCenter(smoothRand(center, 1.2), gap, isH);
     rows.push({center, gap});
@@ -351,15 +416,16 @@ function initState() {
 
   state = {
     rows, center, gap: startGap,
-    speed:    theme.speedStart * cfg.speed,
-    score:    0,
-    hiScore:  hiScores[selectedTheme],
-    alive:    true,
-    started:  false,
-    playerPos: isH ? H/2 : W/2,
-    offset:   0,
-    obstacles:    [],
-    collectibles: [],
+    speed:         theme.speedStart * cfg.speed,
+    score:         0,
+    hiScore:       hiScores[selectedTheme],
+    alive:         true,
+    started:       false,
+    playerPos:     isH ? H/2 : W/2,
+    offset:        0,
+    obstacles:     [],
+    collectibles:  [],
+    zeppelins:     [],
     deathTimer:    0,
     flashTimer:    0,
     invincible:    0,
@@ -368,8 +434,12 @@ function initState() {
     hitFlash:      0,
     moveSoundTimer:0,
     wallBumpTimer: 0,
+    wallHitTimes:  [],
+    wallSoundMuted:0,
+    wingExpanded:  false,
+    jumpTimer:     0,
+    jumpOffset:    0,
     distance:      0,
-    // baked config
     isH, flipped, pFixed, cfg,
   };
 }
@@ -387,10 +457,7 @@ function spawnRow() {
   const {isH, flipped, cfg} = state;
   const drift = cfg.maxUndulation + state.speed * cfg.undulationSpeed * 0.3;
   state.center = clampCenter(smoothRand(state.center, drift), state.gap, isH);
-  state.gap = Math.max(
-    theme.minGap * cfg.gapSize,
-    state.gap - theme.narrowRate * cfg.gapNarrowRate
-  );
+  state.gap = Math.max(theme.minGap * cfg.gapSize, state.gap - theme.narrowRate * cfg.gapNarrowRate);
   const newRow = {center: state.center, gap: state.gap};
 
   if (flipped) { state.rows.unshift(newRow); state.rows.pop(); }
@@ -411,14 +478,18 @@ function spawnRow() {
       state.collectibles.push({sprite:co.sprite, palette:co.palette, bonus:co.bonus, mainPos:pos, crossPos:spawnCross, alive:true});
     }
   }
+  if (selectedTheme === 'cave' && Math.random() < 0.004) {
+    const pos = state.center + (Math.random() - 0.5) * (state.gap - 24);
+    state.zeppelins.push({mainPos: pos, crossPos: spawnCross, alive: true});
+  }
 }
 
 // ============================================================
 //  UPDATE
 // ============================================================
 function update() {
-  if (!state.alive)    { state.deathTimer++; return; }
-  if (!state.started)  return;
+  if (!state.alive)   { state.deathTimer++; return; }
+  if (!state.started) return;
 
   const {isH, flipped, pFixed, cfg} = state;
   const pSpeed = 2.2 + state.speed * 0.3;
@@ -427,14 +498,22 @@ function update() {
   if (input.right) state.playerPos += pSpeed;
   state.playerPos = Math.max(4, Math.min((isH ? H : W) - 4, state.playerPos));
 
+  // Wing expansion (cave) and car jump (road)
+  state.wingExpanded = (selectedTheme === 'cave' && isH && input.action);
+  if (selectedTheme === 'road' && !isH) {
+    if (state.jumpTimer > 0) {
+      state.jumpTimer--;
+      state.jumpOffset = Math.sin((1 - state.jumpTimer / 45) * Math.PI) * 20;
+    } else {
+      state.jumpOffset = 0;
+    }
+  }
+
   state.offset   += state.speed;
   state.distance += state.speed;
   state.score     = Math.floor(state.distance);
 
-  while (state.offset >= 1) {
-    state.offset -= 1;
-    spawnRow();
-  }
+  while (state.offset >= 1) { state.offset -= 1; spawnRow(); }
 
   state.speed = Math.min(theme.speedMax * cfg.speed, state.speed + theme.speedAccel * cfg.speedAccelRate);
 
@@ -453,23 +532,33 @@ function update() {
         die();
       } else {
         state.playerPos = Math.max(lo, Math.min(hi, state.playerPos));
-        if (state.wallBumpTimer === 0) { sndWall(); state.wallBumpTimer = 14; }
+        if (state.wallBumpTimer === 0) {
+          const now = Date.now();
+          state.wallHitTimes.push(now);
+          state.wallHitTimes = state.wallHitTimes.filter(t => now - t < 2000);
+          if (state.wallHitTimes.length >= 2 && state.wallSoundMuted === 0) state.wallSoundMuted = 180;
+          if (state.wallSoundMuted === 0) sndWall();
+          state.wallBumpTimer = 14;
+        }
       }
     }
   }
   if (state.wallBumpTimer > 0) state.wallBumpTimer--;
+  if (state.wallSoundMuted > 0) state.wallSoundMuted--;
 
-  // Player screen coords for collision math
   const px = isH ? pFixed : state.playerPos;
   const py = isH ? state.playerPos : pFixed;
 
-  // Obstacle collision (skip during any invincibility)
+  // Obstacle collision
   if (state.invincible === 0 && state.hitInvincible === 0) {
     for (const o of state.obstacles) {
       if (!o.alive) continue;
+      if (!isH && state.jumpOffset > 5) continue; // car jumped over obstacle
       const ox = isH ? o.crossPos : o.mainPos;
       const oy = isH ? o.mainPos  : o.crossPos;
-      if (Math.abs(px - ox) < 6 && Math.abs(py - oy) < 6) {
+      const hr = state.wingExpanded ? 9 : 6;
+      const ohh = o.hh || hr;
+      if (Math.abs(px - ox) < hr && Math.abs(py - oy) < ohh) {
         state.health--;
         state.hitInvincible = 60;
         state.hitFlash = 20;
@@ -481,27 +570,54 @@ function update() {
   }
   if (state.hitInvincible > 0) state.hitInvincible--;
 
-  // Collectible collision → grant invincibility
+  // Collectible collision
   for (const c of state.collectibles) {
     if (!c.alive) continue;
     const cx = isH ? c.crossPos : c.mainPos;
     const cy = isH ? c.mainPos  : c.crossPos;
-    if (Math.abs(px - cx) < 7 && Math.abs(py - cy) < 7) {
+    const cr = state.wingExpanded ? 12 : 7;
+    if (Math.abs(px - cx) < cr && Math.abs(py - cy) < cr) {
       c.alive = false;
-      state.score += c.bonus;
+      state.score      += c.bonus;
       state.invincible  = cfg.invincFrames;
       state.flashTimer  = 12;
       sndCollect();
     }
   }
-
   if (state.invincible > 0) state.invincible--;
 
-  // Move sound (throttled)
+  // Zeppelin update (cave flyer)
+  if (selectedTheme === 'cave') {
+    const zdir = flipped ? 1 : -1;
+    for (const z of state.zeppelins) z.crossPos += zdir * state.speed;
+    for (const z of state.zeppelins) {
+      if (!z.alive) continue;
+      const hr = state.wingExpanded ? 9 : 6;
+      if (state.invincible === 0 && state.hitInvincible === 0 &&
+          Math.abs(px - z.crossPos) < hr && Math.abs(py - (z.mainPos - 10)) < 6) {
+        z.alive = false;
+        state.health--;
+        state.hitInvincible = 60;
+        state.hitFlash = 20;
+        sndHit();
+        if (state.health <= 0) die();
+        continue;
+      }
+      const zcr = state.wingExpanded ? 7 : 4;
+      if (Math.abs(px - z.crossPos) < zcr && Math.abs(py - (z.mainPos - 1)) < 3) {
+        z.alive = false;
+        state.score += 100;
+        state.flashTimer = 12;
+        sndCollect();
+      }
+    }
+    state.zeppelins = state.zeppelins.filter(z => z.alive &&
+      (flipped ? z.crossPos < W + 16 : z.crossPos > -16));
+  }
+
   if (state.moveSoundTimer > 0) state.moveSoundTimer--;
   if ((input.left || input.right) && state.moveSoundTimer === 0) {
-    sndMove();
-    state.moveSoundTimer = 10;
+    sndMove(); state.moveSoundTimer = 10;
   }
 
   // Clean off-screen
@@ -523,6 +639,7 @@ function die() {
   if (state.score > hiScores[selectedTheme]) {
     hiScores[selectedTheme] = state.score;
     state.hiScore = state.score;
+    try { localStorage.setItem(_hiKey, JSON.stringify(hiScores)); } catch(e) {}
   }
 }
 
@@ -565,9 +682,13 @@ function draw() {
         ctx.fillStyle = theme.lineColor;
         ctx.fillRect(Math.floor((wallL+wallR)/2), y, 1, 1);
       }
-      if (theme.wallStyle==='rocky' && i%4===0) {
+      if (theme.wallStyle === 'rocky' && i%4===0) {
         ctx.fillStyle = theme.wallAccent;
         ctx.fillRect(Math.floor(wallL)-1, y, 2, 1); ctx.fillRect(Math.ceil(wallR), y, 2, 1);
+      }
+      if (theme.wallStyle === 'jagged') {
+        ctx.fillStyle = theme.wallAccent;
+        if (i%3===0) { ctx.fillRect(Math.floor(wallL)-2,y,3,1); ctx.fillRect(Math.ceil(wallR),y,3,1); }
       }
     }
   }
@@ -578,29 +699,53 @@ function draw() {
     const cx = isH ? c.crossPos : c.mainPos, cy = isH ? c.mainPos : c.crossPos;
     drawSprite(c.sprite, c.palette, cx-4, cy-4, 1);
   }
+  // Zeppelins (cave flyer) — balloon=damage, cockpit=token
+  for (const z of (state.zeppelins || [])) {
+    if (!z.alive) continue;
+    const zx = z.crossPos, zy = z.mainPos;
+    ctx.fillStyle = '#AA3322';
+    ctx.fillRect(zx-3,zy-16,7,2); ctx.fillRect(zx-4,zy-14,9,6); ctx.fillRect(zx-3,zy-8,7,2);
+    ctx.fillStyle = '#CC5544'; ctx.fillRect(zx-3,zy-13,3,3);
+    ctx.fillStyle = '#776655'; ctx.fillRect(zx,zy-6,1,3);
+    ctx.fillStyle = '#886622'; ctx.fillRect(zx-3,zy-3,7,4);
+    ctx.fillStyle = '#CCBB44'; ctx.fillRect(zx-2,zy-2,2,1); ctx.fillRect(zx+1,zy-2,1,1);
+  }
   // Obstacles
   for (const o of state.obstacles) {
     if (!o.alive) continue;
     const ox = isH ? o.crossPos : o.mainPos, oy = isH ? o.mainPos : o.crossPos;
-    drawSprite(o.sprite, o.palette, ox-4, oy-4, 1);
+    drawSprite(o.sprite, o.palette, ox-4, oy-(o.drawOfsY||4), 1);
   }
 
-  // Player coords
   const px = isH ? pFixed : state.playerPos;
   const py = isH ? state.playerPos : pFixed;
+  const drawPy = py - (state.jumpOffset || 0);
+
+  // Car jump shadow
+  if (!isH && state.jumpOffset > 1) {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(px - 3, py - 1, 8, 3);
+  }
 
   // Invincibility shield
   if (state.invincible > 0) {
     const pulse = Math.sin(state.invincible / 5) * 0.5 + 0.5;
-    ctx.fillStyle = `rgba(255,255,80,${(pulse * 0.45).toFixed(2)})`;
-    ctx.fillRect(px-6, py-6, 20, 20);
-    ctx.fillStyle = `rgba(255,220,0,${(pulse * 0.6).toFixed(2)})`;
-    ctx.fillRect(px-4, py-4, 16, 16);
+    ctx.fillStyle = `rgba(255,255,80,${(pulse*0.45).toFixed(2)})`;
+    ctx.fillRect(px-6, drawPy-6, 20, 20);
+    ctx.fillStyle = `rgba(255,220,0,${(pulse*0.6).toFixed(2)})`;
+    ctx.fillRect(px-4, drawPy-4, 16, 16);
+  }
+
+  // Wing expansion visual (cave flyer)
+  if (isH && state.wingExpanded) {
+    ctx.fillStyle = theme.palette[2] || '#88CCFF';
+    ctx.fillRect(px - 4, drawPy - 7, 8, 3);
+    ctx.fillRect(px - 4, drawPy + 5, 8, 3);
   }
 
   // Player sprite
   if (state.alive || state.deathTimer % 6 < 3) {
-    drawSprite(theme.player, theme.palette, px-4, py-4, 1);
+    drawSprite(theme.player, theme.palette, px-4, drawPy-4, 1);
   }
 
   // Bonus flash
@@ -616,11 +761,11 @@ function draw() {
     for (let i = 0; i < 8; i++) {
       const a = (i/8)*Math.PI*2, d = t*1.5;
       ctx.fillStyle = theme.palette[2]||'#FFF';
-      ctx.fillRect(px+Math.cos(a)*d, py+Math.sin(a)*d, 2, 2);
+      ctx.fillRect(px+Math.cos(a)*d, drawPy+Math.sin(a)*d, 2, 2);
     }
   }
 
-  // Hit flash (red overlay)
+  // Hit flash
   if (state.hitFlash > 0) {
     state.hitFlash--;
     ctx.fillStyle = `rgba(255,40,40,${(state.hitFlash/20)*0.45})`;
@@ -632,30 +777,36 @@ function draw() {
   drawText(`SCORE ${state.score}`, 4, 4);
   drawText(`HI    ${state.hiScore}`, 4, 14);
   drawText(`${state.speed.toFixed(1)}X`, W-24, 4);
-  // Health pips (only when more than 1 hit point)
   if (cfg.hitPoints > 1) {
     for (let i = 0; i < cfg.hitPoints; i++) {
       ctx.fillStyle = i < state.health ? '#FF4444' : '#333333';
-      ctx.fillRect(4 + i * 7, 24, 5, 5);
+      ctx.fillRect(4 + i*7, 24, 5, 5);
     }
   }
   if (state.invincible > 0) {
     ctx.fillStyle = '#FFEE44';
-    drawText('INVINCIBLE', W/2 - 30, 4);
+    drawText('INVINCIBLE', W/2-30, 4);
   }
 
-  // Start screen
+  // Start overlay
   if (!state.started && state.alive) {
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(0, H/2-26, W, 50);
+    ctx.fillRect(0, H/2-26, W, 62);
     ctx.fillStyle = theme.hudColor;
     drawText(theme.name.toUpperCase(), W/2 - theme.name.length*3, H/2-18);
-    const ctrl = isH ? 'UP/DOWN ARROWS' : 'LEFT/RIGHT ARROWS';
+    const ctrl = isMobile ? 'TAP LEFT / RIGHT'
+      : (isH ? 'UP/DOWN ARROWS' : 'LEFT/RIGHT ARROWS');
     drawText(ctrl, W/2 - ctrl.length*3, H/2-6);
-    drawText('SPACE TO START', W/2-42, H/2+6);
+    const go = isMobile ? 'TAP TO START' : 'SPACE TO START';
+    drawText(go, W/2 - go.length*3, H/2+6);
+    if (!isMobile) {
+      ctx.fillStyle = '#888';
+      const hint = selectedTheme === 'road' ? 'SPACE: JUMP' : selectedTheme === 'cave' ? 'SHIFT: WINGS' : '';
+      if (hint) drawText(hint, W/2 - hint.length*3, H/2+18);
+    }
   }
 
-  // Game over screen
+  // Game over overlay
   if (!state.alive && state.deathTimer > 30) {
     ctx.fillStyle = 'rgba(0,0,0,0.72)';
     ctx.fillRect(0, H/2-30, W, 60);
@@ -665,11 +816,12 @@ function draw() {
     drawText(`SCORE ${state.score}`,   W/2-30, H/2-10);
     drawText(`BEST  ${state.hiScore}`, W/2-30, H/2+2);
     ctx.fillStyle = '#888';
-    drawText('SPACE-RETRY  ESC-MENU', W/2-63, H/2+18);
+    const retry = isMobile ? 'TAP TO RETRY' : 'SPACE-RETRY  ESC-MENU';
+    drawText(retry, W/2 - retry.length*3, H/2+18);
   }
 }
 
-// 5x7 pixel font renderer
+// 5x7 pixel font
 const FONT = {
   'A':'01110100011000111111100011000110001',
   'B':'11110100011111010001100011000111110',
@@ -715,25 +867,19 @@ const FONT = {
   ':':'00000011000110000000011000110000000',
 };
 const FW = 5, FH = 7;
- 
+
 function drawText(str, x, y) {
   let cx = x;
   for (const ch of str.toUpperCase()) {
     const bits = FONT[ch];
-    if (bits) {
-      for (let i = 0; i < bits.length; i++) {
-        if (bits[i] === '1') {
-          ctx.fillRect(cx + (i % FW), y + ((i / FW) | 0), 1, 1);
-        }
-      }
-    }
+    if (bits) for (let i = 0; i < bits.length; i++)
+      if (bits[i] === '1') ctx.fillRect(cx + (i%FW), y + ((i/FW)|0), 1, 1);
     cx += FW + 1;
   }
 }
 
-
 // ============================================================
-//  AUDIO  (Web Audio API — no external files)
+//  AUDIO
 // ============================================================
 let _ac = null;
 function getAC() {
@@ -741,8 +887,6 @@ function getAC() {
   if (_ac.state === 'suspended') _ac.resume();
   return _ac;
 }
-
-// Play a pitched tone (oscillator + gain envelope)
 function _tone(freq, type, vol, delay, dur, freqEnd) {
   try {
     const a = getAC(), t = a.currentTime + delay;
@@ -756,111 +900,127 @@ function _tone(freq, type, vol, delay, dur, freqEnd) {
     osc.start(t); osc.stop(t + dur + 0.01);
   } catch(e) {}
 }
-
-// Play a noise burst (white noise + gain envelope)
 function _noise(vol, delay, dur) {
   try {
     const a = getAC(), t = a.currentTime + delay;
     const sr = a.sampleRate;
-    const buf = a.createBuffer(1, Math.ceil(sr * dur), sr);
+    const buf = a.createBuffer(1, Math.ceil(sr*dur), sr);
     const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < d.length; i++) d[i] = Math.random()*2-1;
     const src = a.createBufferSource(), g = a.createGain();
     src.buffer = buf; src.connect(g); g.connect(a.destination);
     g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.start(t); src.stop(t + dur + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    src.start(t); src.stop(t+dur+0.01);
   } catch(e) {}
 }
-
-// Subtle whistle tick while steering
-function sndMove() {
-  _tone(480, 'triangle', 0.06, 0, 0.04);
-}
-
-// Wall bump (low thud)
-function sndWall() {
-  _tone(110, 'triangle', 0.35, 0, 0.12, 45);
-  _noise(0.10, 0, 0.08);
-}
-
-// Collectible chime (ascending 3-note ding)
-function sndCollect() {
-  _tone(660,  'sine', 0.28, 0,    0.10);
-  _tone(880,  'sine', 0.28, 0.09, 0.12);
-  _tone(1320, 'sine', 0.20, 0.19, 0.14);
-}
-
-// Obstacle hit — sharp crunch
-function sndHit() {
-  _tone(280, 'sawtooth', 0.30, 0,    0.12, 70);
-  _noise(0.18, 0, 0.10);
-}
-
-// Death — descending sweep + noise
-function sndDie() {
-  _tone(440, 'sawtooth', 0.28, 0,    0.09, 220);
-  _tone(220, 'sawtooth', 0.22, 0.07, 0.18, 60);
-  _noise(0.12, 0, 0.22);
-}
+function sndMove()    { _tone(480,'triangle',0.06,0,0.04); }
+function sndWall()    { _tone(110,'triangle',0.35,0,0.12,45); _noise(0.10,0,0.08); }
+function sndCollect() { _tone(660,'sine',0.28,0,0.10); _tone(880,'sine',0.28,0.09,0.12); _tone(1320,'sine',0.20,0.19,0.14); }
+function sndHit()     { _tone(280,'sawtooth',0.30,0,0.12,70); _noise(0.18,0,0.10); }
+function sndDie()     { _tone(440,'sawtooth',0.28,0,0.09,220); _tone(220,'sawtooth',0.22,0.07,0.18,60); _noise(0.12,0,0.22); }
 
 // ============================================================
 //  MENU UI BUILDER
 // ============================================================
 function buildSettingsUI() {
   const s = gameSettings[selectedTheme];
+  const panel = document.getElementById('settings-panel');
+  panel.innerHTML = '';
 
-  // Sliders
-  const slidersCol = document.getElementById('sliders-col');
-  slidersCol.innerHTML = '';
-  for (const d of SLIDER_DEFS) {
-    const row = document.createElement('div');
-    row.className = 'slider-row';
-    const id = 'sv-' + d.key;
-    row.innerHTML = `
-      <label for="${id}">${d.label}</label>
-      <input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${s[d.key]}">
-      <span class="slider-val" id="vl-${d.key}">${d.fmt(s[d.key])}</span>`;
-    slidersCol.appendChild(row);
-    row.querySelector('input').addEventListener('input', e => {
-      const v = parseFloat(e.target.value);
-      s[d.key] = v;
-      document.getElementById('vl-'+d.key).textContent = d.fmt(v);
-      saveSettings(selectedTheme, s);
-    });
+  if (isMobile) {
+    // Single flat column
+    for (const d of SLIDER_DEFS) {
+      const row = document.createElement('div');
+      row.className = 'slider-row';
+      const id = 'sv-' + d.key;
+      row.innerHTML = `
+        <div class="slider-head">
+          <label for="${id}">${d.label}</label>
+          <span class="slider-val" id="vl-${d.key}">${d.fmt(s[d.key])}</span>
+        </div>
+        <input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${s[d.key]}">`;
+      panel.appendChild(row);
+      row.querySelector('input').addEventListener('input', e => {
+        const v = parseFloat(e.target.value);
+        s[d.key] = v;
+        document.getElementById('vl-'+d.key).textContent = d.fmt(v);
+        saveSettings(selectedTheme, s);
+      });
+    }
+
+    const divEl = document.createElement('div');
+    divEl.style.cssText = 'height:1px;background:#1e1e1e;margin:4px 0';
+    panel.appendChild(divEl);
+
+    const mobileSwitches = [
+      {key:'direction', label:'OBSTACLES FROM', opts:[{v:'normal',l:'BELOW'},{v:'flipped',l:'ABOVE'}]},
+      {key:'placement', label:'PLAYER AT',      opts:[{v:'end',l:'BOTTOM'},{v:'start',l:'TOP'}]},
+      {key:'wallDeath', label:'WALL HIT',        opts:[{v:'on',l:'LETHAL'},{v:'off',l:'BOUNCE'}]},
+    ];
+    for (const def of mobileSwitches) {
+      const row = document.createElement('div');
+      row.className = 'sw-row';
+      row.innerHTML = `<span class="sw-label">${def.label}</span>`;
+      const pair = document.createElement('div');
+      pair.className = 'sw-pair';
+      for (const opt of def.opts) {
+        const btn = document.createElement('button');
+        btn.className = 'sw-opt' + (s[def.key] === opt.v ? ' active' : '');
+        btn.textContent = opt.l;
+        btn.addEventListener('click', () => {
+          s[def.key] = opt.v;
+          saveSettings(selectedTheme, s);
+          pair.querySelectorAll('.sw-opt').forEach(b => b.classList.toggle('active', b.textContent === opt.l));
+        });
+        pair.appendChild(btn);
+      }
+      row.appendChild(pair);
+      panel.appendChild(row);
+    }
+  } else {
+    // Desktop: two columns
+    const slidersCol = document.createElement('div');
+    slidersCol.className = 'settings-col';
+    slidersCol.id = 'sliders-col';
+    const divider = document.createElement('div');
+    divider.className = 'settings-divider';
+    const switchesCol = document.createElement('div');
+    switchesCol.className = 'settings-col';
+    switchesCol.id = 'switches-col';
+    panel.appendChild(slidersCol);
+    panel.appendChild(divider);
+    panel.appendChild(switchesCol);
+
+    for (const d of SLIDER_DEFS) {
+      const row = document.createElement('div');
+      row.className = 'slider-row';
+      const id = 'sv-' + d.key;
+      row.innerHTML = `
+        <label for="${id}">${d.label}</label>
+        <input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${s[d.key]}">
+        <span class="slider-val" id="vl-${d.key}">${d.fmt(s[d.key])}</span>`;
+      slidersCol.appendChild(row);
+      row.querySelector('input').addEventListener('input', e => {
+        const v = parseFloat(e.target.value);
+        s[d.key] = v;
+        document.getElementById('vl-'+d.key).textContent = d.fmt(v);
+        saveSettings(selectedTheme, s);
+      });
+    }
+    buildSwitches(s, switchesCol);
   }
-
-  buildSwitches(s);
 }
 
-function buildSwitches(s) {
-  const switchesCol = document.getElementById('switches-col');
-  switchesCol.innerHTML = '';
+function buildSwitches(s, col) {
+  col.innerHTML = '';
   const isH = s.scrollDir === 'horizontal';
-
   const defs = [
-    {
-      key:'scrollDir', label:'SCROLL',
-      opts:[{v:'vertical',l:'VERTICAL'},{v:'horizontal',l:'HORIZONTAL'}],
-    },
-    {
-      key:'direction', label:'OBSTACLES FROM',
-      opts: isH
-        ? [{v:'normal',l:'RIGHT'},{v:'flipped',l:'LEFT'}]
-        : [{v:'normal',l:'BELOW'},{v:'flipped',l:'ABOVE'}],
-    },
-    {
-      key:'placement', label:'PLAYER AT',
-      opts: isH
-        ? [{v:'start',l:'LEFT'},{v:'end',l:'RIGHT'}]
-        : [{v:'start',l:'TOP'},{v:'end',l:'BOTTOM'}],
-    },
-    {
-      key:'wallDeath', label:'WALL HIT',
-      opts:[{v:'on',l:'LETHAL'},{v:'off',l:'BOUNCE'}],
-    },
+    {key:'scrollDir', label:'SCROLL',         opts:[{v:'vertical',l:'VERTICAL'},{v:'horizontal',l:'HORIZONTAL'}]},
+    {key:'direction', label:'OBSTACLES FROM',  opts: isH ? [{v:'normal',l:'RIGHT'},{v:'flipped',l:'LEFT'}]   : [{v:'normal',l:'BELOW'},{v:'flipped',l:'ABOVE'}]},
+    {key:'placement', label:'PLAYER AT',       opts: isH ? [{v:'start',l:'LEFT'},{v:'end',l:'RIGHT'}]        : [{v:'start',l:'TOP'},{v:'end',l:'BOTTOM'}]},
+    {key:'wallDeath', label:'WALL HIT',        opts:[{v:'on',l:'LETHAL'},{v:'off',l:'BOUNCE'}]},
   ];
-
   for (const def of defs) {
     const row = document.createElement('div');
     row.className = 'sw-row';
@@ -874,13 +1034,13 @@ function buildSwitches(s) {
       btn.addEventListener('click', () => {
         s[def.key] = opt.v;
         saveSettings(selectedTheme, s);
-        if (def.key === 'scrollDir') buildSwitches(s); // labels change
+        if (def.key === 'scrollDir') buildSwitches(s, col);
         else pair.querySelectorAll('.sw-opt').forEach(b => b.classList.toggle('active', b.textContent === opt.l));
       });
       pair.appendChild(btn);
     }
     row.appendChild(pair);
-    switchesCol.appendChild(row);
+    col.appendChild(row);
   }
 }
 
@@ -890,7 +1050,6 @@ document.querySelectorAll('.g-tab').forEach(btn => {
     document.querySelectorAll('.g-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     selectedTheme = btn.dataset.theme;
-    currentSettings = gameSettings[selectedTheme];
     buildSettingsUI();
   });
 });
@@ -901,55 +1060,63 @@ document.querySelectorAll('.g-tab').forEach(btn => {
 function showMenu() {
   currentScreen = 'menu';
   input.left = input.right = false;
+  document.body.style.touchAction = 'pan-y';
   document.getElementById('menu').style.display        = 'flex';
   document.getElementById('game-screen').style.display = 'none';
 }
 
 function showGame() {
   currentScreen = 'game';
+  document.body.style.touchAction = 'none';
   document.getElementById('menu').style.display        = 'none';
   document.getElementById('game-screen').style.display = 'flex';
+  resizeCanvas();
   initState();
 }
 
-document.getElementById('play-btn').addEventListener('click', showGame);
+document.getElementById('play-btn').addEventListener('click', () => { getAC(); showGame(); });
 document.getElementById('back-btn').addEventListener('click', showMenu);
 
 // ============================================================
 //  INPUT
 // ============================================================
 function handleAction() {
-  if (!state.started && state.alive)              { state.started = true; return; }
-  if (!state.alive && state.deathTimer > 30)      { initState(); state.started = true; }
+  if (!state.started && state.alive)         { state.started = true; return; }
+  if (!state.alive && state.deathTimer > 30) { initState(); state.started = true; return; }
+  if (selectedTheme === 'road' && state.started && state.alive && state.jumpTimer === 0) {
+    state.jumpTimer = 45;
+  }
 }
 
 document.addEventListener('keydown', e => {
   if (currentScreen === 'menu') {
-    if (e.code === 'Enter') { e.preventDefault(); showGame(); }
+    if (e.code === 'Enter') { e.preventDefault(); getAC(); showGame(); }
     return;
   }
-  // game screen
   if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { input.left  = true; e.preventDefault(); }
   if (e.code === 'ArrowRight' || e.code === 'KeyD') { input.right = true; e.preventDefault(); }
   if (e.code === 'ArrowUp'    || e.code === 'KeyW') { input.left  = true; e.preventDefault(); }
   if (e.code === 'ArrowDown'  || e.code === 'KeyS') { input.right = true; e.preventDefault(); }
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.action = true; e.preventDefault(); }
   if (e.code === 'Space')  { handleAction(); e.preventDefault(); }
   if (e.code === 'Escape') { showMenu(); e.preventDefault(); }
 });
-
 document.addEventListener('keyup', e => {
   if (e.code === 'ArrowLeft'  || e.code === 'KeyA') input.left  = false;
   if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
   if (e.code === 'ArrowUp'    || e.code === 'KeyW') input.left  = false;
   if (e.code === 'ArrowDown'  || e.code === 'KeyS') input.right = false;
+  if (e.code === 'ShiftLeft'  || e.code === 'ShiftRight') input.action = false;
 });
 
 const tl = document.getElementById('touch-left');
 const tr = document.getElementById('touch-right');
-tl.addEventListener('touchstart', e=>{input.left=true; handleAction(); e.preventDefault();},{passive:false});
-tl.addEventListener('touchend',   e=>{input.left=false; e.preventDefault();},{passive:false});
-tr.addEventListener('touchstart', e=>{input.right=true; handleAction(); e.preventDefault();},{passive:false});
-tr.addEventListener('touchend',   e=>{input.right=false; e.preventDefault();},{passive:false});
+tl.addEventListener('touchstart',  e => { input.left=true;  handleAction(); e.preventDefault(); }, {passive:false});
+tl.addEventListener('touchend',    e => { input.left=false; e.preventDefault(); }, {passive:false});
+tl.addEventListener('touchcancel', e => { input.left=false; }, {passive:true});
+tr.addEventListener('touchstart',  e => { input.right=true;  handleAction(); e.preventDefault(); }, {passive:false});
+tr.addEventListener('touchend',    e => { input.right=false; e.preventDefault(); }, {passive:false});
+tr.addEventListener('touchcancel', e => { input.right=false; }, {passive:true});
 
 // ============================================================
 //  GAME LOOP
@@ -959,8 +1126,15 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// Boot
+// Boot — adapt static text for mobile
+if (isMobile) {
+  document.getElementById('menu-sub').textContent  = 'TAP LEFT / RIGHT TO STEER';
+  document.getElementById('play-hint').textContent = 'TAP TO START AFTER LAUNCH';
+  document.getElementById('back-btn').textContent  = '◀  MENU';
+}
+
 buildSettingsUI();
+resizeCanvas();
 loop();
 </script>
 </body>
