@@ -61,8 +61,8 @@ canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edge
   </div>
   <button id="startBtn">START GAME</button>
   <div style="color:#555;font-size:13px;text-align:center;margin-top:8px;">
-    Arrow Keys / WASD: Move &amp; Jump &nbsp;|&nbsp; Z / Space: Throw shell<br>
-    Collect gems • Defeat crabs • Reach the star!
+    ←→ / AD: Move &nbsp;|&nbsp; ↑ / W / Space: Jump &nbsp;|&nbsp; ↓ / S: Duck<br>
+    Space / Z: Throw carried shell &nbsp;|&nbsp; Collect gems • Defeat crabs • Reach the star!
   </div>
 </div>
 
@@ -322,6 +322,7 @@ function spawnPlayer() {
     coyoteTime: 0,
     wasOnGround: false,
     invincible: 0,    // frames of invincibility
+    ducking: false,
     spawnX: 80, spawnY: (SURFACE_FLOOR - 2) * TILE,
   };
 }
@@ -392,20 +393,33 @@ function updatePlayer(dt) {
   if (pl.invincible > 0) pl.invincible--;
 
   // Input
-  const left  = keys['ArrowLeft']  || keys['KeyA'];
-  const right = keys['ArrowRight'] || keys['KeyD'];
-  const jump  = keys['ArrowUp']    || keys['KeyW'] || keys['Space'];
-  const jumpP = justPressed['ArrowUp'] || justPressed['KeyW'] || justPressed['Space'];
-  const throwK = justPressed['KeyZ'] || justPressed['ShiftLeft'];
+  const left   = keys['ArrowLeft']  || keys['KeyA'];
+  const right  = keys['ArrowRight'] || keys['KeyD'];
+  const down   = keys['ArrowDown']  || keys['KeyS'];
+  const spaceThrow = !!pl.carrying; // Space throws when holding something, else jumps
+  const jump   = keys['ArrowUp']    || keys['KeyW'] || (!spaceThrow && keys['Space']);
+  const jumpP  = justPressed['ArrowUp'] || justPressed['KeyW'] || (!spaceThrow && justPressed['Space']);
+  const throwK = justPressed['KeyZ'] || justPressed['ShiftLeft'] || (spaceThrow && justPressed['Space']);
 
-  // Horizontal movement
+  // Duck
+  if (down && pl.onGround && !pl.inWater) {
+    pl.ducking = true;
+  } else {
+    pl.ducking = false;
+  }
+
+  // Horizontal movement (no movement while ducking)
   const spd = pl.inWater ? SWIM_SPEED : PLAYER_SPEED;
-  if (left)  { pl.vx = -spd; pl.facingRight = false; }
-  else if (right) { pl.vx = spd;  pl.facingRight = true; }
-  else pl.vx *= 0.7;
+  if (!pl.ducking) {
+    if (left)  { pl.vx = -spd; pl.facingRight = false; }
+    else if (right) { pl.vx = spd; pl.facingRight = true; }
+    else pl.vx *= 0.7;
+  } else {
+    pl.vx *= 0.5;
+  }
 
-  // Don't allow going left past start
-  if (pl.x < 0) { pl.x = 0; pl.vx = 0; }
+  // Don't allow going left of the camera's current left edge (one-way scroll)
+  if (pl.x < state.cameraX) { pl.x = state.cameraX; if (pl.vx < 0) pl.vx = 0; }
 
   // Gravity
   if (pl.inWater) {
@@ -424,7 +438,7 @@ function updatePlayer(dt) {
   if (jumpP) pl.jumpBuffer = 8;
   else if (pl.jumpBuffer > 0) pl.jumpBuffer--;
 
-  if (pl.jumpBuffer > 0 && pl.coyoteTime > 0 && !pl.inWater) {
+  if (pl.jumpBuffer > 0 && pl.coyoteTime > 0 && !pl.inWater && !pl.ducking) {
     pl.vy = JUMP_FORCE;
     pl.coyoteTime = 0;
     pl.jumpBuffer = 0;
@@ -524,7 +538,11 @@ function updatePlayer(dt) {
   if (rectOverlap(pl.x,pl.y,pl.w,pl.h, st.x,st.y,32,32)) {
     sfxStar();
     endGame('win');
+    return;
   }
+
+  // Hard wall at star — player cannot walk or jump past it
+  if (pl.x + pl.w > st.x + 32) { pl.x = st.x + 32 - pl.w; if (pl.vx > 0) pl.vx = 0; }
 
   // Fall off screen
   if (pl.y > H * 2) loseLife(false);
@@ -576,12 +594,15 @@ function updateCrabs() {
 
     // Player vs crab
     const pl = state.player;
-    if (pl.invincible <= 0 && overlap(pl, crab)) {
-      // Stomp from above?
-      if (pl.vy > 0 && pl.y + pl.h - pl.vy * 1.1 < crab.y + crab.h * 0.4) {
+    // Kill zone covers crab body + claws (claws extend ~16px above crab.y, ~19px sideways)
+    const killBox = { x: crab.x - 19, y: crab.y - 16, w: crab.w + 38, h: crab.h + 16 };
+    // Stomp: player is airborne, overlaps kill zone, and feet are not below crab bottom
+    const stomping = !pl.onGround && overlap(pl, killBox) && pl.y + pl.h <= crab.y + crab.h;
+    if (pl.invincible <= 0) {
+      if (stomping) {
         killCrab(crab, pl.x + pl.w/2, crab.y);
         pl.vy = JUMP_FORCE * 0.6;
-      } else {
+      } else if (overlap(pl, crab)) {
         if (cfg.crabLives) loseLife(false);
         else {
           pl.vx = pl.x < crab.x ? -5 : 5;
@@ -654,6 +675,7 @@ function loseLife(isLava) {
     pl.x = pl.spawnX; pl.y = pl.spawnY;
     pl.vx = 0; pl.vy = 0;
     pl.carrying = null;
+    pl.ducking = false;
     pl.invincible = 120;
     state.cameraX = Math.max(0, pl.x - W/3);
   }
@@ -674,8 +696,9 @@ function endGame(result) {
 function updateCamera() {
   const pl = state.player;
   const targetX = pl.x - W * 0.3;
-  state.cameraX += (targetX - state.cameraX) * 0.1;
-  state.cameraX = Math.max(0, Math.min(state.cameraX, state.levelWidth - W));
+  const newX = state.cameraX + (targetX - state.cameraX) * 0.1;
+  // Camera only ever advances forward — never scrolls back
+  state.cameraX = Math.max(state.cameraX, Math.max(0, Math.min(newX, state.levelWidth - W)));
 }
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
@@ -989,8 +1012,11 @@ function drawPlayer() {
   if (pl.invincible > 0 && Math.floor(pl.invincible / 4) % 2 === 0) return;
 
   ctx.save();
-  ctx.translate(sx + pl.w/2, pl.y + pl.h/2);
+  // Anchor to feet so squish compresses upward
+  ctx.translate(sx + pl.w/2, pl.y + pl.h);
+  if (pl.ducking) ctx.scale(1, 0.5);
   if (!pl.facingRight) ctx.scale(-1, 1);
+  ctx.translate(0, -pl.h / 2);
 
   // Body - Big Green is a big green character
   // Legs (animated when moving)

@@ -171,6 +171,39 @@ canvas {
 }
 #back-btn:hover  { color: #999; border-color: #555; }
 #back-btn:active { color: #999; }
+
+/* ── HI-SCORE NAME ENTRY OVERLAY ── */
+#hi-overlay {
+  display: none; position: absolute; inset: 0; z-index: 30;
+  background: rgba(0,0,0,0.90);
+  flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  font-family: monospace;
+}
+#hi-overlay .hi-ttl { font-size: 0.72rem; letter-spacing: 0.28em; color: #ffdd00; text-align: center; }
+#hi-overlay .hi-sc  { font-size: 0.60rem; color: #aaa;  letter-spacing: 0.14em; }
+#hi-overlay .hi-rk  { font-size: 0.55rem; color: #888;  letter-spacing: 0.12em; }
+#hi-name {
+  background: #0a0a0a; border: 2px solid #ffdd00; color: #ffdd00;
+  font-family: monospace; font-size: 0.85rem; letter-spacing: 0.2em;
+  padding: 7px 12px; text-align: center; outline: none; border-radius: 4px;
+  width: 160px; text-transform: uppercase;
+}
+#hi-ok {
+  background: #ffdd00; color: #000; border: none;
+  padding: 7px 24px; font-family: monospace; font-size: 0.68rem;
+  letter-spacing: 0.2em; font-weight: bold; border-radius: 4px; cursor: pointer;
+}
+#hi-ok:hover { background: #ffee44; }
+
+/* ── LEADERBOARD IN MENU ── */
+.lb-section { width: 100%; max-width: 520px; }
+.lb-hdr { font-size: 0.55rem; letter-spacing: 0.22em; color: #333; margin-bottom: 5px; }
+.lb-entry { display: flex; padding: 3px 4px; border-bottom: 1px solid #0f0f0f; }
+.lb-entry:nth-child(odd) { background: #0b0b0b; }
+.lb-entry .lr { color: #2a2a2a; width: 20px; font-size: 0.56rem; }
+.lb-entry .ln { color: #555; flex: 1; font-size: 0.56rem; letter-spacing: 0.05em; }
+.lb-entry .ls { color: #ffdd00; font-size: 0.56rem; }
+.lb-none { color: #222; font-size: 0.52rem; letter-spacing: 0.15em; padding: 5px 4px; }
 </style>
 </head>
 <body>
