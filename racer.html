@@ -231,6 +231,11 @@ canvas {
     <button id="play-btn">▶  PLAY</button>
     <p class="play-hint" id="play-hint">PRESS ENTER TO START</p>
   </div>
+
+  <div class="lb-section">
+    <div class="lb-hdr">— TOP SCORES —</div>
+    <div id="lb-list"></div>
+  </div>
 </div>
 
 <!-- ══ GAME SCREEN ══ -->
@@ -239,6 +244,13 @@ canvas {
     <canvas id="c"></canvas>
     <div id="touch-left"></div>
     <div id="touch-right"></div>
+    <div id="hi-overlay" style="display:none">
+      <div class="hi-ttl">★ NEW HIGH SCORE ★</div>
+      <div class="hi-sc" id="hi-sc-val"></div>
+      <div class="hi-rk" id="hi-rk-val"></div>
+      <input id="hi-name" maxlength="10" placeholder="YOUR NAME" autocomplete="off" spellcheck="false">
+      <button id="hi-ok">SAVE</button>
+    </div>
   </div>
   <button id="back-btn" id="back-btn">◀  BACK TO MENU  (ESC)</button>
 </div>
@@ -285,6 +297,24 @@ const SPRITES = {
     [3,1,1,2,2,1,1,3],[3,1,2,2,2,2,1,3],[3,1,2,2,2,2,1,3],[3,1,2,2,2,2,1,3],
     [3,1,2,2,2,2,1,3],[3,1,2,2,2,2,1,3],[0,1,2,2,2,2,1,0],[0,0,1,3,3,1,0,0],
   ],
+  bus:[
+    [0,0,0,1,1,1,1,1,1,0,0,0],
+    [0,1,1,2,2,2,2,2,2,1,1,0],
+    [1,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,4,4,2,2,2,2,4,4,2,1],
+    [1,2,4,4,2,2,2,2,4,4,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,1],
+    [1,5,2,2,2,2,2,2,2,2,5,1],
+    [1,5,2,2,2,2,2,2,2,2,5,1],
+    [1,5,2,2,2,2,2,2,2,2,5,1],
+    [1,5,2,2,2,2,2,2,2,2,5,1],
+    [1,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,4,4,2,2,2,2,4,4,2,1],
+    [1,2,4,4,2,2,2,2,4,4,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,1],
+    [0,1,1,2,2,2,2,2,2,1,1,0],
+    [0,0,1,3,3,1,1,3,3,1,0,0],
+  ],
   gem:[
     [0,0,1,1,1,1,0,0],[0,1,4,5,5,4,1,0],[1,4,5,5,5,5,4,1],[1,5,5,5,5,5,5,1],
     [0,1,5,5,5,5,1,0],[0,0,1,5,5,1,0,0],[0,0,0,1,1,0,0,0],[0,0,0,0,0,0,0,0],
@@ -312,7 +342,7 @@ const THEMES = {
     palette:['transparent','#222','#FFD700','#FF4444','#1E90FF','#EEE'],
     obstacles:[
       {sprite:SPRITES.enemyCar,  freq:0.02,  palette:['transparent','#333','#FF3333','#DD2222','#EE5555','#FF6666'], hw:6, hh:6},
-      {sprite:SPRITES.semiTruck, freq:0.008, palette:['transparent','#444','#774422','#FF5500','#CCAA44','#996633'], hw:9, hh:8, drawOfsY:6},
+      {sprite:SPRITES.bus, freq:0.006, palette:['transparent','#333','#3355AA','#111','#AADDFF','#1144CC'], hw:7, hh:10, drawOfsX:6, drawOfsY:8},
     ],
     collectibles:[{sprite:SPRITES.fuel,freq:0.008,palette:['transparent','#333','#FF4444','#FF6600','#FFAA00','#FFDD00'],bonus:75}],
     scrollDir:'vertical',
@@ -391,11 +421,18 @@ canvas.width = W; canvas.height = H;
 let theme, state;
 let currentScreen = 'menu';
 let input = {left:false, right:false, action:false};
-const _hiKey = (isMobile ? 'runner_mob_hi' : 'runner_hi');
-const hiScores = (() => {
-  try { return Object.assign({tunnel:0,road:0,cave:0}, JSON.parse(localStorage.getItem(_hiKey))); }
-  catch(e) { return {tunnel:0,road:0,cave:0}; }
-})();
+const _lbPrefix = isMobile ? 'runner_mob_lb_' : 'runner_lb_';
+function loadLB(t)   { try { return JSON.parse(localStorage.getItem(_lbPrefix+t))||[]; } catch(e){return[];} }
+function saveLB(t,b) { try { localStorage.setItem(_lbPrefix+t,JSON.stringify(b)); } catch(e){} }
+function qualifiesLB(t,sc) { if(sc<=0)return false; const b=leaderboards[t]; return b.length<10||sc>b[b.length-1].score; }
+function insertLB(t,name,sc) {
+  const b=leaderboards[t];
+  b.push({name:(name.trim().toUpperCase().slice(0,10))||'ANON',score:sc});
+  b.sort((a,z)=>z.score-a.score);
+  if(b.length>10)b.length=10;
+  saveLB(t,b);
+}
+const leaderboards={tunnel:loadLB('tunnel'),road:loadLB('road'),cave:loadLB('cave')};
 
 function resizeCanvas() {
   const pad = 8, btnH = 50;
@@ -451,7 +488,7 @@ function initState() {
     rows, center, gap: startGap,
     speed:         theme.speedStart * cfg.speed,
     score:         0,
-    hiScore:       hiScores[selectedTheme],
+    hiScore:       leaderboards[selectedTheme].length ? leaderboards[selectedTheme][0].score : 0,
     alive:         true,
     started:       false,
     playerPos:     isH ? H/2 : W/2,
@@ -466,10 +503,10 @@ function initState() {
     hitInvincible: 0,
     hitFlash:      0,
     moveSoundTimer:0,
-    wallBumpTimer: 0,
-    wallHitTimes:  [],
-    wallSoundMuted:0,
-    wingExpanded:  false,
+    wallBumpTimer:  0,
+    wallBumpCount:  0,
+    wingSweep:      0,
+    wingExpanded:   false,
     jumpTimer:     0,
     jumpOffset:    0,
     distance:      0,
@@ -531,8 +568,16 @@ function update() {
   if (input.right) state.playerPos += pSpeed;
   state.playerPos = Math.max(4, Math.min((isH ? H : W) - 4, state.playerPos));
 
-  // Wing expansion (cave) and car jump (road)
-  state.wingExpanded = (selectedTheme === 'cave' && isH && input.action);
+  // Wing sweep (cave F-14 style) and car jump (road)
+  if (selectedTheme === 'cave' && isH) {
+    const wTarget = input.action ? 1 : 0;
+    const wRate   = input.action ? 0.12 : 0.08;
+    state.wingSweep = Math.max(0, Math.min(1,
+      state.wingSweep + (wTarget > state.wingSweep ? wRate : -wRate)));
+    state.wingExpanded = state.wingSweep > 0.4;
+  } else {
+    state.wingExpanded = false;
+  }
   if (selectedTheme === 'road' && !isH) {
     if (state.jumpTimer > 0) {
       state.jumpTimer--;
@@ -566,18 +611,13 @@ function update() {
       } else {
         state.playerPos = Math.max(lo, Math.min(hi, state.playerPos));
         if (state.wallBumpTimer === 0) {
-          const now = Date.now();
-          state.wallHitTimes.push(now);
-          state.wallHitTimes = state.wallHitTimes.filter(t => now - t < 2000);
-          if (state.wallHitTimes.length >= 2 && state.wallSoundMuted === 0) state.wallSoundMuted = 180;
-          if (state.wallSoundMuted === 0) sndWall();
+          if (state.wallBumpCount < 3) { sndWall(); state.wallBumpCount++; }
           state.wallBumpTimer = 14;
         }
       }
     }
   }
   if (state.wallBumpTimer > 0) state.wallBumpTimer--;
-  if (state.wallSoundMuted > 0) state.wallSoundMuted--;
 
   const px = isH ? pFixed : state.playerPos;
   const py = isH ? state.playerPos : pFixed;
@@ -669,11 +709,7 @@ function die() {
   state.alive = false;
   state.deathTimer = 0;
   sndDie();
-  if (state.score > hiScores[selectedTheme]) {
-    hiScores[selectedTheme] = state.score;
-    state.hiScore = state.score;
-    try { localStorage.setItem(_hiKey, JSON.stringify(hiScores)); } catch(e) {}
-  }
+  state.namePromptShown = false;
 }
 
 // ============================================================
@@ -732,22 +768,51 @@ function draw() {
     const cx = isH ? c.crossPos : c.mainPos, cy = isH ? c.mainPos : c.crossPos;
     drawSprite(c.sprite, c.palette, cx-4, cy-4, 1);
   }
-  // Zeppelins (cave flyer) — balloon=damage, cockpit=token
+  // Zeppelins (cave flyer) — horizontal cigar-shaped airship
   for (const z of (state.zeppelins || [])) {
     if (!z.alive) continue;
     const zx = z.crossPos, zy = z.mainPos;
-    ctx.fillStyle = '#AA3322';
-    ctx.fillRect(zx-3,zy-16,7,2); ctx.fillRect(zx-4,zy-14,9,6); ctx.fillRect(zx-3,zy-8,7,2);
-    ctx.fillStyle = '#CC5544'; ctx.fillRect(zx-3,zy-13,3,3);
-    ctx.fillStyle = '#776655'; ctx.fillRect(zx,zy-6,1,3);
-    ctx.fillStyle = '#886622'; ctx.fillRect(zx-3,zy-3,7,4);
-    ctx.fillStyle = '#CCBB44'; ctx.fillRect(zx-2,zy-2,2,1); ctx.fillRect(zx+1,zy-2,1,1);
+    // Envelope (horizontal, centered around zy-10)
+    ctx.fillStyle = '#6622AA';
+    ctx.fillRect(zx-12, zy-14, 24, 8);  // main hull
+    ctx.fillRect(zx-10, zy-15, 20, 1);  // top cap
+    ctx.fillRect(zx-10, zy-7,  20, 1);  // bottom cap
+    // Bow taper (left = direction of travel)
+    ctx.fillStyle = '#5511AA';
+    ctx.fillRect(zx-13, zy-13, 1, 6);
+    ctx.fillRect(zx-14, zy-12, 1, 4);
+    // Stern (right)
+    ctx.fillRect(zx+12, zy-13, 1, 6);
+    // Envelope highlight
+    ctx.fillStyle = '#9944CC';
+    ctx.fillRect(zx-10, zy-14, 18, 2);
+    // Portholes
+    ctx.fillStyle = '#FFEEAA';
+    ctx.fillRect(zx-7, zy-13, 2, 3);
+    ctx.fillRect(zx-1, zy-13, 2, 3);
+    ctx.fillRect(zx+5, zy-13, 2, 3);
+    // Mooring cables
+    ctx.fillStyle = '#443322';
+    ctx.fillRect(zx-3, zy-6, 1, 4);
+    ctx.fillRect(zx+2, zy-6, 1, 4);
+    // Gondola (centered around zy-2)
+    ctx.fillStyle = '#886622';
+    ctx.fillRect(zx-5, zy-3, 10, 4);
+    ctx.fillStyle = '#CCAA44';
+    ctx.fillRect(zx-4, zy-2, 3, 2);
+    ctx.fillRect(zx+1, zy-2, 3, 2);
+    // Tail fins (stern = right)
+    ctx.fillStyle = '#8833BB';
+    ctx.fillRect(zx+10, zy-17, 4, 4);  // upper fin
+    ctx.fillRect(zx+10, zy-7,  4, 4);  // lower fin
+    ctx.fillRect(zx+12, zy-15, 3, 2);  // upper fin tip
+    ctx.fillRect(zx+12, zy-5,  3, 2);  // lower fin tip
   }
   // Obstacles
   for (const o of state.obstacles) {
     if (!o.alive) continue;
     const ox = isH ? o.crossPos : o.mainPos, oy = isH ? o.mainPos : o.crossPos;
-    drawSprite(o.sprite, o.palette, ox-4, oy-(o.drawOfsY||4), 1);
+    drawSprite(o.sprite, o.palette, ox-(o.drawOfsX||4), oy-(o.drawOfsY||4), 1);
   }
 
   const px = isH ? pFixed : state.playerPos;
@@ -760,20 +825,45 @@ function draw() {
     ctx.fillRect(px - 3, py - 1, 8, 3);
   }
 
-  // Invincibility shield
+  // Invincibility — rainbow orbiting particle rings
   if (state.invincible > 0) {
-    const pulse = Math.sin(state.invincible / 5) * 0.5 + 0.5;
-    ctx.fillStyle = `rgba(255,255,80,${(pulse*0.45).toFixed(2)})`;
-    ctx.fillRect(px-6, drawPy-6, 20, 20);
-    ctx.fillStyle = `rgba(255,220,0,${(pulse*0.6).toFixed(2)})`;
-    ctx.fillRect(px-4, drawPy-4, 16, 16);
+    const t  = state.invincible;
+    const cx = px + 4, cy = drawPy + 4;
+    const RC = ['#FF4444','#FF8800','#FFDD00','#44FF44','#00CCFF','#AA44FF'];
+    for (let ring = 0; ring < 3; ring++) {
+      const radius = 6 + ring * 4;
+      const count  = 4 + ring * 2;
+      const spin   = t * (0.08 + ring * 0.04) * (ring % 2 === 0 ? 1 : -1);
+      for (let i = 0; i < count; i++) {
+        const angle = spin + (i / count) * Math.PI * 2;
+        const rx2 = Math.round(cx + Math.cos(angle) * radius);
+        const ry2 = Math.round(cy + Math.sin(angle) * radius);
+        ctx.fillStyle = RC[(i + ring * 2 + (t >> 3)) % RC.length];
+        const sz = ring < 2 ? 2 : 1;
+        ctx.fillRect(rx2 - 1, ry2 - 1, sz, sz);
+      }
+    }
+    const pulse = (Math.sin(t / 3) + 1) * 0.5;
+    ctx.fillStyle = `rgba(255,255,255,${(0.06 + 0.10 * pulse).toFixed(2)})`;
+    ctx.fillRect(cx - 5, cy - 5, 10, 10);
   }
 
-  // Wing expansion visual (cave flyer)
-  if (isH && state.wingExpanded) {
-    ctx.fillStyle = theme.palette[2] || '#88CCFF';
-    ctx.fillRect(px - 4, drawPy - 7, 8, 3);
-    ctx.fillRect(px - 4, drawPy + 5, 8, 3);
+  // Cave flyer F-14/B-1 variable-sweep wing animation
+  if (isH && selectedTheme === 'cave' && state.wingSweep > 0.02) {
+    const sw     = state.wingSweep;
+    const rootX  = px;
+    const rootY  = drawPy + 4;
+    const span   = 4 + Math.round(sw * 5);    // 4 swept → 9 extended
+    const tipOfs = Math.round((1 - sw) * 5);  // 0 extended → 5 swept back
+    const c1 = theme.palette[2] || '#88CCFF';
+    const c2 = theme.palette[3] || '#6699CC';
+    for (let i = 1; i <= span; i++) {
+      const t2  = i / span;
+      const wx  = rootX - Math.round(tipOfs * t2);
+      ctx.fillStyle = i >= span - 1 ? c1 : c2;
+      ctx.fillRect(wx, rootY - i - 1, 2, 1); // upper wing
+      ctx.fillRect(wx, rootY + i,     2, 1); // lower wing
+    }
   }
 
   // Player sprite
@@ -841,6 +931,18 @@ function draw() {
 
   // Game over overlay
   if (!state.alive && state.deathTimer > 30) {
+    if (!state.namePromptShown) {
+      state.namePromptShown = true;
+      if (qualifiesLB(selectedTheme, state.score)) {
+        const rank = leaderboards[selectedTheme].filter(e=>e.score>state.score).length + 1;
+        document.getElementById('hi-sc-val').textContent  = 'SCORE  ' + state.score;
+        document.getElementById('hi-rk-val').textContent  = 'RANK   #' + rank + ' OF 10';
+        document.getElementById('hi-name').value = '';
+        const ov = document.getElementById('hi-overlay');
+        ov.style.display = 'flex';
+        setTimeout(()=>document.getElementById('hi-name').focus(), 50);
+      }
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.72)';
     ctx.fillRect(0, H/2-30, W, 60);
     ctx.fillStyle = '#FF4444';
@@ -1077,6 +1179,37 @@ function buildSwitches(s, col) {
   }
 }
 
+// ============================================================
+//  LEADERBOARD UI
+// ============================================================
+function buildLeaderboardUI() {
+  const list = document.getElementById('lb-list');
+  if (!list) return;
+  const board = leaderboards[selectedTheme];
+  if (!board.length) {
+    list.innerHTML = '<div class="lb-none">NO SCORES YET</div>';
+    return;
+  }
+  list.innerHTML = board.map((e, i) =>
+    `<div class="lb-entry"><span class="lr">${i+1}</span><span class="ln">${e.name}</span><span class="ls">${e.score}</span></div>`
+  ).join('');
+}
+
+function submitHiName() {
+  const inp  = document.getElementById('hi-name');
+  const name = (inp.value.trim().toUpperCase().slice(0,10)) || 'ANON';
+  insertLB(selectedTheme, name, state.score);
+  state.hiScore = leaderboards[selectedTheme][0].score;
+  state.newHiScore = false;
+  document.getElementById('hi-overlay').style.display = 'none';
+  buildLeaderboardUI();
+}
+
+document.getElementById('hi-ok').addEventListener('click', submitHiName);
+document.getElementById('hi-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); submitHiName(); }
+});
+
 // Game tab selection
 document.querySelectorAll('.g-tab').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1084,6 +1217,7 @@ document.querySelectorAll('.g-tab').forEach(btn => {
     btn.classList.add('active');
     selectedTheme = btn.dataset.theme;
     buildSettingsUI();
+    buildLeaderboardUI();
   });
 });
 
@@ -1096,6 +1230,7 @@ function showMenu() {
   document.body.style.touchAction = 'pan-y';
   document.getElementById('menu').style.display        = 'flex';
   document.getElementById('game-screen').style.display = 'none';
+  buildLeaderboardUI();
 }
 
 function showGame() {
@@ -1113,7 +1248,10 @@ document.getElementById('back-btn').addEventListener('click', showMenu);
 // ============================================================
 //  INPUT
 // ============================================================
+function hiOverlayVisible() { return document.getElementById('hi-overlay').style.display !== 'none'; }
+
 function handleAction() {
+  if (hiOverlayVisible()) return;
   if (!state.started && state.alive)         { state.started = true; return; }
   if (!state.alive && state.deathTimer > 30) { initState(); state.started = true; return; }
   if (selectedTheme === 'road' && state.started && state.alive && state.jumpTimer === 0) {
@@ -1132,24 +1270,24 @@ document.addEventListener('keydown', e => {
   if (e.code === 'ArrowDown'  || e.code === 'KeyS') { input.right = true; e.preventDefault(); }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.action = true; e.preventDefault(); }
   if (e.code === 'Space')  { handleAction(); e.preventDefault(); }
-  if (e.code === 'Escape') { showMenu(); e.preventDefault(); }
+  if (e.code === 'Escape') { if (hiOverlayVisible()) return; showMenu(); e.preventDefault(); }
 });
 document.addEventListener('keyup', e => {
-  if (e.code === 'ArrowLeft'  || e.code === 'KeyA') input.left  = false;
-  if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
-  if (e.code === 'ArrowUp'    || e.code === 'KeyW') input.left  = false;
-  if (e.code === 'ArrowDown'  || e.code === 'KeyS') input.right = false;
+  if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { input.left  = false; if (state) state.wallBumpCount = 0; }
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') { input.right = false; if (state) state.wallBumpCount = 0; }
+  if (e.code === 'ArrowUp'    || e.code === 'KeyW') { input.left  = false; if (state) state.wallBumpCount = 0; }
+  if (e.code === 'ArrowDown'  || e.code === 'KeyS') { input.right = false; if (state) state.wallBumpCount = 0; }
   if (e.code === 'ShiftLeft'  || e.code === 'ShiftRight') input.action = false;
 });
 
 const tl = document.getElementById('touch-left');
 const tr = document.getElementById('touch-right');
 tl.addEventListener('touchstart',  e => { input.left=true;  handleAction(); e.preventDefault(); }, {passive:false});
-tl.addEventListener('touchend',    e => { input.left=false; e.preventDefault(); }, {passive:false});
-tl.addEventListener('touchcancel', e => { input.left=false; }, {passive:true});
+tl.addEventListener('touchend',    e => { input.left=false;  if(state)state.wallBumpCount=0; e.preventDefault(); }, {passive:false});
+tl.addEventListener('touchcancel', e => { input.left=false;  if(state)state.wallBumpCount=0; }, {passive:true});
 tr.addEventListener('touchstart',  e => { input.right=true;  handleAction(); e.preventDefault(); }, {passive:false});
-tr.addEventListener('touchend',    e => { input.right=false; e.preventDefault(); }, {passive:false});
-tr.addEventListener('touchcancel', e => { input.right=false; }, {passive:true});
+tr.addEventListener('touchend',    e => { input.right=false; if(state)state.wallBumpCount=0; e.preventDefault(); }, {passive:false});
+tr.addEventListener('touchcancel', e => { input.right=false; if(state)state.wallBumpCount=0; }, {passive:true});
 
 // ============================================================
 //  GAME LOOP
@@ -1167,6 +1305,7 @@ if (isMobile) {
 }
 
 buildSettingsUI();
+buildLeaderboardUI();
 resizeCanvas();
 loop();
 </script>

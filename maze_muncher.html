@@ -106,7 +106,9 @@ window.addEventListener('resize',resizeCanvas);
 // ── State ─────────────────────────────────────────────────────────────────────
 let gstate='title'; // title | playing | complete | gameover
 let level=1,score=0;
-let best = (() => { try { return parseInt(localStorage.getItem('maze_best'),10)||0; } catch(e){return 0;} })();
+const _mazeLBKey='maze_lb';
+let mazeLB=(()=>{try{return JSON.parse(localStorage.getItem(_mazeLBKey))||[];}catch(e){return[];}})();
+let best=mazeLB.length?mazeLB[0].score:0;
 let timeLeft=0,timerAcc=0;
 let freeExit=false,noTimer=false; // game-mode options
 let maze=[],mW=0,mH=0;
@@ -560,13 +562,64 @@ const overlayEl=document.getElementById('overlay');
 function showOv(html){overlayEl.innerHTML=html;overlayEl.style.display='flex';}
 function hideOv(){overlayEl.style.display='none';}
 
+// ── Leaderboard helpers ───────────────────────────────────────────────────────
+function qualifiesLB(sc){return sc>0&&(mazeLB.length<10||sc>mazeLB[mazeLB.length-1].score);}
+
+function lbHTML(){
+  if(!mazeLB.length)return'';
+  return'<div class="ob" style="margin-top:6px;font-size:clamp(10px,2vw,13px);color:#334466;letter-spacing:1px">▸ TOP SCORES ◂</div>'+
+    mazeLB.map((e,i)=>`<div class="ob" style="font-size:clamp(10px,2vw,13px);color:${i===0?'#ffee00':'#445577'}">${i+1}. ${e.name} — ${e.score}</div>`).join('');
+}
+
+function showGameOverOv(){
+  showOv(`
+    <div class="ot">GAME OVER</div>
+    <div class="ob">Level ${level} &nbsp;·&nbsp; Dots: ${dotsEaten}</div>
+    <div class="osc">Score: ${score}</div>
+    ${lbHTML()}
+    ${optionsHTML()}
+    <button id="btnRetry">PLAY AGAIN</button>
+  `);
+  bindOpts();
+  document.getElementById('btnRetry').onclick=()=>{score=0;level=1;hideOv();startLevel(1);};
+}
+
+function showNameEntry(){
+  const rank=mazeLB.filter(e=>e.score>score).length+1;
+  showOv(`
+    <div class="os" style="color:#ffee00;letter-spacing:3px">NEW HIGH SCORE!</div>
+    <div class="osc">${score}</div>
+    <div class="ob">Rank #${rank} of ${Math.min(mazeLB.length+1,10)} — enter your name:</div>
+    <input id="lb-inp" maxlength="10" placeholder="YOUR NAME" autocomplete="off" spellcheck="false"
+      style="background:#001133;border:2px solid #0066ff;color:#ddeeff;font-family:inherit;
+             font-size:clamp(14px,3vw,20px);padding:8px 14px;text-align:center;outline:none;
+             border-radius:4px;width:min(200px,80%);text-transform:uppercase;letter-spacing:2px;margin:4px 0">
+    <button id="lb-ok">SAVE SCORE</button>
+  `);
+  function submit(){
+    const inp=document.getElementById('lb-inp');
+    if(!inp)return;
+    const name=(inp.value.trim().toUpperCase().slice(0,10))||'ANON';
+    mazeLB.push({name,score});
+    mazeLB.sort((a,b)=>b.score-a.score);
+    if(mazeLB.length>10)mazeLB.length=10;
+    try{localStorage.setItem(_mazeLBKey,JSON.stringify(mazeLB));}catch(e){}
+    best=mazeLB[0].score;
+    updateHUD();
+    showGameOverOv();
+  }
+  document.getElementById('lb-ok').onclick=submit;
+  document.getElementById('lb-inp').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submit();}});
+  setTimeout(()=>{const i=document.getElementById('lb-inp');if(i)i.focus();},50);
+}
+
 // ── Level done ────────────────────────────────────────────────────────────────
 function levelDone(){
   if(gstate!=='playing')return;
   gstate='complete';
   const bonus=noTimer?0:Math.floor(timeLeft)*25;
   score+=bonus;
-  if(score>best){best=score;try{localStorage.setItem('maze_best',best);}catch(e){}}
+  if(score>best)best=score;
   updateHUD();
   const timeLine=noTimer?'':
     `<div class="ob">Time bonus: ${Math.floor(timeLeft)}s × 25 = <span class="ok">+${bonus} pts</span></div>`;
@@ -584,18 +637,10 @@ function levelDone(){
 function gameOver(){
   if(gstate!=='playing')return;
   gstate='gameover';
-  if(score>best){best=score;try{localStorage.setItem('maze_best',best);}catch(e){}}
+  if(score>best)best=score;
   updateHUD();
-  showOv(`
-    <div class="ot">GAME OVER</div>
-    <div class="ob">Level ${level} &nbsp;·&nbsp; Dots: ${dotsEaten}</div>
-    <div class="osc">Score: ${score}</div>
-    <div class="ob" style="color:#7788bb">Best: ${best}</div>
-    ${optionsHTML()}
-    <button id="btnRetry">PLAY AGAIN</button>
-  `);
-  bindOpts();
-  document.getElementById('btnRetry').onclick=()=>{score=0;level=1;hideOv();startLevel(1);};
+  if(qualifiesLB(score))showNameEntry();
+  else showGameOverOv();
 }
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
@@ -702,6 +747,17 @@ function startGame(){
 }
 document.getElementById('btnStart').onclick=startGame;
 bindOpts(); // wire the title screen toggles
+
+// Inject leaderboard into title screen if scores exist
+(function(){
+  if(!mazeLB.length)return;
+  const div=document.createElement('div');
+  div.style.cssText='width:100%;max-width:340px;margin-top:2px;text-align:center';
+  div.innerHTML='<div style="font-size:clamp(9px,1.8vw,12px);color:#334466;letter-spacing:1px;margin-bottom:3px">▸ TOP SCORES ◂</div>'+
+    mazeLB.slice(0,5).map((e,i)=>`<div style="font-size:clamp(9px,1.8vw,12px);color:${i===0?'#ffee00':'#445577'}">${i+1}. ${e.name} — ${e.score}</div>`).join('');
+  const btn=document.getElementById('btnStart');
+  btn.parentNode.insertBefore(div,btn);
+})();
 </script>
 </body>
 </html>
