@@ -62,7 +62,8 @@ canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edge
   <button id="startBtn">START GAME</button>
   <div style="color:#555;font-size:13px;text-align:center;margin-top:8px;">
     ←→ / AD: Move &nbsp;|&nbsp; ↑ / W: Jump &nbsp;|&nbsp; Space / Z: Throw shell or shoot bubble &nbsp;|&nbsp; ↓ / S: Duck<br>
-    Jump on crabs &amp; mantis shrimp to defeat them • Mantis shell = bubble cannon • Duck / jump to dodge bubbles
+    Jump on crabs, mantis shrimp &amp; bats to defeat them • Mantis shell = bubble cannon • Duck / jump to dodge bubbles<br>
+    Carrying a shell? Getting hit drops it instead of costing a life!
   </div>
 </div>
 
@@ -121,6 +122,8 @@ function sfxCrab()    { playTone(200, 'sawtooth', 0.2, 0.15); playTone(100,'squa
 function sfxMantis()  { playTone(120, 'sawtooth', 0.18, 0.18); playTone(60,'square',0.12,0.12); }
 function sfxSnap()    { playTone(900,'square',0.04,0.2); playTone(450,'sawtooth',0.08,0.15); }
 function sfxBubble()  { playTone(660,'sine',0.12,0.13,880); playTone(440,'sine',0.08,0.1,660); }
+function sfxBat()     { playTone(2200,'square',0.05,0.14,3000); playTone(1100,'sine',0.06,0.1,1600); }
+function sfxShellDrop(){ playTone(300,'sawtooth',0.1,0.15); playTone(200,'square',0.08,0.1); }
 function sfxHurt()    { playTone(150, 'sawtooth', 0.3, 0.2, 400); }
 function sfxStar()   {
   [523,659,784,1047].forEach((f,i) => setTimeout(()=>playTone(f,'sine',0.25,0.15), i*100));
@@ -169,6 +172,7 @@ function initState() {
     caves: [],
     crabs: [],
     mantisShrimps: [],
+    bats: [],
     gems: [],
     shells: [],
     bubbles: [],
@@ -202,6 +206,7 @@ function generateLevel() {
   state.blocks = [];
   state.crabs = [];
   state.mantisShrimps = [];
+  state.bats = [];
   state.gems = [];
   state.shells = [];
   state.bubbles = [];
@@ -305,6 +310,12 @@ function generateLevel() {
     enemySlot++;
   }
 
+  // Bats — fly in mid-air with sine-wave vertical motion
+  for (let tx = 20; tx < TW - 20; tx += 18 + Math.floor(Math.random() * 18)) {
+    const baseY = (SURFACE_FLOOR - 7 + Math.floor(Math.random() * 4)) * TILE; // rows 4–7
+    state.bats.push(createBat(tx * TILE, baseY));
+  }
+
   // Win star
   state.star = { x: (TW - 5) * TILE, y: (SURFACE_FLOOR - 2) * TILE, pulse: 0 };
 
@@ -331,6 +342,18 @@ function createMantis(x, y) {
     snapTimer: 90 + Math.floor(Math.random() * 80),
     snapAnim: 0,   // frames of claw-snap animation
     facingRight: dir > 0,
+  };
+}
+
+function createBat(x, baseY) {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  return {
+    x, y: baseY, baseY,
+    w: 28, h: 14,
+    vx: 2.2 * dir,
+    alive: true,
+    facingRight: dir > 0,
+    time: Math.random() * Math.PI * 2,
   };
 }
 
@@ -597,6 +620,26 @@ function updateBlocks() {
   }
 }
 
+// Unified player damage: drop carried shell as shield (no life lost), else take normal damage
+function hitPlayer(pl, knockDir) {
+  if (pl.carrying) {
+    const sh = pl.carrying;
+    sh.carrier = null;
+    sh.vx = knockDir * 4;
+    sh.vy = -4;
+    sh.thrown = false;
+    pl.carrying = null;
+    pl.vx = knockDir * 3;
+    pl.vy = -4;
+    pl.invincible = 80;
+    sfxShellDrop();
+    spawnParticles(pl.x + pl.w/2, pl.y + pl.h/2, '#ffcc00', 6);
+  } else {
+    if (cfg.crabLives) loseLife(false);
+    else { pl.vx = knockDir * 5; pl.vy = -6; pl.invincible = 90; }
+  }
+}
+
 function updateCrabs() {
   const solids = getSolidPlatforms();
   for (const crab of state.crabs) {
@@ -640,12 +683,7 @@ function updateCrabs() {
         killCrab(crab, pl.x + pl.w/2, crab.y);
         pl.vy = JUMP_FORCE * 0.6;
       } else if (overlap(pl, crab)) {
-        if (cfg.crabLives) loseLife(false);
-        else {
-          pl.vx = pl.x < crab.x ? -5 : 5;
-          pl.vy = -6;
-          pl.invincible = 90;
-        }
+        hitPlayer(pl, pl.x < crab.x ? -1 : 1);
       }
     }
 
@@ -739,8 +777,7 @@ function updateMantisShrimps() {
         killMantis(ms, pl.x + pl.w/2, ms.y);
         pl.vy = JUMP_FORCE * 0.6;
       } else if (overlap(pl, ms)) {
-        if (cfg.crabLives) loseLife(false);
-        else { pl.vx = pl.x < ms.x ? -5 : 5; pl.vy = -6; pl.invincible = 90; }
+        hitPlayer(pl, pl.x < ms.x ? -1 : 1);
       }
     }
 
@@ -785,10 +822,58 @@ function updateBubbles() {
     // Enemy bubble hits player (player can dodge by jumping or ducking)
     if (!b.fromPlayer && pl.invincible <= 0 && overlap(pl, b)) {
       state.bubbles.splice(i, 1);
-      if (cfg.crabLives) loseLife(false);
-      else { pl.vx = b.vx > 0 ? 5 : -5; pl.vy = -6; pl.invincible = 90; }
+      hitPlayer(pl, b.vx > 0 ? 1 : -1);
     }
   }
+}
+
+function updateBats() {
+  const pl = state.player;
+  for (const bat of state.bats) {
+    if (!bat.alive) continue;
+
+    // Advance phase (drives both vertical oscillation and wing animation)
+    bat.time += 0.045;
+
+    // Horizontal movement — no gravity, free-flying
+    bat.x += bat.vx;
+    if (bat.vx > 0) bat.facingRight = true;
+    else if (bat.vx < 0) bat.facingRight = false;
+
+    // Reverse at level edges
+    if (bat.x < 20)                         { bat.vx =  Math.abs(bat.vx); bat.facingRight = true; }
+    if (bat.x + bat.w > state.levelWidth-20) { bat.vx = -Math.abs(bat.vx); bat.facingRight = false; }
+
+    // Vertical position: pure sine-wave oscillation around baseY
+    bat.y = bat.baseY + Math.sin(bat.time) * 32;
+
+    // Player stomp: airborne, falling or level, feet within bat top half
+    const stomping = !pl.onGround && pl.vy >= -2 && overlap(pl, bat) && pl.y + pl.h <= bat.y + bat.h;
+    if (pl.invincible <= 0) {
+      if (stomping) {
+        killBat(bat, pl.x + pl.w/2, bat.y);
+        pl.vy = JUMP_FORCE * 0.6;
+      } else if (overlap(pl, bat)) {
+        hitPlayer(pl, pl.x < bat.x ? -1 : 1);
+      }
+    }
+
+    // Thrown shell kills bat
+    for (const sh of state.shells) {
+      if (sh.thrown && overlap(sh, bat)) {
+        killBat(bat, sh.x + sh.w/2, bat.y);
+        sh.thrown = false; sh.vx = 0;
+      }
+    }
+  }
+}
+
+function killBat(bat, px, py) {
+  bat.alive = false;
+  state.score += 150;
+  sfxBat();
+  spawnParticles(px, py, '#8040c0', 8);
+  spawnParticles(px, py, '#4020a0', 5);
 }
 
 function updateParticles() {
@@ -893,6 +978,9 @@ const COL = {
   mantisEye:'#fff',
   bubble1:  '#00aaff',
   bubble2:  '#66ddff',
+  bat1:     '#4a2080',
+  bat2:     '#2a1040',
+  batEye:   '#ff2020',
   star:     '#ffff00',
   particle: '#fff',
   bgMtn1:   '#304060',
@@ -1291,6 +1379,54 @@ function drawBubbles() {
   }
 }
 
+function drawBats() {
+  const cx = state.cameraX;
+  for (const bat of state.bats) {
+    if (!bat.alive) continue;
+    const sx = bat.x - cx;
+    if (sx + bat.w < 0 || sx > W) continue;
+
+    ctx.save();
+    ctx.translate(sx + bat.w/2, bat.y + bat.h/2);
+    if (!bat.facingRight) ctx.scale(-1, 1);
+
+    const wingY = Math.sin(bat.time * 2.5) * 9; // wing flap faster than body oscillation
+
+    // Wings (behind body)
+    ctx.fillStyle = COL.bat1;
+    ctx.fillRect(-22, -2 + wingY, 17, 7);   // left main wing
+    ctx.fillRect(-29, -6 + wingY, 8, 5);    // left tip
+    ctx.fillRect(5,   -2 + wingY, 17, 7);   // right main wing
+    ctx.fillRect(21,  -6 + wingY, 8, 5);    // right tip
+    // Wing membrane sheen
+    ctx.fillStyle = '#3a1870';
+    ctx.fillRect(-21, -1 + wingY, 15, 4);
+    ctx.fillRect(6,   -1 + wingY, 15, 4);
+
+    // Body
+    ctx.fillStyle = COL.bat2;
+    ctx.fillRect(-5, -6, 10, 12);
+
+    // Ears
+    ctx.fillStyle = COL.bat1;
+    ctx.fillRect(-4, -12, 3, 7);
+    ctx.fillRect(1,  -12, 3, 7);
+    ctx.fillStyle = '#6030a0';
+    ctx.fillRect(-3, -11, 1, 4);
+    ctx.fillRect(2,  -11, 1, 4);
+
+    // Eyes (face toward the right in canonical space)
+    ctx.fillStyle = COL.batEye;
+    ctx.fillRect(1, -4, 4, 4);
+    ctx.fillStyle = '#aa0000';
+    ctx.fillRect(2, -3, 2, 2);
+    ctx.fillStyle = '#ffaaaa';
+    ctx.fillRect(1, -4, 1, 1);
+
+    ctx.restore();
+  }
+}
+
 function drawPlayer() {
   const pl = state.player;
   const cx = state.cameraX;
@@ -1459,6 +1595,7 @@ function gameLoop(ts) {
     updateBlocks();
     updateCrabs();
     updateMantisShrimps();
+    updateBats();
     updateShells();
     updateBubbles();
     updateParticles();
@@ -1477,6 +1614,7 @@ function gameLoop(ts) {
   drawShells();
   drawCrabs();
   drawMantisShrimps();
+  drawBats();
   drawBubbles();
   drawStar();
   drawPlayer();
