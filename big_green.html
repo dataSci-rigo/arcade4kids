@@ -57,7 +57,7 @@ canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edge
   </div>
   <div class="splash-row">
     <label>Crabs take lives:</label>
-    <button class="toggle-btn on" id="crabLivesToggle">YES</button>
+    <button class="toggle-btn" id="crabLivesToggle">NO</button>
   </div>
   <button id="startBtn">START GAME</button>
   <div style="color:#555;font-size:13px;text-align:center;margin-top:8px;">
@@ -141,6 +141,7 @@ const JUMP_FORCE = -13;
 const PLAYER_SPEED = 3.5;
 const SWIM_SPEED = 2.2;
 const LEVEL_LENGTH = 400; // tiles wide
+const GEM_PALETTE = ['#ff4444','#44aaff','#ff8844','#aa44ff','#44ffcc','#ff44aa','#ffff44'];
 
 // ─── Canvas setup ─────────────────────────────────────────────────────────────
 const canvas = document.getElementById('gameCanvas');
@@ -183,6 +184,7 @@ function initState() {
     // zone info
     zoneName: 'Surface',
     blocks: [],        // pushable blocks
+    platformStuns: [], // { x, y, timer } flashing stunned platforms
   };
   generateLevel();
   spawnPlayer();
@@ -235,7 +237,7 @@ function generateLevel() {
       state.platforms.push({ x: (px/TILE + i)*TILE, y: row*TILE, w: TILE, h: TILE, type: 'platform' });
     }
     // Gem on platform
-    state.gems.push({ x: (px/TILE + Math.floor(len/2))*TILE + 8, y: row*TILE - 24, collected: false });
+    state.gems.push({ x: (px/TILE + Math.floor(len/2))*TILE + 8, y: row*TILE - 24, collected: false, colorSeed: Math.floor(Math.random() * GEM_PALETTE.length) });
     // Sometimes put a pushable block
     if (Math.random() < 0.4) {
       state.blocks.push(createBlock((px/TILE + Math.floor(len/2))*TILE, (row-1)*TILE));
@@ -294,7 +296,7 @@ function generateLevel() {
     // Gems in cave
     for (let g = 0; g < caveLen - 2; g += 3) {
       if (caveType !== 'lava') {
-        state.gems.push({ x: cx + (g+1)*TILE + 8, y: (caveRow+2)*TILE, collected: false });
+        state.gems.push({ x: cx + (g+1)*TILE + 8, y: (caveRow+2)*TILE, collected: false, colorSeed: Math.floor(Math.random() * GEM_PALETTE.length) });
       }
     }
 
@@ -323,7 +325,7 @@ function generateLevel() {
 
   // Extra gems on surface
   for (let tx = 5; tx < TW - 5; tx += 8 + Math.floor(Math.random() * 6)) {
-    state.gems.push({ x: tx * TILE + 8, y: (SURFACE_FLOOR - 2) * TILE, collected: false });
+    state.gems.push({ x: tx * TILE + 8, y: (SURFACE_FLOOR - 2) * TILE, collected: false, colorSeed: Math.floor(Math.random() * GEM_PALETTE.length) });
   }
 }
 
@@ -374,6 +376,8 @@ function spawnPlayer() {
     invincible: 0,    // frames of invincibility
     ducking: false,
     spawnX: 80, spawnY: (SURFACE_FLOOR - 2) * TILE,
+    gemColor: null, gemColorTimer: 0,
+    groundPound: 0,
   };
 }
 
@@ -441,6 +445,8 @@ function updatePlayer(dt) {
   }
 
   if (pl.invincible > 0) pl.invincible--;
+  if (pl.gemColorTimer > 0) pl.gemColorTimer--;
+  if (pl.groundPound > 0) pl.groundPound--;
 
   // Input
   const left   = keys['ArrowLeft']  || keys['KeyA'];
@@ -455,8 +461,15 @@ function updatePlayer(dt) {
   const throwK  = actionK && hasCrabShell;
   const shootK  = actionK && hasMantisShell;
 
+  // Ground pound — down just-pressed while standing on a floating platform
+  let didGroundPound = false;
+  if ((justPressed['ArrowDown'] || justPressed['KeyS']) && pl.onGround && !pl.inWater) {
+    const standingPlat = getStandingPlatform(pl);
+    if (standingPlat) { triggerGroundPound(pl, standingPlat); didGroundPound = true; }
+  }
+
   // Duck — shrinks hitbox so cavitation bubbles pass over the player
-  if (down && pl.onGround && !pl.inWater) {
+  if (down && pl.onGround && !pl.inWater && !didGroundPound && pl.groundPound <= 0) {
     if (!pl.ducking) { pl.ducking = true; pl.h = 16; pl.y += 16; }
   } else if (pl.ducking) {
     pl.ducking = false; pl.h = 32; pl.y -= 16;
@@ -590,8 +603,12 @@ function updatePlayer(dt) {
     if (!g.collected && rectOverlap(pl.x,pl.y,pl.w,pl.h, g.x,g.y,16,16)) {
       g.collected = true;
       state.score += 100;
+      const gci = (Math.floor(Date.now() / 500) + (g.colorSeed || 0)) % GEM_PALETTE.length;
+      const gc2 = GEM_PALETTE[gci];
+      pl.gemColor = gc2;
+      pl.gemColorTimer = 600;
       sfxGem();
-      spawnParticles(g.x+8, g.y+8, '#ff0', 8);
+      spawnParticles(g.x+8, g.y+8, gc2, 8);
     }
   }
 
@@ -624,6 +641,58 @@ function updateBlocks() {
       blockShockwave(blk.x + blk.w/2, blk.y + blk.h, prevVy);
     }
     if (blk.x < 0) { blk.x = 0; blk.vx = 0; }
+  }
+}
+
+function getStandingPlatform(pl) {
+  const feetY = pl.y + pl.h;
+  for (const p of state.platforms) {
+    if (p.type === 'platform' &&
+        feetY >= p.y && feetY <= p.y + 8 &&
+        pl.x + pl.w > p.x + 2 && pl.x < p.x + p.w - 2) {
+      return p;
+    }
+  }
+  return null;
+}
+
+function triggerGroundPound(pl, plat) {
+  pl.groundPound = 22;
+  const cx = pl.x + pl.w / 2;
+  const cy = pl.y + pl.h;
+  sfxShockwave();
+  spawnParticles(cx, cy, '#ffffff', 12);
+  spawnParticles(cx, cy, '#ffffaa', 8);
+  state.shockwaves.push({ x: cx, y: cy, r: 0, maxR: 140, life: 18 });
+  // Flash the entire island (all platform tiles at same Y)
+  for (const p of state.platforms) {
+    if (p.type === 'platform' && p.y === plat.y) {
+      state.platformStuns.push({ x: p.x, y: p.y, timer: 28 });
+    }
+  }
+  // Kill enemies in radius
+  const radius = 140;
+  for (const crab of state.crabs) {
+    if (!crab.alive) continue;
+    const dx = (crab.x + crab.w/2) - cx, dy = (crab.y + crab.h/2) - cy;
+    if (dx*dx + dy*dy < radius*radius) killCrab(crab, crab.x + crab.w/2, crab.y);
+  }
+  for (const ms of state.mantisShrimps) {
+    if (!ms.alive) continue;
+    const dx = (ms.x + ms.w/2) - cx, dy = (ms.y + ms.h/2) - cy;
+    if (dx*dx + dy*dy < radius*radius) killMantis(ms, ms.x + ms.w/2, ms.y);
+  }
+  for (const bat of state.bats) {
+    if (!bat.alive) continue;
+    const dx = (bat.x + bat.w/2) - cx, dy = (bat.y + bat.h/2) - cy;
+    if (dx*dx + dy*dy < radius*radius) killBat(bat, bat.x + bat.w/2, bat.y);
+  }
+}
+
+function updatePlatformStuns() {
+  for (let i = state.platformStuns.length - 1; i >= 0; i--) {
+    state.platformStuns[i].timer--;
+    if (state.platformStuns[i].timer <= 0) state.platformStuns.splice(i, 1);
   }
 }
 
@@ -667,6 +736,7 @@ function tryDropShell(pl) {
 
 // Full hit: drop shell as shield OR take normal damage
 function hitPlayer(pl, knockDir) {
+  pl.gemColor = null; pl.gemColorTimer = 0;
   if (tryDropShell(pl)) {
     pl.vx = knockDir * 3;
     pl.vy = -4;
@@ -722,8 +792,12 @@ function updateCrabs() {
       } else if (overlap(pl, crab)) {
         hitPlayer(pl, pl.x < crab.x ? -1 : 1);
       }
-    } else if (!stomping && overlap(pl, crab)) {
-      tryDropShell(pl);
+    } else {
+      if (stomping) {
+        killCrab(crab, pl.x + pl.w/2, crab.y);
+        pl.vy = JUMP_FORCE * 0.6;
+      }
+      if (overlap(pl, crab)) { tryDropShell(pl); pl.gemColor = null; pl.gemColorTimer = 0; }
     }
 
     // Shell vs crab
@@ -818,8 +892,12 @@ function updateMantisShrimps() {
       } else if (overlap(pl, ms)) {
         hitPlayer(pl, pl.x < ms.x ? -1 : 1);
       }
-    } else if (!stomping && overlap(pl, ms)) {
-      tryDropShell(pl);
+    } else {
+      if (stomping) {
+        killMantis(ms, pl.x + pl.w/2, ms.y);
+        pl.vy = JUMP_FORCE * 0.6;
+      }
+      if (overlap(pl, ms)) { tryDropShell(pl); pl.gemColor = null; pl.gemColorTimer = 0; }
     }
 
     // Thrown shell kills mantis
@@ -857,23 +935,30 @@ function updateBubbles() {
     if (!b.fromPlayer && overlap(pl, b)) {
       state.bubbles.splice(i, 1);
       if (pl.invincible <= 0) hitPlayer(pl, b.vx > 0 ? 1 : -1);
-      else tryDropShell(pl);
+      else { tryDropShell(pl); pl.gemColor = null; pl.gemColorTimer = 0; }
       continue;
     }
 
-    // ALL bubbles kill any creature (cavitation is indiscriminate)
+    // ALL bubbles kill any creature on-screen (cavitation is indiscriminate)
     let consumed = false;
+    const scLeft = state.cameraX, scRight = state.cameraX + W;
     for (const crab of state.crabs) {
-      if (crab.alive && overlap(b, crab)) { killCrab(crab, b.x+b.w/2, crab.y); consumed = true; break; }
+      if (crab.alive && crab.x + crab.w >= scLeft && crab.x <= scRight && overlap(b, crab)) {
+        killCrab(crab, b.x+b.w/2, crab.y); consumed = true; break;
+      }
     }
     if (!consumed) {
       for (const ms of state.mantisShrimps) {
-        if (ms.alive && overlap(b, ms)) { killMantis(ms, b.x+b.w/2, ms.y); consumed = true; break; }
+        if (ms.alive && ms.x + ms.w >= scLeft && ms.x <= scRight && overlap(b, ms)) {
+          killMantis(ms, b.x+b.w/2, ms.y); consumed = true; break;
+        }
       }
     }
     if (!consumed) {
       for (const bat of state.bats) {
-        if (bat.alive && overlap(b, bat)) { killBat(bat, b.x+b.w/2, bat.y); consumed = true; break; }
+        if (bat.alive && bat.x + bat.w >= scLeft && bat.x <= scRight && overlap(b, bat)) {
+          killBat(bat, b.x+b.w/2, bat.y); consumed = true; break;
+        }
       }
     }
     if (consumed) { state.bubbles.splice(i, 1); }
@@ -900,17 +985,29 @@ function updateBats() {
     // Vertical position: pure sine-wave oscillation around baseY
     bat.y = bat.baseY + Math.sin(bat.time) * 32;
 
-    // Player stomp: airborne, falling or level, feet within bat top half
-    const stomping = !pl.onGround && pl.vy >= -2 && overlap(pl, bat) && pl.y + pl.h <= bat.y + bat.h;
+    // Player stomp: airborne falling, feet at bat level
+    const stomping   = !pl.onGround && pl.vy >= -2 && overlap(pl, bat) && pl.y + pl.h <= bat.y + bat.h;
+    // Player upward punch: jumping up and head contacts bat
+    const punchingUp = !pl.onGround && pl.vy < -4  && overlap(pl, bat);
     if (pl.invincible <= 0) {
       if (stomping) {
         killBat(bat, pl.x + pl.w/2, bat.y);
         pl.vy = JUMP_FORCE * 0.6;
+      } else if (punchingUp) {
+        killBat(bat, pl.x + pl.w/2, bat.y);
+        pl.vy = 4; // bounce player back down
       } else if (overlap(pl, bat)) {
         hitPlayer(pl, pl.x < bat.x ? -1 : 1);
       }
-    } else if (!stomping && overlap(pl, bat)) {
-      tryDropShell(pl);
+    } else {
+      if (stomping) {
+        killBat(bat, pl.x + pl.w/2, bat.y);
+        pl.vy = JUMP_FORCE * 0.6;
+      } else if (punchingUp) {
+        killBat(bat, pl.x + pl.w/2, bat.y);
+        pl.vy = 4;
+      }
+      if (overlap(pl, bat)) { tryDropShell(pl); pl.gemColor = null; pl.gemColorTimer = 0; }
     }
 
     // Thrown shell kills bat
@@ -960,6 +1057,7 @@ function spawnParticles(x, y, color, count) {
 
 function loseLife(isLava) {
   sfxHurt();
+  state.player.gemColor = null; state.player.gemColorTimer = 0;
   spawnParticles(state.player.x + 12, state.player.y + 16, '#f44', 12);
   state.lives--;
   updateHUD();
@@ -1094,7 +1192,7 @@ function drawMountain(x, y, w, h) {
   ctx.fill();
 }
 
-function drawTile(type, sx, sy) {
+function drawTile(type, sx, sy, stunLevel = 0) {
   switch(type) {
     case 'floor':
       ctx.fillStyle = COL.floorTop;
@@ -1140,6 +1238,11 @@ function drawTile(type, sx, sy) {
       ctx.fillRect(sx+16+(Math.cos(t+sx*0.07)*3)|0, sy+6, 8, 4);
       break;
   }
+  // Stun flash overlay for platforms hit by ground pound
+  if (stunLevel > 0) {
+    ctx.fillStyle = `rgba(255,255,200,${(stunLevel / 28) * 0.75})`;
+    ctx.fillRect(sx, sy, TILE, TILE);
+  }
 }
 
 function worldToScreen(wx, wy) {
@@ -1151,7 +1254,11 @@ function drawPlatforms() {
   for (const p of state.platforms) {
     if (p.x + p.w < cx - 10 || p.x > cx + W + 10) continue;
     const sx = p.x - cx;
-    drawTile(p.type, sx, p.y);
+    let stunLevel = 0;
+    for (const s of state.platformStuns) {
+      if (s.x === p.x && s.y === p.y) { stunLevel = s.timer; break; }
+    }
+    drawTile(p.type, sx, p.y, stunLevel);
   }
 }
 
@@ -1202,14 +1309,15 @@ function drawBlocks() {
 
 function drawGems() {
   const cx = state.cameraX;
-  const t = Date.now() / 300;
+  const now = Date.now();
+  const t = now / 300;
   for (const g of state.gems) {
     if (g.collected) continue;
     if (g.x + 16 < cx || g.x > cx + W) continue;
     const sx = g.x - cx;
     const bob = Math.sin(t + g.x * 0.05) * 3;
-    // Diamond shape
-    ctx.fillStyle = '#ffee00';
+    const gci = (Math.floor(now / 500) + (g.colorSeed || 0)) % GEM_PALETTE.length;
+    ctx.fillStyle = GEM_PALETTE[gci];
     ctx.beginPath();
     ctx.moveTo(sx+8, g.y + bob);
     ctx.lineTo(sx+16, g.y+8 + bob);
@@ -1217,7 +1325,7 @@ function drawGems() {
     ctx.lineTo(sx, g.y+8 + bob);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#fff8a0';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
     ctx.fillRect(sx+5, g.y+5 + bob, 4, 4);
   }
 }
@@ -1491,6 +1599,13 @@ function drawBats() {
   }
 }
 
+function tintColor(hex, factor) {
+  const r = Math.min(255, Math.floor(parseInt(hex.slice(1,3),16) * factor));
+  const g = Math.min(255, Math.floor(parseInt(hex.slice(3,5),16) * factor));
+  const b = Math.min(255, Math.floor(parseInt(hex.slice(5,7),16) * factor));
+  return '#'+r.toString(16).padStart(2,'0')+g.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0');
+}
+
 function drawPlayer() {
   const pl = state.player;
   const cx = state.cameraX;
@@ -1498,94 +1613,158 @@ function drawPlayer() {
 
   if (pl.invincible > 0 && Math.floor(pl.invincible / 4) % 2 === 0) return;
 
+  // Gem-color tint: swap green parts with collected gem's color
+  const gc = pl.gemColor && pl.gemColorTimer > 0 ? pl.gemColor : null;
+  const headC = gc || '#2d8c38';
+  const headHi = gc ? tintColor(gc, 1.35) : '#3ab048';
+  const limbC  = gc ? tintColor(gc, 0.50) : '#1a6020';
+  const bodyC  = gc ? tintColor(gc, 0.70) : '#2d8c38';
+  const bodyHi = gc ? tintColor(gc, 0.90) : '#3ab048';
+  const eyeC   = gc ? tintColor(gc, 1.20) : '#3399ff';
+
   ctx.save();
-  // Anchor to feet so duck squish compresses upward; use constant 16 (half of full h=32)
   ctx.translate(sx + pl.w/2, pl.y + pl.h);
-  if (pl.ducking) ctx.scale(1, 0.5);
   if (!pl.facingRight) ctx.scale(-1, 1);
-  ctx.translate(0, -16);
 
-  // Body - Big Green is a big green character
-  // Legs (animated when moving)
-  const t = Date.now() / 120;
-  const legSwing = pl.onGround && Math.abs(pl.vx) > 0.5 ? Math.sin(t) * 6 : 0;
-
-  // Stubby legs
-  ctx.fillStyle = '#1a6020';
-  ctx.fillRect(-5, 9, 4, 7 + Math.max(0, -legSwing));
-  ctx.fillRect(-6, 16 + Math.max(0, -legSwing), 6, 3);
-  ctx.fillRect(1, 9, 4, 7 + Math.max(0, legSwing));
-  ctx.fillRect(1, 16 + Math.max(0, legSwing), 6, 3);
-
-  // Tiny body
-  ctx.fillStyle = '#2d8c38';
-  ctx.fillRect(-6, 0, 13, 11);
-  ctx.fillStyle = '#3ab048';
-  ctx.fillRect(-3, 2, 7, 6);
-
-  // Mantis shell worn on back (drawn before arms so arms overlap)
-  if (pl.carrying && pl.carrying.type === 'mantis') {
-    ctx.fillStyle = COL.mantis1;
-    ctx.fillRect(-12, -8, 6, 18);
-    ctx.fillStyle = COL.mantis3;
-    ctx.fillRect(-12, -8, 5, 4);
-    ctx.fillStyle = COL.mantis2;
-    ctx.fillRect(-12, -2, 5, 4);
-    ctx.fillStyle = COL.mantis4;
-    ctx.fillRect(-12, 4,  5, 4);
-    ctx.fillStyle = COL.mantis5;
-    ctx.fillRect(-11, -7, 4, 2);
-  }
-
-  // Arms
-  ctx.fillStyle = '#1a6020';
-  if (pl.carrying && pl.carrying.type === 'crab') {
-    ctx.fillRect(6, 1, 5, 8);
+  if (pl.ducking) {
+    // Army crawl: prone, head forward, elbows out. (0,0)=feet center, -y=up.
+    // Legs (trailing behind)
+    ctx.fillStyle = limbC;
+    ctx.fillRect(-15, -6, 14, 5);   // thighs
+    ctx.fillRect(-17, -3, 5, 3);    // back foot
+    ctx.fillRect(-9,  -3, 5, 3);    // front foot (bent)
+    // Torso (horizontal)
+    ctx.fillStyle = bodyC;
+    ctx.fillRect(-6, -12, 15, 6);
+    ctx.fillStyle = bodyHi;
+    ctx.fillRect(-3, -11, 10, 4);
+    // Right arm (crawling forward, elbow on ground)
+    ctx.fillStyle = limbC;
+    ctx.fillRect(7, -10, 11, 4);
+    ctx.fillRect(16, -8, 4, 3);     // fist
+    // Left arm (back)
+    ctx.fillRect(-12, -10, 7, 4);
+    // Mantis shell flat on back
+    if (pl.carrying && pl.carrying.type === 'mantis') {
+      ctx.fillStyle = COL.mantis1;
+      ctx.fillRect(-5, -17, 12, 5);
+      ctx.fillStyle = COL.mantis3;
+      ctx.fillRect(-5, -17, 11, 2);
+      ctx.fillStyle = COL.mantis2;
+      ctx.fillRect(-5, -13, 11, 2);
+    }
+    // Head (side-profile, forward and low)
+    ctx.fillStyle = headC;
+    ctx.beginPath();
+    ctx.arc(13, -15, 9, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = headHi;
+    ctx.beginPath();
+    ctx.arc(13, -16, 7, 0, Math.PI*2);
+    ctx.fill();
+    // Eye (side-profile, single eye forward)
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(9, -20, 7, 7);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(10, -19, 5, 5);
+    ctx.fillStyle = eyeC;
+    ctx.fillRect(11, -18, 3, 3);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(12, -17, 2, 2);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(10, -19, 2, 2);
+    // Nose tip
+    ctx.fillStyle = limbC;
+    ctx.fillRect(19, -14, 3, 2);
   } else {
-    const armSwing = pl.onGround && Math.abs(pl.vx) > 0.5 ? Math.sin(t + Math.PI) * 5 : 0;
-    ctx.fillRect(6, 1 + armSwing, 4, 7);
+    ctx.translate(0, -16);
+
+    const t = Date.now() / 120;
+    const legSwing = pl.onGround && Math.abs(pl.vx) > 0.5 ? Math.sin(t) * 6 : 0;
+
+    // Stubby legs
+    ctx.fillStyle = limbC;
+    ctx.fillRect(-5, 9, 4, 7 + Math.max(0, -legSwing));
+    ctx.fillRect(-6, 16 + Math.max(0, -legSwing), 6, 3);
+    ctx.fillRect(1, 9, 4, 7 + Math.max(0, legSwing));
+    ctx.fillRect(1, 16 + Math.max(0, legSwing), 6, 3);
+
+    // Body
+    ctx.fillStyle = bodyC;
+    ctx.fillRect(-6, 0, 13, 11);
+    ctx.fillStyle = bodyHi;
+    ctx.fillRect(-3, 2, 7, 6);
+
+    // Mantis shell worn on back
+    if (pl.carrying && pl.carrying.type === 'mantis') {
+      ctx.fillStyle = COL.mantis1;
+      ctx.fillRect(-12, -8, 6, 18);
+      ctx.fillStyle = COL.mantis3;
+      ctx.fillRect(-12, -8, 5, 4);
+      ctx.fillStyle = COL.mantis2;
+      ctx.fillRect(-12, -2, 5, 4);
+      ctx.fillStyle = COL.mantis4;
+      ctx.fillRect(-12, 4,  5, 4);
+      ctx.fillStyle = COL.mantis5;
+      ctx.fillRect(-11, -7, 4, 2);
+    }
+
+    // Arms — ground pound shows both arms thrusting down
+    ctx.fillStyle = limbC;
+    if (pl.groundPound > 0) {
+      ctx.fillRect(-10, 4, 5, 14);
+      ctx.fillRect(  6, 4, 5, 14);
+      ctx.fillStyle = bodyC;
+      ctx.fillRect(-11, 17, 7, 5);
+      ctx.fillRect(  5, 17, 7, 5);
+    } else if (pl.carrying && pl.carrying.type === 'crab') {
+      ctx.fillRect(6, 1, 5, 8);
+      ctx.fillRect(-9, 1, 4, 7);
+    } else {
+      const armSwing = pl.onGround && Math.abs(pl.vx) > 0.5 ? Math.sin(t + Math.PI) * 5 : 0;
+      ctx.fillRect(6, 1 + armSwing, 4, 7);
+      ctx.fillRect(-9, 1, 4, 7);
+    }
+
+    // Big round head
+    ctx.fillStyle = headC;
+    ctx.beginPath();
+    ctx.arc(1, -16, 19, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = headHi;
+    ctx.beginPath();
+    ctx.arc(1, -17, 15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Big eyes
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-12, -25, 10, 11);
+    ctx.fillRect(3, -25, 10, 11);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-11, -24, 8, 8);
+    ctx.fillRect(4, -24, 8, 8);
+    ctx.fillStyle = eyeC;
+    ctx.fillRect(-10, -23, 5, 5);
+    ctx.fillRect(5, -23, 5, 5);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-9, -22, 3, 3);
+    ctx.fillRect(6, -22, 3, 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-11, -24, 2, 2);
+    ctx.fillRect(3, -24, 2, 2);
+
+    // Nose
+    ctx.fillStyle = limbC;
+    ctx.fillRect(-1, -13, 3, 2);
+
+    // Smile
+    ctx.strokeStyle = limbC;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(1, -14, 7, Math.PI * 0.1, Math.PI * 0.9);
+    ctx.stroke();
   }
-  ctx.fillRect(-9, 1, 4, 7);
-
-  // Big round head
-  ctx.fillStyle = '#2d8c38';
-  ctx.beginPath();
-  ctx.arc(1, -16, 19, 0, Math.PI * 2);
-  ctx.fill();
-  // Face highlight (slightly lighter inner circle)
-  ctx.fillStyle = '#3ab048';
-  ctx.beginPath();
-  ctx.arc(1, -17, 15, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Big eyes
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(-12, -25, 10, 11);  // left sclera
-  ctx.fillRect(3, -25, 10, 11);    // right sclera
-  ctx.fillStyle = '#000';
-  ctx.fillRect(-11, -24, 8, 8);    // left iris
-  ctx.fillRect(4, -24, 8, 8);      // right iris
-  ctx.fillStyle = '#3399ff';
-  ctx.fillRect(-10, -23, 5, 5);    // left colour
-  ctx.fillRect(5, -23, 5, 5);      // right colour
-  ctx.fillStyle = '#000';
-  ctx.fillRect(-9, -22, 3, 3);     // left pupil
-  ctx.fillRect(6, -22, 3, 3);      // right pupil
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(-11, -24, 2, 2);    // left shine
-  ctx.fillRect(3, -24, 2, 2);      // right shine
-
-  // Nose
-  ctx.fillStyle = '#1a6020';
-  ctx.fillRect(-1, -13, 3, 2);
-
-  // Smile — arc curving downward (bottom of circle = ∪ = smile)
-  ctx.strokeStyle = '#1a6020';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(1, -14, 7, Math.PI * 0.1, Math.PI * 0.9);
-  ctx.stroke();
 
   ctx.restore();
 }
@@ -1684,6 +1863,7 @@ function gameLoop(ts) {
     updateShells();
     updateBubbles();
     updateShockwaves();
+    updatePlatformStuns();
     updateParticles();
     updateCamera();
     updateHUD();
@@ -1712,7 +1892,7 @@ function gameLoop(ts) {
 
 // ─── Splash screen controls ───────────────────────────────────────────────────
 let splashLives = 3;
-let splashCrabLives = true;
+let splashCrabLives = false;
 
 document.getElementById('livesDown').addEventListener('click', () => {
   if (splashLives > 1) { splashLives--; document.getElementById('livesDisplay').textContent = splashLives; }
