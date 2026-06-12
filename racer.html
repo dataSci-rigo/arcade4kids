@@ -400,6 +400,11 @@ function loadSettings(themeKey) {
 
 function saveSettings(themeKey, s) {
   try { localStorage.setItem((isMobile ? 'runner_mob_cfg_' : 'runner_cfg_') + themeKey, JSON.stringify(s)); } catch(e) {}
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({racer: gameSettings}),
+  }).catch(() => {});
 }
 
 const gameSettings = {
@@ -1304,10 +1309,26 @@ if (isMobile) {
   document.getElementById('back-btn').textContent  = '◀  MENU';
 }
 
-buildSettingsUI();
-buildLeaderboardUI();
-resizeCanvas();
-loop();
+(async () => {
+  try {
+    const resp = await Promise.race([
+      fetch('/api/settings'),
+      new Promise((_, rej) => setTimeout(() => rej(), 600)),
+    ]);
+    if (resp.ok) {
+      const srv = await resp.json();
+      if (srv.racer) {
+        for (const k of ['tunnel', 'road', 'cave']) {
+          if (srv.racer[k]) Object.assign(gameSettings[k], srv.racer[k]);
+        }
+      }
+    }
+  } catch(e) {}
+  buildSettingsUI();
+  buildLeaderboardUI();
+  resizeCanvas();
+  loop();
+})();
 </script>
 </body>
 </html>

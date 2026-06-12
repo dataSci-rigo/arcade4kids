@@ -104,6 +104,8 @@ html,body{
   animation:cardIn .5s ease-out both;
 }
 .card:nth-child(2){animation-delay:.12s}
+.card:nth-child(3){animation-delay:.24s}
+.card:nth-child(4){animation-delay:.36s}
 @keyframes cardIn{
   from{opacity:0;transform:translateY(30px) scale(.95)}
   to{opacity:1;transform:translateY(0) scale(1)}
@@ -417,6 +419,37 @@ const PREVIEW_FNS = {
     ctx.fillRect(px - 2, py - 3, 4, 6);
   },
 
+  math_smash(ctx, w, h, t) {
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, w, h);
+
+    const symbols = ['+', '×', '−', '÷', '=', '7', '3', '9', '5', '2'];
+    const count = 10;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + t * 0.6;
+      const r = Math.min(w, h) * 0.32 + Math.sin(t * 1.2 + i) * 6;
+      const x = w / 2 + Math.cos(angle) * r;
+      const y = h / 2 + Math.sin(angle) * r * 0.7;
+      const alpha = 0.5 + Math.sin(t * 2 + i * 0.9) * 0.35;
+      ctx.fillStyle = i % 2 === 0 ? `rgba(78,205,196,${alpha})` : `rgba(255,230,109,${alpha})`;
+      ctx.font = `bold ${Math.round(h * 0.16)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(symbols[i], x, y);
+    }
+
+    const pulse = 0.85 + Math.sin(t * 3) * 0.12;
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#FFE66D';
+    ctx.font = `bold ${Math.round(h * 0.28)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', 0, 0);
+    ctx.restore();
+  },
+
   maze(ctx, w, h, t) {
     ctx.fillStyle = '#00000e';
     ctx.fillRect(0, 0, w, h);
@@ -473,6 +506,52 @@ const PREVIEW_FNS = {
     ctx.closePath();
     ctx.fill();
     ctx.shadowBlur = 0;
+  },
+  big_green(ctx, w, h, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, w, h);
+
+    // Ground
+    ctx.fillStyle = '#2a5c2a';
+    ctx.fillRect(0, h * 0.85, w, h * 0.15);
+    ctx.fillStyle = '#44ff88';
+    ctx.fillRect(0, h * 0.85, w, 3);
+
+    // Platforms
+    const platforms = [
+      { x: 0.1, y: 0.62, len: 0.25 },
+      { x: 0.45, y: 0.48, len: 0.22 },
+      { x: 0.72, y: 0.65, len: 0.2 },
+    ];
+    platforms.forEach(p => {
+      ctx.fillStyle = '#2a5c2a';
+      ctx.fillRect(p.x * w, p.y * h, p.len * w, h * 0.06);
+      ctx.fillStyle = '#44ff88';
+      ctx.fillRect(p.x * w, p.y * h, p.len * w, 3);
+    });
+
+    // Player — bouncing on ground and platform
+    const jumpT = t * 2.2;
+    const jumpPhase = (jumpT % (Math.PI * 2));
+    const groundY = h * 0.85;
+    const playerH = h * 0.1;
+    const jumpHeight = h * 0.28;
+    const py = groundY - playerH - Math.max(0, Math.sin(jumpPhase)) * jumpHeight;
+    const px = w * 0.2 + Math.sin(t * 0.8) * w * 0.05;
+
+    ctx.fillStyle = '#44ff88';
+    ctx.fillRect(px - w * 0.04, py, w * 0.08, playerH);
+    ctx.fillStyle = '#00cc44';
+    ctx.fillRect(px - w * 0.025, py + playerH * 0.1, w * 0.05, playerH * 0.5);
+
+    // Simple enemy — crab-like
+    const ex = w * 0.65 + Math.sin(t * 1.5) * w * 0.08;
+    const ey = groundY - playerH;
+    ctx.fillStyle = '#ff4444';
+    ctx.fillRect(ex - w * 0.05, ey, w * 0.1, playerH * 0.7);
+    ctx.fillStyle = '#cc2222';
+    ctx.fillRect(ex - w * 0.065, ey + playerH * 0.2, w * 0.02, playerH * 0.3);
+    ctx.fillRect(ex + w * 0.045, ey + playerH * 0.2, w * 0.02, playerH * 0.3);
   },
 };
 
