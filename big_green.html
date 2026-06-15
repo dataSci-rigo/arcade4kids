@@ -291,6 +291,12 @@ function generateLevel() {
       !(p.x >= exitCol*TILE && p.x < (exitCol+2)*TILE &&
         (p.type === 'floor' || p.type === 'dirt' || p.type === 'cave_ceil'))
     );
+    // One-way ledge midway up the exit shaft so player can exit in two jumps
+    if (caveType !== 'lava') {
+      const ledgeY = Math.floor(((SURFACE_FLOOR * TILE) + (caveRow + caveH) * TILE) / 2 / TILE) * TILE;
+      state.platforms.push({ x: exitCol * TILE,       y: ledgeY, w: TILE, h: TILE, type: 'ledge' });
+      state.platforms.push({ x: (exitCol + 1) * TILE, y: ledgeY, w: TILE, h: TILE, type: 'ledge' });
+    }
 
     // Gems in cave
     for (let g = 0; g < caveLen - 2; g += 3) {
@@ -389,7 +395,7 @@ function rectOverlap(ax,ay,aw,ah, bx,by,bw,bh) {
 }
 
 // Solid tile types
-const SOLID_TYPES = new Set(['floor','dirt','platform','cave_wall','cave_ceil','cave_floor','cave_wall_r']);
+const SOLID_TYPES = new Set(['floor','dirt','platform','cave_wall','cave_ceil','cave_floor','cave_wall_r','ledge']);
 
 function getSolidPlatforms() {
   return state.platforms.filter(p => SOLID_TYPES.has(p.type));
@@ -414,7 +420,7 @@ function resolveEntityVsWorld(ent, solidList) {
         ent.y = p.y - ent.h;
         ent.vy = 0;
         ent.onGround = true;
-      } else if (wasAbove) {
+      } else if (wasAbove && p.type !== 'ledge') {
         ent.y = p.y + p.h;
         ent.vy = 0;
       }
@@ -1104,7 +1110,7 @@ function updateCamera() {
   const newX = state.cameraX + (targetX - state.cameraX) * 0.1;
   state.cameraX = Math.max(state.cameraX, Math.max(0, Math.min(newX, state.levelWidth - W)));
   // Vertical: smooth follow, never scroll above sky (y=0)
-  const targetY = pl.y - H * 0.45;
+  const targetY = pl.y - H * 0.7;
   state.cameraY = Math.max(0, state.cameraY + (targetY - state.cameraY) * 0.1);
 }
 
@@ -1240,6 +1246,17 @@ function drawTile(type, sx, sy, stunLevel = 0) {
       ctx.fillStyle = '#2a1808';
       ctx.fillRect(sx+4, sy+6, 8, 5);
       ctx.fillRect(sx+16, sy+18, 7, 4);
+      break;
+    case 'ledge':
+      ctx.fillStyle = '#8b5e2a';
+      ctx.fillRect(sx, sy, TILE, 8);
+      ctx.fillStyle = '#c09050';
+      ctx.fillRect(sx+2, sy+2, TILE-4, 3);
+      ctx.fillStyle = '#6b3e0a';
+      ctx.fillRect(sx, sy+8, TILE, TILE-8);
+      ctx.fillStyle = '#5a3000';
+      ctx.fillRect(sx+4, sy+10, 3, 6);
+      ctx.fillRect(sx+16, sy+10, 3, 6);
       break;
     case 'lava':
       const t = Date.now() / 200;
