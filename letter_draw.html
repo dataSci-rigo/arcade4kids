@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Letter Draw</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & base ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --coral:  #FF6B9D;
+  --teal:   #4ECDC4;
+  --yellow: #FFE66D;
+  --mint:   #A8E6CF;
+  --purple: #C3A6FF;
+  --bg:     #FFF9F0;
+  --ink:    #2D2D3A;
+}
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  font-family: 'Nunito', sans-serif;
+  color: var(--ink);
+  touch-action: manipulation;
+  overflow: hidden;
+}
+
+/* ── Screen management ─────────────────────────────────────────── */
+.screen {
+  display: none;
+  position: fixed; inset: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.screen.active { display: flex; }
+
+/* ── Splash ────────────────────────────────────────────────────── */
+#splash {
+  background: linear-gradient(160deg, #FF6B9D 0%, #FFE66D 100%);
+  gap: 24px;
+}
+.splash-title {
+  font-size: clamp(42px, 14vw, 72px);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 4px 0 rgba(0,0,0,.15);
+  letter-spacing: -1px;
+  text-align: center;
+  line-height: 1.1;
+}
+.splash-subtitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255,255,255,.85);
+  text-align: center;
+}
+.splash-abc {
+  font-size: clamp(24px, 8vw, 40px);
+  font-weight: 900;
+  color: rgba(255,255,255,.6);
+  letter-spacing: 4px;
+  text-align: center;
+}
+.btn-play {
+  background: #fff;
+  color: var(--coral);
+  border: none;
+  border-radius: 50px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  padding: 18px 64px;
+  cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+  letter-spacing: 1px;
+}
+.btn-play:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Game ──────────────────────────────────────────────────────── */
+#game {
+  background: var(--bg);
+  padding: 0;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+/* Progress bar */
+.progress-bar-wrap {
+  width: 100%;
+  background: #EEE;
+  height: 8px;
+}
+.progress-bar-fill {
+  height: 8px;
+  background: linear-gradient(90deg, var(--coral), var(--yellow));
+  transition: width .4s ease;
+}
+.progress-label {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #999;
+  padding: 6px 0 2px;
+}
+
+/* Letter + word hint strip */
+.hint-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 20px 6px;
+  width: 100%;
+}
+.letter-badge {
+  font-size: clamp(72px, 22vw, 120px);
+  font-weight: 900;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--coral), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  flex-shrink: 0;
+  user-select: none;
+}
+.word-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.word-img {
+  width: 90px; height: 90px;
+  border-radius: 14px;
+  object-fit: cover;
+  background: #EEE;
+  display: block;
+}
+.word-img-placeholder {
+  width: 90px; height: 90px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--teal), var(--mint));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 42px;
+}
+.word-label {
+  font-size: 16px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--ink);
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+/* Drawing area */
+.canvas-wrap {
+  flex: 1;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 16px 0;
+}
+#draw-canvas {
+  width: 100%;
+  flex: 1;
+  border: 3px dashed #DDD;
+  border-radius: 20px;
+  background: #fff;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+#draw-canvas.shake {
+  animation: shake .4s ease;
+}
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-8px)}
+  40%{transform:translateX(8px)}
+  60%{transform:translateX(-6px)}
+  80%{transform:translateX(6px)}
+}
+
+/* Feedback message */
+.feedback-msg {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--coral);
+  text-align: center;
+  min-height: 28px;
+  padding: 4px 0;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.feedback-msg.show { opacity: 1; }
+
+/* Button row */
+.btn-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 16px 16px;
+  width: 100%;
+}
+.btn-clear, .btn-check {
+  flex: 1;
+  border: none;
+  border-radius: 16px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  min-height: 60px;
+  cursor: pointer;
+  transition: transform .1s, box-shadow .1s;
+  letter-spacing: .5px;
+}
+.btn-clear {
+  background: #F0F0F0;
+  color: #888;
+  box-shadow: 0 4px 0 #DDD;
+}
+.btn-check {
+  background: linear-gradient(135deg, var(--coral), #FF8E53);
+  color: #fff;
+  box-shadow: 0 4px 0 #c94a6a;
+}
+.btn-check:disabled {
+  background: #DDD;
+  color: #AAA;
+  box-shadow: 0 4px 0 #CCC;
+  cursor: default;
+}
+.btn-clear:active:not(:disabled), .btn-check:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0,0,0,.1);
+}
+
+/* ── Win screen ────────────────────────────────────────────────── */
+#win {
+  background: linear-gradient(160deg, #A8E6CF 0%, #FFE66D 100%);
+  gap: 20px;
+}
+.win-stars {
+  font-size: 56px;
+  letter-spacing: 8px;
+}
+.win-title {
+  font-size: clamp(36px, 12vw, 60px);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0,0,0,.12);
+  text-align: center;
+}
+.win-subtitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(0,0,0,.45);
+  text-align: center;
+}
+.btn-again {
+  background: #fff;
+  color: #3DAA78;
+  border: none;
+  border-radius: 50px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  padding: 16px 52px;
+  cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.1);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-again:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.1); }
+
+/* ── Particles ─────────────────────────────────────────────────── */
+.particle {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 50%;
+  animation: fall linear forwards;
+}
+@keyframes fall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+.star-burst {
+  position: fixed;
+  pointer-events: none;
+  font-size: 32px;
+  animation: burst .6s ease-out forwards;
+}
+@keyframes burst {
+  0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+  60%  { transform: scale(1.4) rotate(30deg); opacity: 1; }
+  100% { transform: scale(0.8) rotate(-10deg); opacity: 0; }
+}
+
+/* ── Loading overlay ───────────────────────────────────────────── */
+#loading {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(255,249,240,.9);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--coral);
+}
+#loading.show { display: flex; }
+.spinner {
+  width: 48px; height: 48px;
+  border: 5px solid #FFD6E7;
+  border-top-color: var(--coral);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <span id="loading-msg">Getting ready…</span>
+</div>
+
+<!-- Splash -->
+<div id="splash" class="screen active">
+  <div class="splash-abc">A B C D E</div>
+  <div class="splash-title">Letter<br>Draw!</div>
+  <div class="splash-subtitle">Write the letter with your finger</div>
+  <button class="btn-play" onclick="startGame()">PLAY!</button>
+</div>
+
+<!-- Game -->
+<div id="game" class="screen">
+  <div class="progress-bar-wrap">
+    <div class="progress-bar-fill" id="prog-fill" style="width:0%"></div>
+  </div>
+  <div class="progress-label" id="prog-label">Letter 1 of 26</div>
+
+  <div class="hint-strip">
+    <div class="letter-badge" id="letter-badge">A</div>
+    <div class="word-hint">
+      <img class="word-img" id="word-img" src="" alt="" onerror="this.style.display='none';document.getElementById('word-emoji').style.display='flex'">
+      <div class="word-img-placeholder" id="word-emoji" style="display:none">🔤</div>
+      <div class="word-label" id="word-label">apple</div>
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="draw-canvas"></canvas>
+    <div class="feedback-msg" id="feedback-msg">Try again! 💪</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-clear" onclick="clearCanvas()">🗑️ Clear</button>
+    <button class="btn-check" id="btn-check" onclick="checkLetter()" disabled>✅ Check</button>
+  </div>
+</div>
+
+<!-- Win -->
+<div id="win" class="screen">
+  <div class="win-stars" id="win-stars">⭐⭐⭐</div>
+  <div class="win-title">Amazing!</div>
+  <div class="win-subtitle" id="win-subtitle">You wrote all 26 letters!</div>
+  <button class="btn-again" onclick="startGame()">Play Again!</button>
+</div>
+
+<script>
+// ── State ───────────────────────────────────────────────────────────────────
+const G = {
+  letters: [],
+  idx: 0,
+  total: 0,
+  stars: 0,
+  attempts: 0,
+  inputOn: true,
+  hasInk: false,
+};
+
+const ENCOURAGEMENTS = [
+  'Try again! 💪',
+  'Almost there! ⭐',
+  'You got this! 🎉',
+  'So close! 🌟',
+  'Keep going! 🚀',
+  'Nice try! One more! 🎈',
+];
+let encIdx = 0;
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+function showLoading(msg) {
+  $('loading-msg').textContent = msg;
+  $('loading').classList.add('show');
+}
+function hideLoading() {
+  $('loading').classList.remove('show');
+}
+
+// ── Canvas setup ─────────────────────────────────────────────────────────────
+const canvas = $('draw-canvas');
+const ctx = canvas.getContext('2d');
+let drawing = false;
+let lastX = 0, lastY = 0;
+
+function resizeCanvas() {
+  const wrap = canvas.parentElement;
+  const w = wrap.clientWidth - 32;   // padding
+  const h = wrap.clientHeight - 40;  // feedback-msg height
+  if (canvas.width === w && canvas.height === h) return;
+  const oldW = canvas.width, oldH = canvas.height;
+  // Save existing drawing
+  const saved = oldW > 0 ? ctx.getImageData(0, 0, oldW, oldH) : null;
+  canvas.width = w;
+  canvas.height = h;
+  fillWhite();
+  if (saved && oldW > 0) ctx.putImageData(saved, 0, 0);
+}
+
+function fillWhite() {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function clearCanvas() {
+  fillWhite();
+  G.hasInk = false;
+  $('btn-check').disabled = true;
+  hideFeedback();
+}
+
+function getPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const src = e.changedTouches ? e.changedTouches[0] : e;
+  return { x: src.clientX - r.left, y: src.clientY - r.top };
+}
+
+function startStroke(e) {
+  if (!G.inputOn) return;
+  e.preventDefault();
+  drawing = true;
+  const {x, y} = getPos(e);
+  lastX = x; lastY = y;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+}
+
+function moveStroke(e) {
+  if (!drawing || !G.inputOn) return;
+  e.preventDefault();
+  const {x, y} = getPos(e);
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 22;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  lastX = x; lastY = y;
+  if (!G.hasInk) {
+    G.hasInk = true;
+    $('btn-check').disabled = false;
+  }
+}
+
+function endStroke(e) {
+  drawing = false;
+}
+
+canvas.addEventListener('pointerdown',  startStroke, {passive: false});
+canvas.addEventListener('pointermove',  moveStroke,  {passive: false});
+canvas.addEventListener('pointerup',    endStroke,   {passive: false});
+canvas.addEventListener('pointercancel',endStroke,   {passive: false});
+
+// ── Game flow ────────────────────────────────────────────────────────────────
+async function startGame() {
+  showLoading('Shuffling letters…');
+  try {
+    // Build shuffled A–Z list
+    const res = await fetch('/api/letter-words?letter=A');
+    const data = await res.json();
+    // Use all letters A-Z, shuffled
+    const all = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    G.letters = shuffle(all);
+    G.idx = 0;
+    G.total = G.letters.length;
+    G.stars = 0;
+    showScreen('game');
+    await startRound();
+  } finally {
+    hideLoading();
+  }
+}
+
+async function startRound() {
+  G.attempts = 0;
+  G.hasInk = false;
+  G.inputOn = true;
+  clearCanvas();
+  hideFeedback();
+
+  const letter = G.letters[G.idx];
+
+  // Update progress
+  $('prog-fill').style.width = (G.idx / G.total * 100) + '%';
+  $('prog-label').textContent = `Letter ${G.idx + 1} of ${G.total}`;
+  $('letter-badge').textContent = letter;
+
+  // Show loading indicator for image while keeping game visible
+  const wordImg = $('word-img');
+  const wordEmoji = $('word-emoji');
+  wordImg.style.display = 'none';
+  wordEmoji.style.display = 'flex';
+  wordEmoji.textContent = '⏳';
+  $('word-label').textContent = '…';
+
+  // Fetch word + image in background
+  try {
+    const res = await fetch(`/api/letter-words?letter=${letter}`);
+    const {word, image} = await res.json();
+    $('word-label').textContent = word.toUpperCase();
+    if (image) {
+      wordImg.src = image;
+      wordImg.style.display = 'block';
+      wordEmoji.style.display = 'none';
+    } else {
+      wordEmoji.textContent = letter + '…';
+      wordEmoji.style.display = 'flex';
+    }
+  } catch {
+    wordEmoji.textContent = '🖊️';
+    $('word-label').textContent = letter + '…';
+  }
+
+  // Size canvas now that screen is visible
+  resizeCanvas();
+}
+
+async function checkLetter() {
+  if (!G.inputOn || !G.hasInk) return;
+  G.inputOn = false;
+  $('btn-check').disabled = true;
+
+  const b64 = canvas.toDataURL('image/png');
+  let result;
+  try {
+    const res = await fetch('/api/recognize-letter', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({image: b64}),
+    });
+    result = await res.json();
+  } catch {
+    G.inputOn = true;
+    $('btn-check').disabled = false;
+    return;
+  }
+
+  const target = G.letters[G.idx];
+  const accepted = isAccepted(target, result);
+
+  if (accepted) {
+    const firstTry = G.attempts === 0;
+    G.stars += firstTry ? 3 : 1;
+    celebrate(firstTry);
+    setTimeout(() => nextRound(), firstTry ? 2000 : 1400);
+  } else {
+    G.attempts++;
+    showFeedback(ENCOURAGEMENTS[encIdx % ENCOURAGEMENTS.length]);
+    encIdx++;
+    canvas.classList.add('shake');
+    setTimeout(() => canvas.classList.remove('shake'), 450);
+    G.inputOn = true;
+    $('btn-check').disabled = false;
+  }
+}
+
+function isAccepted(target, data) {
+  if (!data || data.error) return false;
+  if (data.letter === target) return true;
+  // Also accept if target appears in top-3 with confidence > 0.20
+  return (data.top3 || []).some(x => x.letter === target && x.prob > 0.20);
+}
+
+function nextRound() {
+  G.idx++;
+  if (G.idx >= G.total) {
+    showWin();
+  } else {
+    startRound();
+  }
+}
+
+function showWin() {
+  const starCount = Math.min(3, Math.round(G.stars / G.total));
+  $('win-stars').textContent = '⭐'.repeat(Math.max(1, starCount));
+  $('win-subtitle').textContent = `You drew all ${G.total} letters!`;
+  showScreen('win');
+  bigConfetti();
+}
+
+// ── Feedback ─────────────────────────────────────────────────────────────────
+function showFeedback(msg) {
+  const el = $('feedback-msg');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function hideFeedback() {
+  $('feedback-msg').classList.remove('show');
+}
+
+// ── Celebrations ──────────────────────────────────────────────────────────────
+const COLORS = ['#FF6B9D','#4ECDC4','#FFE66D','#A8E6CF','#C3A6FF','#FF8E53','#7FDBFF'];
+
+function celebrate(big) {
+  if (big) bigConfetti();
+  else smallStars();
+  playChime(big);
+}
+
+function bigConfetti() {
+  const count = 60;
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => spawnParticle(), i * 18);
+  }
+}
+
+function smallStars() {
+  const emojis = ['⭐','🌟','✨'];
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 3;
+  for (let i = 0; i < 8; i++) {
+    const el = document.createElement('div');
+    el.className = 'star-burst';
+    el.textContent = emojis[i % emojis.length];
+    const angle = (i / 8) * Math.PI * 2;
+    const r = 60 + Math.random() * 40;
+    el.style.cssText = `left:${cx + Math.cos(angle)*r}px;top:${cy + Math.sin(angle)*r}px;transform-origin:center`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 700);
+  }
+}
+
+function spawnParticle() {
+  const el = document.createElement('div');
+  el.className = 'particle';
+  const size = 8 + Math.random() * 10;
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  const dur = 1.2 + Math.random() * 1.2;
+  el.style.cssText = `
+    left: ${Math.random() * 100}vw;
+    top: -20px;
+    width: ${size}px; height: ${size}px;
+    background: ${color};
+    animation-duration: ${dur}s;
+  `;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), dur * 1000 + 100);
+}
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playChime(big) {
+  try {
+    const ac = getAudio();
+    const notes = big
+      ? [523.25, 659.25, 783.99, 1046.50]  // C5 E5 G5 C6
+      : [523.25, 659.25, 783.99];
+    notes.forEach((freq, i) => {
+      setTimeout(() => {
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.connect(gain); gain.connect(ac.destination);
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.18, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.4);
+        osc.start(); osc.stop(ac.currentTime + 0.4);
+      }, i * 100);
+    });
+  } catch {}
+}
+
+// ── Utility ──────────────────────────────────────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Resize canvas when window resizes (orientation change)
+window.addEventListener('resize', () => {
+  if (document.getElementById('game').classList.contains('active')) resizeCanvas();
+});
+</script>
+</body>
+</html>

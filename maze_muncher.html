@@ -77,8 +77,8 @@ button:hover,button:active{background:#0055cc;box-shadow:0 0 18px #0066ff}
       <strong>Space</strong> = buy +10 seconds (up to 3×)
     </div>
     <div class="opts">
-      <button class="opt" id="optExit">EXIT: Eat all dots first</button>
-      <button class="opt" id="optTimer">TIMER: Countdown</button>
+      <button class="opt on" id="optExit">EXIT: Reach freely — no dots needed</button>
+      <button class="opt on" id="optTimer">TIMER: Off — no time limit</button>
     </div>
     <div class="oi" style="margin-top:6px;font-size:clamp(13px,3vw,20px);color:#ffee00;letter-spacing:2px;animation:blink .8s step-end infinite">PRESS SPACE TO PLAY</div>
     <button id="btnStart" style="margin-top:4px">▶ START GAME</button>
@@ -110,7 +110,7 @@ const _mazeLBKey='maze_lb';
 let mazeLB=(()=>{try{return JSON.parse(localStorage.getItem(_mazeLBKey))||[];}catch(e){return[];}})();
 let best=mazeLB.length?mazeLB[0].score:0;
 let timeLeft=0,timerAcc=0;
-let freeExit=false,noTimer=false; // game-mode options
+let freeExit=true,noTimer=true; // game-mode options
 let maze=[],mW=0,mH=0;
 let exitGX=0,exitGY=0,exitOpen=false;
 let dotsTotal=0,dotsEaten=0;
@@ -505,8 +505,9 @@ function renderPlayer(){
   ctx.fill();
   ctx.shadowBlur=0;
 
-  // Eye
-  const ea=P.facing-Math.PI*.28;
+  // Eye — flip offset sign when facing left so it mirrors rather than rotates
+  const eyeSign=(P.facing>Math.PI/2&&P.facing<Math.PI*1.5)?1:-1;
+  const ea=P.facing+eyeSign*Math.PI*.28;
   ctx.fillStyle='#111';
   ctx.beginPath();
   ctx.arc(cx+Math.cos(ea)*r*.55,cy+Math.sin(ea)*r*.55,2.5,0,Math.PI*2);

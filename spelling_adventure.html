@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spelling Adventure</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+.screen { width: 100%; max-width: 820px; padding: 20px; display: none; }
+.screen.active { display: block; }
+
+/* ── SPLASH ── */
+#splash { text-align: center; color: white; }
+
+#splash h1 {
+  font-size: 2.8em;
+  text-shadow: 3px 3px 0 #ff6b6b;
+  margin-bottom: 8px;
+  animation: titleBounce 1.4s ease-in-out infinite;
+}
+
+@keyframes titleBounce {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.diff-grid {
+  display: flex; gap: 14px; justify-content: center;
+  flex-wrap: wrap; margin: 24px 0 20px;
+}
+
+.diff-btn {
+  padding: 14px 22px; border: none; border-radius: 50px;
+  font-size: 1.05em; cursor: pointer; font-family: inherit;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.2); transition: transform .15s;
+  line-height: 1.5;
+}
+.diff-btn:active { transform: translateY(5px); box-shadow: none; }
+.diff-btn.easy   { background: #4ecdc4; color: white; }
+.diff-btn.medium { background: #ffe66d; color: #333; }
+.diff-btn.hard   { background: #ff6b6b; color: white; }
+.diff-btn.expert { background: #2c3e50; color: white; }
+.diff-btn.selected { outline: 4px solid white; transform: scale(1.07); }
+
+.play-btn {
+  padding: 18px 60px; background: #f9ca24; border: none;
+  border-radius: 50px; font-size: 1.7em; cursor: pointer;
+  font-family: inherit; box-shadow: 0 6px 0 #f0932b;
+  transition: transform .1s, box-shadow .1s; color: #333; margin-top: 6px;
+}
+.play-btn:active { transform: translateY(6px); box-shadow: none; }
+
+.mgr-btn {
+  padding: 11px 28px; background: rgba(255,255,255,.2);
+  border: 2px solid white; border-radius: 50px; font-size: .95em;
+  cursor: pointer; font-family: inherit; color: white;
+  margin-top: 14px; display: inline-block;
+}
+
+/* ── GAME ── */
+#game {
+  background: white; border-radius: 28px; padding: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+
+.progress-label { text-align: center; color: #777; font-size: 1.1em; margin-bottom: 8px; }
+
+.progress-track {
+  background: #eee; border-radius: 20px; height: 10px; overflow: hidden; margin-bottom: 18px;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 20px; width: 0%;
+  transition: width .5s ease;
+}
+
+.hint-wrap { display: flex; justify-content: center; margin-bottom: 18px; }
+
+.hint-img {
+  width: 190px; height: 190px; object-fit: cover;
+  border-radius: 18px; border: 4px solid #667eea;
+  box-shadow: 0 8px 22px rgba(0,0,0,.2);
+}
+
+.hint-placeholder {
+  width: 190px; height: 190px; border-radius: 18px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 1.1em; font-weight: bold;
+  text-align: center; padding: 12px;
+}
+
+#word-display {
+  display: flex; gap: 7px; justify-content: center;
+  flex-wrap: wrap; margin: 18px 0 14px;
+}
+
+.lbox {
+  width: 44px; height: 54px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.75em; font-weight: bold; text-transform: uppercase;
+  transition: background .2s, transform .2s;
+}
+.lbox.shown   { background: #e8f5e9; color: #2e7d32; border: 3px solid #4caf50; }
+.lbox.blank   { background: #f5f5f5; border: 3px dashed #ccc; }
+.lbox.current { background: #fff9c4; border: 3px dashed #f9ca24; animation: blinkBox .75s ease-in-out infinite; }
+.lbox.space   { background: transparent; border: none; width: 18px; }
+.lbox.hyphen  { background: transparent; border: none; color: #777; }
+
+@keyframes blinkBox {
+  0%,100% { transform: scale(1); border-color: #f9ca24; }
+  50%      { transform: scale(1.06); border-color: #f0932b; }
+}
+
+/* keyboard */
+.keyboard { display: flex; flex-direction: column; gap: 7px; align-items: center; margin-top: 14px; }
+.kb-row { display: flex; gap: 5px; }
+
+.key {
+  width: 40px; height: 40px; border: none; border-radius: 8px;
+  background: #ecf0f1; font-size: .95em; font-weight: bold;
+  cursor: pointer; font-family: inherit;
+  box-shadow: 0 3px 0 #bdc3c7; transition: transform .08s, box-shadow .08s;
+  color: #2c3e50;
+}
+.key:active { transform: translateY(3px); box-shadow: none; }
+.key.correct { background: #2ecc71 !important; color: white !important; box-shadow: 0 3px 0 #27ae60; }
+.key.wrong { animation: shake .28s; }
+
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  25%     { transform: translateX(-6px); }
+  75%     { transform: translateX(6px); }
+}
+
+/* ── WORD-COMPLETE OVERLAY ── */
+#wc-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.72);
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 100;
+}
+#wc-overlay.active { display: flex; }
+
+.wc-msg {
+  color: white; font-size: 2.2em; font-weight: bold;
+  text-align: center; text-shadow: 2px 2px 0 rgba(0,0,0,.3);
+  margin-bottom: 18px; animation: titleBounce .5s infinite;
+}
+
+.cel-imgs { display: flex; gap: 18px; margin-bottom: 18px; flex-wrap: wrap; justify-content: center; }
+
+.cel-img {
+  width: 145px; height: 145px; object-fit: cover;
+  border-radius: 14px; border: 4px solid white;
+  animation: popIn .5s ease both;
+}
+.cel-img:nth-child(2) { animation-delay: .15s; }
+
+@keyframes popIn {
+  0%   { transform: scale(0) rotate(-12deg); opacity: 0; }
+  75%  { transform: scale(1.1) rotate(4deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+.next-btn {
+  padding: 14px 38px; background: #f9ca24; border: none;
+  border-radius: 50px; font-size: 1.35em; cursor: pointer;
+  font-family: inherit; box-shadow: 0 5px 0 #f0932b; color: #333;
+}
+.next-btn:active { transform: translateY(5px); box-shadow: none; }
+
+/* ── GAME-COMPLETE OVERLAY ── */
+#gc-overlay {
+  position: fixed; inset: 0;
+  background: linear-gradient(135deg, #f093fb, #f5576c);
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 150; text-align: center; color: white;
+}
+#gc-overlay.active { display: flex; }
+#gc-overlay .trophy { font-size: 5em; animation: titleBounce .5s infinite; }
+#gc-overlay h1 { font-size: 3em; text-shadow: 3px 3px 0 rgba(0,0,0,.2); margin: 10px 0; }
+
+/* ── TEST MODE ── */
+#test-mode {
+  background: white; border-radius: 28px; padding: 24px;
+  max-height: 92vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+#test-mode h2 { color: #333; margin-bottom: 6px; }
+.test-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.back-btn {
+  padding: 9px 20px; border-radius: 20px; border: none;
+  background: #667eea; color: white; cursor: pointer;
+  font-family: inherit; font-size: .95em;
+}
+
+.test-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 14px; margin-top: 10px;
+}
+
+.t-card {
+  border: 2px solid #e0e0e0; border-radius: 14px;
+  padding: 9px; text-align: center; position: relative;
+  transition: opacity .3s;
+}
+.t-card img {
+  width: 100%; height: 116px; object-fit: cover; border-radius: 9px; display: block;
+}
+.t-word { font-size: .88em; font-weight: bold; margin-top: 6px; color: #333; }
+.x-btn {
+  position: absolute; top: 6px; right: 6px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #e74c3c; color: white; border: none;
+  font-size: .85em; cursor: pointer; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,.3); transition: transform .1s;
+}
+.x-btn:active { transform: scale(.9); }
+.t-loading { opacity: .45; pointer-events: none; }
+
+/* ── PARTICLES ── */
+.confetti {
+  position: fixed; pointer-events: none; z-index: 250;
+  border-radius: 2px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { opacity: 1; transform: translateY(-40px) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(105vh) rotate(600deg); }
+}
+
+.star-p {
+  position: fixed; pointer-events: none; z-index: 250;
+  font-size: 1.8em; animation: starExplode forwards;
+}
+@keyframes starExplode {
+  0%   { transform: translate(0,0) scale(0); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(1); opacity: 0; }
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 480px) {
+  .lbox  { width: 34px; height: 44px; font-size: 1.4em; }
+  .key   { width: 31px; height: 34px; font-size: .8em; }
+  .hint-img, .hint-placeholder { width: 150px; height: 150px; }
+  #splash h1 { font-size: 2em; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════ SPLASH ════════════ -->
+<div class="screen active" id="splash">
+  <h1>⭐ Spelling Adventure ⭐</h1>
+  <p style="font-size:1.15em;opacity:.9;margin-bottom:4px">Pick your difficulty!</p>
+
+  <div class="diff-grid">
+    <button class="diff-btn easy selected" onclick="setDiff(1,this)">
+      😊 Easy<br><small>1 letter hidden</small>
+    </button>
+    <button class="diff-btn medium" onclick="setDiff(2,this)">
+      🤔 Medium<br><small>2 letters hidden</small>
+    </button>
+    <button class="diff-btn hard" onclick="setDiff(3,this)">
+      😤 Hard<br><small>3 letters hidden</small>
+    </button>
+    <button class="diff-btn expert" onclick="setDiff(4,this)">
+      🔥 Expert<br><small>All letters hidden</small>
+    </button>
+  </div>
+
+  <button class="play-btn" onclick="startGame()">▶ Play!</button><br>
+  <button class="mgr-btn" onclick="openTestMode()">🔍 Manage Images</button>
+</div>
+
+<!-- ════════════ GAME ════════════ -->
+<div class="screen" id="game">
+  <div class="progress-label">Word <span id="wnum">1</span> of 5</div>
+  <div class="progress-track"><div class="progress-fill" id="pbar"></div></div>
+
+  <div class="hint-wrap">
+    <img id="hint-img" class="hint-img" src="" alt="hint" style="display:none"
+         onerror="this.style.display='none';document.getElementById('hint-ph').style.display='flex'">
+    <div id="hint-ph" class="hint-placeholder" style="display:none">Loading…</div>
+  </div>
+
+  <div id="word-display"></div>
+  <div class="keyboard" id="keyboard"></div>
+</div>
+
+<!-- ════════════ WORD-COMPLETE OVERLAY ════════════ -->
+<div id="wc-overlay">
+  <div class="wc-msg" id="wc-msg">🎉 Fantastic! 🎉</div>
+  <div class="cel-imgs" id="cel-imgs"></div>
+  <button class="next-btn" onclick="nextWord()">Next Word ➡</button>
+</div>
+
+<!-- ════════════ GAME-COMPLETE OVERLAY ════════════ -->
+<div id="gc-overlay">
+  <div class="trophy">🏆</div>
+  <h1>YOU WIN!</h1>
+  <p style="font-size:1.35em;margin:16px 0">All 5 words spelled correctly!</p>
+  <button class="next-btn" onclick="goHome()" style="margin-top:12px">🏠 Play Again</button>
+</div>
+
+<!-- ════════════ TEST MODE ════════════ -->
+<div class="screen" id="test-mode">
+  <div class="test-hdr">
+    <h2>🔍 Manage Images</h2>
+    <button class="back-btn" onclick="goHome()">← Back</button>
+  </div>
+  <p style="color:#888;font-size:.92em;margin-bottom:12px">
+    Tap ✕ on any image to remove it and fetch two fresh ones from DuckDuckGo.
+  </p>
+  <div id="test-grid" class="test-grid"></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════ -->
+<script>
+// ── WORD LIST ──────────────────────────────────────────────
+const WORDS = [
+  "QuinJet","batcycle","batwing","flash","bluey",
+  "bat-computer","catwoman","Ironman","Rocket Raccoon",
+  "King Shark","Slimer","Marshmallow Man","Grogu",
+  "jumping","flying","lego","dancing","running"
+];
+
+// ── STATE ──────────────────────────────────────────────────
+let difficulty    = 1;
+let selectedWords = [];
+let wordIndex     = 0;
+let blanks        = [];   // char-positions that need filling
+let blankPos      = 0;    // which blank we're on
+let cache         = {};   // word.lower -> [url,...]
+
+// ── CACHE (localStorage) ───────────────────────────────────
+function loadCache() {
+  try { cache = JSON.parse(localStorage.getItem('saCache') || '{}'); } catch { cache = {}; }
+}
+function saveCache() {
+  try { localStorage.setItem('saCache', JSON.stringify(cache)); } catch {}
+}
+loadCache();
+
+// ── DDG IMAGE FETCH ────────────────────────────────────────
+async function ddgImages(query, need = 3) {
+  const PROXIES = [
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+  ];
+
+  for (const px of PROXIES) {
+    try {
+      const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`;
+      const html = await (await fetch(px(searchUrl), {signal: AbortSignal.timeout(7000)})).text();
+
+      let vqd = null;
+      for (const re of [/vqd=['"]([^'"]+)['"]/, /"vqd":"([^"]+)"/, /vqd=([^&\s,'"<]+)/]) {
+        const m = html.match(re); if (m) { vqd = m[1]; break; }
+      }
+      if (!vqd) continue;
+
+      const apiUrl = `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(query)}&vqd=${encodeURIComponent(vqd)}&f=,,,&p=1`;
+      const data = await (await fetch(px(apiUrl), {signal: AbortSignal.timeout(7000)})).json();
+      const urls = (data.results || []).map(r => r.image).filter(Boolean);
+      if (urls.length) return urls.slice(0, need + 6);
+    } catch { /* try next proxy */ }
+  }
+
+  // Fallback: DDG Instant Answer (CORS-friendly, may return one image)
+  try {
+    const ia = await (await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&t=sa`
+    )).json();
+    if (ia.Image) return [ia.Image];
+  } catch {}
+
+  // Fallback: Wikipedia thumbnail
+  try {
+    const ws = await (await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=1`
+    )).json();
+    const title = ws.query?.search?.[0]?.title;
+    if (title) {
+      const wi = await (await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&origin=*&pithumbsize=400`
+      )).json();
+      const src = Object.values(wi.query?.pages || {})[0]?.thumbnail?.source;
+      if (src) return [src];
+    }
+  } catch {}
+
+  return [];
+}
+
+async function ensureImages(word, minCount = 3) {
+  const k = word.toLowerCase();
+  if (!cache[k]) cache[k] = [];
+  if (cache[k].length < minCount) {
+    const fetched = await ddgImages(word, minCount);
+    for (const u of fetched) if (!cache[k].includes(u)) cache[k].push(u);
+    saveCache();
+  }
+  return cache[k];
+}
+
+// ── DIFFICULTY ─────────────────────────────────────────────
+function setDiff(level, btn) {
+  difficulty = level;
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+// ── SCREEN HELPER ──────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+}
+
+function goHome() {
+  clearParticles();
+  document.getElementById('wc-overlay').classList.remove('active');
+  document.getElementById('gc-overlay').classList.remove('active');
+  showScreen('splash');
+}
+
+// ── GAME START ─────────────────────────────────────────────
+async function startGame() {
+  const shuffled = [...WORDS].sort(() => Math.random() - .5);
+  selectedWords = shuffled.slice(0, 5);
+  wordIndex = 0;
+  showScreen('game');
+  await loadWord(0);
+}
+
+async function loadWord(idx) {
+  const word = selectedWords[idx];
+  document.getElementById('wnum').textContent = idx + 1;
+  document.getElementById('pbar').style.width = `${(idx / 5) * 100}%`;
+
+  // Show placeholder while loading
+  const img = document.getElementById('hint-img');
+  const ph  = document.getElementById('hint-ph');
+  img.style.display = 'none';
+  ph.style.display  = 'flex';
+  ph.textContent    = 'Loading image…';
+
+  const imgs = await ensureImages(word, 3);
+
+  if (imgs.length) {
+    img.onload  = () => { img.style.display = 'block'; ph.style.display = 'none'; };
+    img.onerror = () => { img.style.display = 'none';  ph.textContent = word; ph.style.fontSize = '1.4em'; };
+    img.src = imgs[0];
+  } else {
+    ph.textContent = word;
+    ph.style.fontSize = '1.4em';
+  }
+
+  setupBlanks(word);
+  buildKeyboard();
+}
+
+// ── BLANK SETUP ────────────────────────────────────────────
+function setupBlanks(word) {
+  const letterIdxs = [];
+  for (let i = 0; i < word.length; i++) if (/[a-zA-Z]/.test(word[i])) letterIdxs.push(i);
+
+  const n = difficulty === 4 ? letterIdxs.length : Math.min(difficulty, letterIdxs.length);
+  blanks   = [...letterIdxs].sort(() => Math.random() - .5).slice(0, n).sort((a,b) => a-b);
+  blankPos = 0;
+
+  renderWord(word);
+}
+
+function renderWord(word) {
+  const c = document.getElementById('word-display');
+  c.innerHTML = '';
+  for (let i = 0; i < word.length; i++) {
+    const ch = word[i];
+    const div = document.createElement('div');
+    div.className = 'lbox';
+    div.dataset.i = i;
+
+    if (ch === ' ') {
+      div.classList.add('space');
+    } else if (ch === '-') {
+      div.classList.add('hyphen');
+      div.textContent = '-';
+    } else {
+      const bi = blanks.indexOf(i);
+      if (bi === -1) {
+        div.classList.add('shown');
+        div.textContent = ch.toUpperCase();
+      } else if (bi < blankPos) {
+        div.classList.add('shown');
+        div.textContent = ch.toUpperCase();
+      } else if (bi === blankPos) {
+        div.classList.add('current');
+      } else {
+        div.classList.add('blank');
+      }
+    }
+    c.appendChild(div);
+  }
+}
+
+// ── KEYBOARD ───────────────────────────────────────────────
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'].forEach(row => {
+    const r = document.createElement('div');
+    r.className = 'kb-row';
+    for (const l of row) {
+      const btn = document.createElement('button');
+      btn.className = 'key';
+      btn.textContent = l;
+      btn.dataset.l = l;
+      btn.onclick = () => pressKey(l);
+      r.appendChild(btn);
+    }
+    kb.appendChild(r);
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && !e.metaKey && !e.ctrlKey)
+    pressKey(e.key.toUpperCase());
+});
+
+function pressKey(letter) {
+  const word = selectedWords[wordIndex];
+  if (!word || blankPos >= blanks.length) return;
+
+  const target = word[blanks[blankPos]].toUpperCase();
+  const btn    = document.querySelector(`.key[data-l="${letter}"]`);
+
+  if (letter === target) {
+    blankPos++;
+    renderWord(word);
+    if (btn) { btn.classList.add('correct'); setTimeout(() => btn.classList.remove('correct'), 420); }
+    if (blankPos >= blanks.length) setTimeout(wordComplete, 480);
+  } else {
+    if (btn) { btn.classList.add('wrong'); setTimeout(() => btn.classList.remove('wrong'), 300); }
+  }
+}
+
+// ── WORD COMPLETE ──────────────────────────────────────────
+const CEL_MSGS = [
+  '🎉 Fantastic! 🎉',
+  '⭐ Super Star! ⭐',
+  '🌈 Amazing! 🌈',
+  '🎆 Brilliant! 🎆',
+  '🎊 Incredible! 🎊'
+];
+
+const CELEBRATIONS = [doConfetti, doStars, doBounce, doFireworks, doRainbow];
+
+async function wordComplete() {
+  const word = selectedWords[wordIndex];
+
+  // Pick and run a celebration
+  CELEBRATIONS[Math.floor(Math.random() * 5)]();
+  document.getElementById('wc-msg').textContent = CEL_MSGS[Math.floor(Math.random() * 5)];
+
+  // Extra images (indices 1 & 2)
+  await ensureImages(word, 3);
+  const extras = (cache[word.toLowerCase()] || []).slice(1, 3);
+
+  const box = document.getElementById('cel-imgs');
+  box.innerHTML = '';
+  if (extras.length) {
+    extras.forEach(url => {
+      const img = document.createElement('img');
+      img.className = 'cel-img';
+      img.src = url;
+      img.onerror = () => img.remove();
+      box.appendChild(img);
+    });
+  } else {
+    box.innerHTML = '<div style="color:white;font-size:3.5em">🎉 🎊 🎉</div>';
+  }
+
+  document.getElementById('wc-overlay').classList.add('active');
+}
+
+function nextWord() {
+  clearParticles();
+  document.getElementById('wc-overlay').classList.remove('active');
+  wordIndex++;
+  if (wordIndex >= 5) {
+    document.getElementById('pbar').style.width = '100%';
+    showGameComplete();
+  } else {
+    loadWord(wordIndex);
+  }
+}
+
+// ── GAME COMPLETE ──────────────────────────────────────────
+function showGameComplete() {
+  document.getElementById('gc-overlay').classList.add('active');
+  doConfetti();
+  setTimeout(doFireworks, 500);
+  setTimeout(doStars, 900);
+}
+
+// ── CELEBRATION EFFECTS ────────────────────────────────────
+function clearParticles() {
+  document.querySelectorAll('.confetti,.star-p,.cel-canvas').forEach(e => e.remove());
+}
+
+function doConfetti() {
+  const cols = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#c77dff','#ff9f43','#ff4ecb'];
+  for (let i = 0; i < 90; i++) {
+    setTimeout(() => {
+      const p = document.createElement('div');
+      p.className = 'confetti';
+      p.style.left = Math.random() * 100 + 'vw';
+      p.style.top  = '-10px';
+      p.style.background = cols[Math.floor(Math.random() * cols.length)];
+      const s = Math.random() * 10 + 6;
+      p.style.width  = s + 'px';
+      p.style.height = s + 'px';
+      p.style.animationDuration = (Math.random() * 2 + 1.4) + 's';
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 4200);
+    }, i * 28);
+  }
+}
+
+function doStars() {
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+  const es = ['⭐','🌟','✨','💫','🌠'];
+  for (let i = 0; i < 24; i++) {
+    const s = document.createElement('div');
+    s.className = 'star-p';
+    s.textContent = es[Math.floor(Math.random() * es.length)];
+    s.style.left = cx + 'px';
+    s.style.top  = cy + 'px';
+    const ang = (i / 24) * Math.PI * 2;
+    const d   = 180 + Math.random() * 220;
+    s.style.setProperty('--tx', Math.cos(ang) * d + 'px');
+    s.style.setProperty('--ty', Math.sin(ang) * d + 'px');
+    s.style.animationDuration = (.7 + Math.random() * .5) + 's';
+    s.style.animationDelay    = Math.random() * .25 + 's';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 2200);
+  }
+}
+
+function doBounce() {
+  const boxes = document.querySelectorAll('#word-display .lbox.shown');
+  const cols  = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#c77dff'];
+  boxes.forEach((b, i) => {
+    setTimeout(() => {
+      b.style.background = cols[i % cols.length];
+      b.style.color      = 'white';
+      b.style.transform  = 'scale(1.25)';
+      setTimeout(() => { b.style.transform = ''; }, 300);
+    }, i * 70);
+  });
+}
+
+function doFireworks() {
+  const cvs = document.createElement('canvas');
+  cvs.className = 'cel-canvas';
+  cvs.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:260;';
+  cvs.width  = window.innerWidth;
+  cvs.height = window.innerHeight;
+  document.body.appendChild(cvs);
+
+  const ctx   = cvs.getContext('2d');
+  const parts = [];
+  const cols  = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#c77dff','#fff','#ff9f43'];
+
+  function burst(x, y) {
+    for (let i = 0; i < 55; i++) {
+      const a = (i / 55) * Math.PI * 2;
+      const spd = 2.5 + Math.random() * 4;
+      parts.push({ x, y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd,
+                   col: cols[Math.floor(Math.random()*cols.length)],
+                   life: 1, sz: 2 + Math.random() * 3 });
+    }
+  }
+
+  burst(cvs.width*.3, cvs.height*.35);
+  setTimeout(() => burst(cvs.width*.7, cvs.height*.3), 280);
+  setTimeout(() => burst(cvs.width*.5, cvs.height*.55), 560);
+
+  let f = 0;
+  (function tick() {
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.x += p.vx; p.y += p.vy; p.vy += .09; p.life -= .018;
+      if (p.life <= 0) { parts.splice(i,1); continue; }
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle   = p.col;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.sz, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (++f < 180 || parts.length) requestAnimationFrame(tick);
+    else cvs.remove();
+  })();
+
+  setTimeout(() => cvs.remove(), 5000);
+}
+
+function doRainbow() {
+  const cols = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#c77dff'];
+  for (let i = 0; i < 40; i++) {
+    setTimeout(() => {
+      const p = document.createElement('div');
+      p.className = 'confetti';
+      p.style.background = 'transparent';
+      p.style.left = Math.random() * 100 + 'vw';
+      p.style.top  = '-10px';
+      p.style.width  = 'auto';
+      p.style.height = 'auto';
+      p.style.fontSize = (1.2 + Math.random()) + 'em';
+      p.textContent = ['🌈','⭐','🎉','✨','🎊'][Math.floor(Math.random()*5)];
+      p.style.animationDuration = (1 + Math.random() * 1.5) + 's';
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 3500);
+    }, i * 55);
+  }
+}
+
+// ── TEST MODE ──────────────────────────────────────────────
+async function openTestMode() {
+  showScreen('test-mode');
+  const grid = document.getElementById('test-grid');
+  grid.innerHTML = '<p style="color:#aaa;padding:20px">Loading images…</p>';
+
+  // Fetch one image per word in parallel
+  await Promise.allSettled(WORDS.map(w => ensureImages(w, 1)));
+  renderTestGrid();
+}
+
+function renderTestGrid() {
+  const grid = document.getElementById('test-grid');
+  grid.innerHTML = '';
+  WORDS.forEach(word => {
+    const k    = word.toLowerCase();
+    const imgs = cache[k] || [];
+    const card = document.createElement('div');
+    card.className = 'test-card';
+    card.dataset.word = word;
+
+    if (imgs.length) {
+      const img = document.createElement('img');
+      img.src = imgs[0];
+      img.alt = word;
+      img.onerror = () => img.replaceWith(makePH(word));
+      card.appendChild(img);
+    } else {
+      card.appendChild(makePH(word));
+    }
+
+    const lbl = document.createElement('div');
+    lbl.className = 't-word';
+    lbl.textContent = word;
+    card.appendChild(lbl);
+
+    const xb = document.createElement('button');
+    xb.className = 'x-btn';
+    xb.title = 'Remove & fetch new image';
+    xb.textContent = '✕';
+    xb.onclick = () => removeImage(word, card);
+    card.appendChild(xb);
+
+    grid.appendChild(card);
+  });
+}
+
+function makePH(word) {
+  const d = document.createElement('div');
+  d.style.cssText =
+    'width:100%;height:116px;border-radius:9px;background:linear-gradient(135deg,#667eea,#764ba2);' +
+    'display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;' +
+    'text-align:center;padding:8px;font-size:.9em;';
+  d.textContent = word;
+  return d;
+}
+
+async function removeImage(word, card) {
+  const k = word.toLowerCase();
+  if (!cache[k]) cache[k] = [];
+
+  // Remove first image
+  cache[k].shift();
+  saveCache();
+
+  // Fetch 2 more from DDG
+  card.classList.add('t-loading');
+  const fresh = await ddgImages(word, 5);
+  for (const u of fresh) if (!cache[k].includes(u)) cache[k].push(u);
+  saveCache();
+  card.classList.remove('t-loading');
+
+  // Update card image
+  const existing = card.querySelector('img') || card.querySelector('div:not(.t-word)');
+  const newSrc   = (cache[k] || [])[0];
+
+  if (newSrc) {
+    const img = document.createElement('img');
+    img.src = newSrc;
+    img.alt = word;
+    img.onerror = () => img.replaceWith(makePH(word));
+    existing?.replaceWith(img);
+  } else {
+    existing?.replaceWith(makePH(word));
+  }
+}
+
+// ── INIT ───────────────────────────────────────────────────
+document.body.tabIndex = 0;
+</script>
+</body>
+</html>

@@ -185,6 +185,7 @@ function initState() {
     zoneName: 'Surface',
     blocks: [],        // pushable blocks
     platformStuns: [], // { x, y, timer } flashing stunned platforms
+    cameraY: 0,
   };
   generateLevel();
   spawnPlayer();
@@ -259,13 +260,11 @@ function generateLevel() {
       type: caveType, entryX: cx + TILE, entryY: caveRow * TILE
     });
 
-    // Floor hole (entry to cave)
-    // Mark tiles in floor area as removed (we'll handle via cave rect)
-    // Remove tiles from surface floor down to cave top for both entry columns
+    // Floor hole (entry to cave) — remove all floor/dirt at the two entry columns
     for (let fi = 0; fi < 2; fi++) {
       const holeX = cx + fi * TILE;
       state.platforms = state.platforms.filter(p =>
-        !(p.x === holeX && p.y >= SURFACE_FLOOR * TILE && p.y < caveRow * TILE)
+        !(p.x === holeX && (p.type === 'floor' || p.type === 'dirt'))
       );
     }
 
@@ -286,11 +285,11 @@ function generateLevel() {
       }
     }
 
-    // Exit hole: remove cave ceiling and all floor/dirt above, same range as entry
+    // Exit hole: remove floor/dirt/cave_ceil at the two exit columns
     const exitCol = entryCol + caveLen - 2;
     state.platforms = state.platforms.filter(p =>
       !(p.x >= exitCol*TILE && p.x < (exitCol+2)*TILE &&
-        p.y >= SURFACE_FLOOR*TILE && p.y < caveRow*TILE)
+        (p.type === 'floor' || p.type === 'dirt' || p.type === 'cave_ceil'))
     );
 
     // Gems in cave
@@ -743,7 +742,7 @@ function hitPlayer(pl, knockDir) {
     pl.invincible = 80;
   } else {
     if (cfg.crabLives) loseLife(false);
-    else { pl.vx = knockDir * 5; pl.vy = -6; pl.invincible = 90; }
+    else { pl.vx = knockDir * 5; pl.vy = -6; }
   }
 }
 
@@ -1057,21 +1056,31 @@ function spawnParticles(x, y, color, count) {
 
 function loseLife(isLava) {
   sfxHurt();
-  state.player.gemColor = null; state.player.gemColorTimer = 0;
-  spawnParticles(state.player.x + 12, state.player.y + 16, '#f44', 12);
+  const pl = state.player;
+  pl.gemColor = null; pl.gemColorTimer = 0;
+  spawnParticles(pl.x + 12, pl.y + 16, '#f44', 12);
+
+  if (!cfg.crabLives) {
+    // Invincible mode: no life loss, no camera reset — just drop item and
+    // place the player back on the surface at the current scroll position.
+    tryDropShell(pl);
+    pl.x = Math.max(state.cameraX + pl.w + 4, pl.x);
+    pl.y = (SURFACE_FLOOR - 1) * TILE;
+    pl.vx = 0; pl.vy = 0;
+    pl.ducking = false; pl.h = 32;
+    return;
+  }
+
   state.lives--;
   updateHUD();
   if (state.lives <= 0) {
     endGame('lose');
   } else {
-    // Respawn
-    const pl = state.player;
     pl.x = pl.spawnX; pl.y = pl.spawnY;
     pl.vx = 0; pl.vy = 0;
     pl.carrying = null;
     pl.ducking = false;
     pl.h = 32;
-    pl.invincible = 120;
     state.cameraX = Math.max(0, pl.x - W/3);
   }
 }
@@ -1090,10 +1099,13 @@ function endGame(result) {
 // ─── Camera ───────────────────────────────────────────────────────────────────
 function updateCamera() {
   const pl = state.player;
+  // Horizontal: one-way forward scroll
   const targetX = pl.x - W * 0.3;
   const newX = state.cameraX + (targetX - state.cameraX) * 0.1;
-  // Camera only ever advances forward — never scrolls back
   state.cameraX = Math.max(state.cameraX, Math.max(0, Math.min(newX, state.levelWidth - W)));
+  // Vertical: smooth follow, never scroll above sky (y=0)
+  const targetY = pl.y - H * 0.45;
+  state.cameraY = Math.max(0, state.cameraY + (targetY - state.cameraY) * 0.1);
 }
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
@@ -1246,14 +1258,14 @@ function drawTile(type, sx, sy, stunLevel = 0) {
 }
 
 function worldToScreen(wx, wy) {
-  return { sx: wx - state.cameraX, sy: wy };
+  return { sx: wx - state.cameraX, sy: wy - state.cameraY };
 }
 
 function drawPlatforms() {
   const cx = state.cameraX;
   for (const p of state.platforms) {
     if (p.x + p.w < cx - 10 || p.x > cx + W + 10) continue;
-    const sx = p.x - cx;
+    const sx = p.x;
     let stunLevel = 0;
     for (const s of state.platformStuns) {
       if (s.x === p.x && s.y === p.y) { stunLevel = s.timer; break; }
@@ -1266,7 +1278,7 @@ function drawCaves() {
   const cx = state.cameraX;
   for (const cave of state.caves) {
     if (cave.x + cave.w < cx || cave.x > cx + W) continue;
-    const sx = cave.x - cx;
+    const sx = cave.x;
     if (cave.type === 'water') {
       ctx.fillStyle = COL.waterDeep;
       ctx.fillRect(sx, cave.y, cave.w, cave.h);
@@ -1291,7 +1303,7 @@ function drawBlocks() {
   const cx = state.cameraX;
   for (const blk of state.blocks) {
     if (blk.x + blk.w < cx || blk.x > cx + W) continue;
-    const sx = blk.x - cx;
+    const sx = blk.x;
     ctx.fillStyle = '#8080c0';
     ctx.fillRect(sx, blk.y, blk.w, blk.h);
     ctx.fillStyle = '#a0a0e0';
@@ -1314,7 +1326,7 @@ function drawGems() {
   for (const g of state.gems) {
     if (g.collected) continue;
     if (g.x + 16 < cx || g.x > cx + W) continue;
-    const sx = g.x - cx;
+    const sx = g.x;
     const bob = Math.sin(t + g.x * 0.05) * 3;
     const gci = (Math.floor(now / 500) + (g.colorSeed || 0)) % GEM_PALETTE.length;
     ctx.fillStyle = GEM_PALETTE[gci];
@@ -1334,7 +1346,7 @@ function drawShells() {
   const cx = state.cameraX;
   for (const sh of state.shells) {
     if (sh.x + sh.w < cx || sh.x > cx + W) continue;
-    const sx = sh.x - cx;
+    const sx = sh.x;
     const mx = sx + sh.w/2, my = sh.y + sh.h/2;
     if (sh.type === 'mantis') {
       // Colourful mantis shell — segmented plates
@@ -1369,7 +1381,7 @@ function drawCrabs() {
   for (const crab of state.crabs) {
     if (!crab.alive) continue;
     if (crab.x + crab.w < cx || crab.x > cx + W) continue;
-    const sx = crab.x - cx;
+    const sx = crab.x;
     const t = Date.now() / 100;
     const flip = crab.vx < 0 ? -1 : 1;
 
@@ -1438,7 +1450,7 @@ function drawMantisShrimps() {
   for (const ms of state.mantisShrimps) {
     if (!ms.alive) continue;
     if (ms.x + ms.w < cx || ms.x > cx + W) continue;
-    const sx = ms.x - cx;
+    const sx = ms.x;
     const t  = Date.now() / 90;
     const flip = ms.facingRight ? 1 : -1;
 
@@ -1508,7 +1520,7 @@ function drawBubbles() {
   const t  = Date.now() / 80;
   for (const b of state.bubbles) {
     if (b.x + b.w < cx || b.x > cx + W) continue;
-    const sx = b.x - cx;
+    const sx = b.x;
     const alpha = Math.min(1, b.life / 40);
     const pulse = 1 + Math.sin(t) * 0.15;
     const r = (b.w / 2) * pulse;
@@ -1555,8 +1567,8 @@ function drawBats() {
   const cx = state.cameraX;
   for (const bat of state.bats) {
     if (!bat.alive) continue;
-    const sx = bat.x - cx;
-    if (sx + bat.w < 0 || sx > W) continue;
+    if (bat.x + bat.w < cx || bat.x > cx + W) continue;
+    const sx = bat.x;
 
     ctx.save();
     ctx.translate(sx + bat.w/2, bat.y + bat.h/2);
@@ -1609,7 +1621,7 @@ function tintColor(hex, factor) {
 function drawPlayer() {
   const pl = state.player;
   const cx = state.cameraX;
-  const sx = pl.x - cx;
+  const sx = pl.x;
 
   if (pl.invincible > 0 && Math.floor(pl.invincible / 4) % 2 === 0) return;
 
@@ -1773,7 +1785,7 @@ function drawStar() {
   const st = state.star;
   const cx = state.cameraX;
   if (st.x + 32 < cx || st.x > cx + W) return;
-  const sx = st.x - cx;
+  const sx = st.x;
   st.pulse = (st.pulse + 0.05) % (Math.PI * 2);
   const glow = 0.7 + Math.sin(st.pulse) * 0.3;
   const bob = Math.sin(st.pulse * 2) * 4;
@@ -1824,13 +1836,13 @@ function drawShockwaves() {
     ctx.strokeStyle = '#c0c0ff';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(sw.x - cx, sw.y, sw.r, 0, Math.PI * 2);
+    ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = alpha * 0.4;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(sw.x - cx, sw.y, sw.r * 0.65, 0, Math.PI * 2);
+    ctx.arc(sw.x, sw.y, sw.r * 0.65, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -1841,7 +1853,7 @@ function drawParticles() {
   for (const p of state.particles) {
     ctx.globalAlpha = p.life / 40;
     ctx.fillStyle = p.color;
-    ctx.fillRect(p.x - cx - p.size/2, p.y - p.size/2, p.size, p.size);
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
   }
   ctx.globalAlpha = 1;
 }
@@ -1873,6 +1885,8 @@ function gameLoop(ts) {
   // Draw
   ctx.clearRect(0, 0, W, H);
   drawBackground();
+  ctx.save();
+  ctx.translate(-state.cameraX, -state.cameraY);
   drawCaves();
   drawPlatforms();
   drawBlocks();
@@ -1886,6 +1900,7 @@ function gameLoop(ts) {
   drawPlayer();
   drawShockwaves();
   drawParticles();
+  ctx.restore();
 
   animId = requestAnimationFrame(gameLoop);
 }
