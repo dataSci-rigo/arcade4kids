@@ -59,6 +59,42 @@ GAMES = [
         'color':    '#FF6B9D',
         'stripe':   'linear-gradient(90deg,#FF6B9D,#FFE66D)',
     },
+    {
+        'key':      'spelling_adventure',
+        'title':    'SPELLING ADVENTURE',
+        'desc':     ['SPOT THE IMAGE · SPELL THE WORD', 'POWERED BY DUCKDUCKGO'],
+        'desktop':  'spelling_adventure.html',
+        'mobile':   'spelling_adventure.html',
+        'color':    '#c77dff',
+        'stripe':   'linear-gradient(90deg,#667eea,#c77dff)',
+    },
+    {
+        'key':      'memory_match',
+        'title':    'MEMORY MATCH',
+        'desc':     ['FLIP & MATCH · 1 OR 2 PLAYERS', 'FIND THE PAIRS'],
+        'desktop':  'memory_match.html',
+        'mobile':   'memory_match.html',
+        'color':    '#FF6B9D',
+        'stripe':   'linear-gradient(90deg,#FF6B9D,#4ECDC4)',
+    },
+    {
+        'key':      'counting_game',
+        'title':    'COUNTING GARDEN',
+        'desc':     ['COUNT BY 1s 2s 3s 4s', 'GROW YOUR GARDEN'],
+        'desktop':  'counting_game.html',
+        'mobile':   'counting_game.html',
+        'color':    '#A8E6CF',
+        'stripe':   'linear-gradient(90deg,#A8E6CF,#FFE66D)',
+    },
+    {
+        'key':      'sort_game',
+        'title':    'SORT IT OUT',
+        'desc':     ['DRAG TO THE RIGHT BIN', 'ANIMALS · FOOD · VEHICLES'],
+        'desktop':  'sort_game.html',
+        'mobile':   'sort_game.html',
+        'color':    '#FFE66D',
+        'stripe':   'linear-gradient(90deg,#FFE66D,#FF6B6B)',
+    },
 ]
 
 # Only files explicitly registered above can be served
