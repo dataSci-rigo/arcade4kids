@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Counting Garden</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --coral:  #FF6B6B;
+  --teal:   #4ECDC4;
+  --yellow: #FFE66D;
+  --mint:   #A8E6CF;
+  --green:  #56c870;
+  --purple: #C3A6FF;
+  --bg:     #FFF9F0;
+  --ink:    #2D2D3A;
+}
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  font-family: 'Nunito', sans-serif;
+  color: var(--ink);
+  touch-action: manipulation;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Screens ── */
+.screen { display: none; position: fixed; inset: 0; flex-direction: column; align-items: center; }
+.screen.active { display: flex; }
+
+/* ── Splash ── */
+#splash {
+  background: linear-gradient(150deg, #56c870 0%, #4ECDC4 100%);
+  justify-content: center; gap: 18px; padding: 24px 20px; overflow-y: auto;
+}
+.splash-title {
+  font-size: clamp(36px, 12vw, 62px); font-weight: 900;
+  color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15);
+  text-align: center; line-height: 1.1;
+}
+.splash-emoji-row { font-size: clamp(26px, 8vw, 44px); letter-spacing: 4px; }
+.splash-label {
+  font-size: 12px; font-weight: 800; color: rgba(255,255,255,.75);
+  text-transform: uppercase; letter-spacing: 2px;
+}
+.opt-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.opt-btn {
+  background: rgba(255,255,255,.25); border: 2.5px solid rgba(255,255,255,.5);
+  border-radius: 40px; color: #fff; font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 800; padding: 10px 20px; cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+.opt-btn.selected { background: rgba(255,255,255,.9); color: var(--ink); border-color: #fff; transform: scale(1.06); }
+.opt-btn:active { transform: scale(.97); }
+.btn-play {
+  background: #fff; color: var(--green); border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 900;
+  padding: 16px 60px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-play:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Top bar ── */
+#top-bar {
+  width: 100%; padding: 10px 16px; flex-shrink: 0;
+  background: linear-gradient(90deg, #56c870, #4ECDC4);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.bar-stat { display: flex; flex-direction: column; align-items: center; }
+.bar-label { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.75); text-transform: uppercase; letter-spacing: 1.5px; }
+.bar-val   { font-size: 22px; font-weight: 900; color: #fff; line-height: 1; }
+
+/* ── Question area ── */
+#question-area {
+  width: 100%; padding: 10px 16px 6px; flex-shrink: 0; text-align: center;
+}
+#question-text {
+  font-size: clamp(18px, 6vw, 28px); font-weight: 800; color: var(--ink);
+}
+#question-num {
+  font-size: clamp(40px, 14vw, 72px); font-weight: 900; color: var(--green);
+  line-height: 1; text-shadow: 0 4px 0 rgba(86,200,112,.25);
+}
+#question-hint {
+  font-size: 14px; font-weight: 700; color: #888; margin-top: 2px;
+}
+
+/* ── Garden ── */
+#garden {
+  flex: 1; width: 100%; position: relative;
+  background: linear-gradient(180deg, #e8f8ec 0%, #d0f0d8 100%);
+  overflow: hidden;
+  border-top: 3px solid #b8e8c0;
+}
+#garden-ground {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 40px;
+  background: linear-gradient(180deg, #8bc34a, #689f38);
+  border-top: 3px solid #558b2f;
+}
+.garden-obj {
+  position: absolute;
+  font-size: clamp(36px, 10vw, 60px);
+  cursor: pointer;
+  transition: transform .1s;
+  line-height: 1;
+  transform-origin: center bottom;
+  touch-action: manipulation;
+}
+.garden-obj:active { transform: scale(0.88); }
+.garden-obj.counted { filter: grayscale(60%) brightness(1.1); }
+
+/* Count bubble */
+.count-bubble {
+  position: absolute;
+  background: var(--yellow); color: var(--ink);
+  font-size: 16px; font-weight: 900;
+  border-radius: 50%; width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  top: -18px; left: 50%; transform: translateX(-50%);
+  box-shadow: 0 2px 0 rgba(0,0,0,.15);
+  animation: bubblePop .3s ease;
+  pointer-events: none;
+}
+@keyframes bubblePop {
+  0%   { transform: translateX(-50%) scale(0); }
+  60%  { transform: translateX(-50%) scale(1.2); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+/* ── Running count display ── */
+#count-display {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  background: rgba(255,255,255,.85); border-radius: 50px;
+  padding: 6px 24px;
+  font-size: clamp(28px, 9vw, 48px); font-weight: 900; color: var(--green);
+  box-shadow: 0 4px 0 rgba(0,0,0,.08);
+  border: 3px solid rgba(86,200,112,.3);
+  min-width: 90px; text-align: center;
+  pointer-events: none;
+  transition: color .2s;
+}
+
+/* ── Skip group labels ── */
+.group-label {
+  position: absolute;
+  background: rgba(255,255,255,.7); border-radius: 8px;
+  padding: 2px 8px; font-size: 13px; font-weight: 800;
+  color: var(--ink); pointer-events: none;
+  border: 2px solid rgba(86,200,112,.4);
+}
+
+/* ── Bottom check button ── */
+#bottom-area {
+  width: 100%; padding: 12px 16px; flex-shrink: 0;
+  display: flex; gap: 12px; justify-content: center; align-items: center;
+  background: var(--bg); border-top: 2px solid #eee;
+}
+.btn-check {
+  background: var(--green); color: #fff; border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 20px; font-weight: 900;
+  padding: 14px 48px; cursor: pointer;
+  box-shadow: 0 5px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-check:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,.12); }
+.btn-check:disabled { background: #ccc; box-shadow: none; cursor: default; }
+#count-counter {
+  font-size: 16px; font-weight: 800; color: #888;
+  display: flex; gap: 6px; align-items: center;
+}
+
+/* ── Feedback overlay ── */
+#feedback {
+  position: fixed; inset: 0; z-index: 30;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.15);
+}
+#feedback.show { display: flex; }
+.feedback-box {
+  background: #fff; border-radius: 28px; padding: 32px 48px;
+  text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+.feedback-emoji { font-size: 64px; line-height: 1; }
+.feedback-msg   { font-size: 24px; font-weight: 900; margin-top: 8px; }
+.feedback-sub   { font-size: 15px; font-weight: 700; color: #888; margin-top: 4px; }
+
+/* ── Win ── */
+#win {
+  background: linear-gradient(150deg, #56c870 0%, #4ECDC4 100%);
+  justify-content: center; gap: 16px; padding: 24px; text-align: center;
+}
+.win-title { font-size: clamp(40px,13vw,66px); font-weight: 900; color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15); }
+.win-sub   { font-size: 18px; font-weight: 700; color: rgba(255,255,255,.85); }
+.win-stars { font-size: 48px; }
+.win-stat  { font-size: 20px; font-weight: 800; color: rgba(255,255,255,.9); }
+.btn-again {
+  background: #fff; color: var(--green); border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 22px; font-weight: 900;
+  padding: 14px 48px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-again:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Back btn ── */
+#back-btn {
+  position: fixed; top: 12px; left: 12px;
+  background: rgba(255,255,255,.3); border: none; border-radius: 50%;
+  width: 40px; height: 40px; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; z-index: 50;
+}
+#back-btn:active { background: rgba(255,255,255,.5); }
+
+/* ── Confetti ── */
+.confetti {
+  position: fixed; pointer-events: none; border-radius: 3px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+/* ── Shake ── */
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%  { transform: translateX(-10px); }
+  40%  { transform: translateX(10px); }
+  60%  { transform: translateX(-7px); }
+  80%  { transform: translateX(7px); }
+}
+.shake { animation: shake .4s ease; }
+</style>
+</head>
+<body>
+
+<!-- ── SPLASH ── -->
+<div id="splash" class="screen active">
+  <div class="splash-title">Counting<br>Garden</div>
+  <div class="splash-emoji-row">🌻🌼🌸</div>
+
+  <div class="splash-label">Mode</div>
+  <div class="opt-row" id="mode-opts">
+    <button class="opt-btn selected" data-val="count"  onclick="pickOpt(this,'mode')">Count It 🔢</button>
+    <button class="opt-btn"          data-val="skip"   onclick="pickOpt(this,'mode')">Skip Count ⏭️</button>
+    <button class="opt-btn"          data-val="fill"   onclick="pickOpt(this,'mode')">Fill It 🌱</button>
+  </div>
+
+  <div class="splash-label">Difficulty</div>
+  <div class="opt-row" id="diff-opts">
+    <button class="opt-btn selected" data-val="easy"   onclick="pickOpt(this,'diff')">Easy 1–5</button>
+    <button class="opt-btn"          data-val="medium" onclick="pickOpt(this,'diff')">Medium 1–10</button>
+    <button class="opt-btn"          data-val="hard"   onclick="pickOpt(this,'diff')">Hard 1–20</button>
+  </div>
+
+  <div class="splash-label">Skip By</div>
+  <div class="opt-row" id="skip-opts">
+    <button class="opt-btn selected" data-val="1" onclick="pickOpt(this,'skip')">1s</button>
+    <button class="opt-btn"          data-val="2" onclick="pickOpt(this,'skip')">2s</button>
+    <button class="opt-btn"          data-val="3" onclick="pickOpt(this,'skip')">3s</button>
+    <button class="opt-btn"          data-val="4" onclick="pickOpt(this,'skip')">4s</button>
+  </div>
+
+  <button class="btn-play" onclick="startGame()">PLAY</button>
+</div>
+
+<!-- ── GAME ── -->
+<div id="game" class="screen">
+  <button id="back-btn" onclick="showScreen('splash')">←</button>
+  <div id="top-bar">
+    <div class="bar-stat">
+      <span class="bar-label">Round</span>
+      <span class="bar-val" id="round-val">1 / 10</span>
+    </div>
+    <div class="bar-stat">
+      <span class="bar-label">Score</span>
+      <span class="bar-val" id="score-val">0</span>
+    </div>
+    <div class="bar-stat">
+      <span class="bar-label">Stars</span>
+      <span class="bar-val" id="stars-val">⭐⭐⭐</span>
+    </div>
+  </div>
+  <div id="question-area">
+    <div id="question-text">How many?</div>
+    <div id="question-num">0</div>
+    <div id="question-hint"></div>
+  </div>
+  <div id="garden">
+    <div id="count-display">0</div>
+    <div id="garden-ground"></div>
+  </div>
+  <div id="bottom-area">
+    <span id="count-counter"></span>
+    <button class="btn-check" id="check-btn" onclick="checkAnswer()">CHECK ✅</button>
+  </div>
+</div>
+
+<!-- ── WIN ── -->
+<div id="win" class="screen">
+  <div class="win-title">Garden Done!</div>
+  <div class="win-stars" id="win-stars">⭐⭐⭐</div>
+  <div class="win-sub"  id="win-sub">Amazing counting!</div>
+  <div class="win-stat" id="win-stat">10 / 10 correct</div>
+  <button class="btn-again" onclick="startGame()">PLAY AGAIN</button>
+  <button class="btn-again" style="background:rgba(255,255,255,.3);color:#fff;box-shadow:none;font-size:17px;padding:12px 32px" onclick="showScreen('splash')">CHANGE SETTINGS</button>
+</div>
+
+<!-- ── Feedback ── -->
+<div id="feedback">
+  <div class="feedback-box">
+    <div class="feedback-emoji" id="fb-emoji">🌟</div>
+    <div class="feedback-msg"   id="fb-msg">Great!</div>
+    <div class="feedback-sub"   id="fb-sub"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const S = { mode: 'count', diff: 'easy', skip: '1' };
+
+const DIFFS = {
+  easy:   { min: 1, max: 5 },
+  medium: { min: 1, max: 10 },
+  hard:   { min: 2, max: 20 },
+};
+
+const EMOJIS = ['🌻','🌼','🌸','🍄','🌺','🌷','🌹','🫐','🍓','🍎',
+                '🦋','🐝','🐛','🐞','🐸','🐢','🦎','🐇','🦔','🦜'];
+
+const G = {
+  round: 0, score: 0, firstTry: 0,
+  target: 0, step: 1,
+  userCount: 0, tappedIndices: new Set(),
+  fillCount: 0,
+  totalRounds: 10,
+};
+
+// ── Audio ──
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, type, dur, vol = 0.18, endFreq = null) {
+  try {
+    const ac = getAudio();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ac.currentTime);
+    if (endFreq) osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + dur);
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch {}
+}
+function playTick(n) {
+  // pitch rises as count goes up
+  const freq = 400 + n * 30;
+  playTone(freq, 'sine', 0.1, 0.2);
+}
+function playCorrect() {
+  [523,659,784,1046].forEach((f,i) => setTimeout(() => playTone(f,'sine',0.18,0.22), i*90));
+}
+function playWrong()   { playTone(200, 'square', 0.18, 0.18); }
+function playCelebrate() {
+  [523,587,659,698,784,880,988,1046].forEach((f,i) =>
+    setTimeout(() => playTone(f,'sine',0.22,0.25), i*80));
+}
+
+// ── TTS ──
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.85; u.pitch = 1.15;
+  window.speechSynthesis.speak(u);
+}
+
+// ── Helpers ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function pickOpt(btn, key) {
+  btn.closest('.opt-row').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  S[key] = btn.dataset.val;
+}
+function ri(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+// ── Start ──
+function startGame() {
+  G.round = 0; G.score = 0; G.firstTry = 0;
+  nextRound();
+  showScreen('game');
+}
+
+function nextRound() {
+  G.round++;
+  G.userCount = 0;
+  G.tappedIndices = new Set();
+  G.fillCount = 0;
+  G.firstTryThisRound = true;
+
+  const diff = DIFFS[S.diff];
+  G.step = parseInt(S.skip);
+
+  if (S.mode === 'skip') {
+    // target must be a multiple of step
+    const maxMult = Math.floor(diff.max / G.step);
+    const minMult = Math.max(1, Math.floor(diff.min / G.step));
+    const mult = ri(minMult, maxMult);
+    G.target = mult * G.step;
+  } else {
+    G.target = ri(diff.min, diff.max);
+  }
+
+  $('round-val').textContent = `${G.round} / ${G.totalRounds}`;
+  $('score-val').textContent = G.score;
+  updateStars();
+  buildGarden();
+}
+
+function buildGarden() {
+  const garden = $('garden');
+  // Clear old objects (keep ground and count display)
+  garden.querySelectorAll('.garden-obj,.group-label').forEach(e => e.remove());
+  $('count-display').textContent = '0';
+  $('count-display').style.color = 'var(--green)';
+
+  const emoji = shuffle(EMOJIS)[0];
+
+  if (S.mode === 'count') {
+    // Scatter G.target objects; player taps each
+    $('question-text').textContent = 'How many are there?';
+    $('question-num').textContent = '';
+    $('question-hint').textContent = 'Tap each one to count!';
+    $('check-btn').textContent = 'DONE ✅';
+    $('count-counter').textContent = '';
+
+    const positions = safePositions(G.target);
+    positions.forEach((pos, i) => {
+      const el = document.createElement('div');
+      el.className = 'garden-obj';
+      el.textContent = emoji;
+      el.style.left = pos.x + 'px';
+      el.style.top  = pos.y + 'px';
+      el.addEventListener('click', () => tapObject(el, i));
+      garden.appendChild(el);
+    });
+    setTimeout(() => speak(`How many ${emoji} can you count?`), 300);
+
+  } else if (S.mode === 'skip') {
+    // Objects in groups of G.step
+    const groups = G.target / G.step;
+    $('question-text').textContent = `Count by ${G.step}s!`;
+    $('question-num').textContent = '';
+    $('question-hint').textContent = `Tap each group of ${G.step}`;
+    $('check-btn').textContent = 'DONE ✅';
+    $('count-counter').textContent = '';
+
+    const groupPositions = safePositions(groups, true);
+    groupPositions.forEach((pos, gi) => {
+      // Cluster G.step objects near pos
+      for (let k = 0; k < G.step; k++) {
+        const el = document.createElement('div');
+        el.className = 'garden-obj';
+        el.textContent = emoji;
+        const ox = (k % 2) * 28 - 14;
+        const oy = Math.floor(k / 2) * -28;
+        el.style.left = Math.max(10, Math.min(garden.clientWidth - 60, pos.x + ox)) + 'px';
+        el.style.top  = Math.max(10, Math.min(garden.clientHeight - 80, pos.y + oy)) + 'px';
+        el.style.fontSize = 'clamp(28px,7vw,40px)';
+        el.dataset.group = gi;
+        garden.appendChild(el);
+      }
+      // Group label + invisible tap zone
+      const lbl = document.createElement('div');
+      lbl.className = 'group-label';
+      lbl.textContent = `+${G.step}`;
+      lbl.style.left = pos.x + 'px';
+      lbl.style.top  = (pos.y - 28) + 'px';
+      lbl.style.cursor = 'pointer';
+      lbl.style.pointerEvents = 'auto';
+      lbl.addEventListener('click', () => tapGroup(gi, lbl));
+      garden.appendChild(lbl);
+    });
+    setTimeout(() => speak(`Count by ${G.step}s. Tap each group!`), 300);
+
+  } else {
+    // Fill it: shown a target number; tap + to plant objects
+    $('question-text').textContent = 'Plant exactly';
+    $('question-num').textContent  = G.target;
+    $('question-hint').textContent = 'Tap the garden to plant!';
+    $('check-btn').textContent = `DONE ✅`;
+    $('count-counter').textContent = `0 / ${G.target}`;
+    garden.style.cursor = 'pointer';
+    garden.addEventListener('click', gardenTap, { once: false });
+    setTimeout(() => speak(`Plant ${G.target} flowers in the garden!`), 300);
+  }
+}
+
+// ── Count It mode ──
+function tapObject(el, i) {
+  if (G.tappedIndices.has(i)) return;
+  G.tappedIndices.add(i);
+  G.userCount++;
+  el.classList.add('counted');
+
+  // Show bubble
+  const bubble = document.createElement('div');
+  bubble.className = 'count-bubble';
+  bubble.textContent = G.userCount;
+  el.style.position = 'absolute'; // ensure relative for bubble
+  el.appendChild(bubble);
+
+  $('count-display').textContent = G.userCount;
+  playTick(G.userCount);
+}
+
+// ── Skip Count mode ──
+const tappedGroups = new Set();
+function tapGroup(gi, lbl) {
+  if (tappedGroups.has(gi)) return;
+  tappedGroups.add(gi);
+  G.userCount += G.step;
+  $('count-display').textContent = G.userCount;
+  lbl.style.background = 'var(--yellow)';
+  lbl.style.borderColor = 'var(--green)';
+  playTick(G.userCount);
+
+  // Grey out group emojis
+  document.querySelectorAll(`.garden-obj[data-group="${gi}"]`).forEach(e => e.classList.add('counted'));
+}
+
+// ── Fill It mode ──
+let gardenTapHandler = null;
+function gardenTap(e) {
+  if (e.target.closest('#garden-ground') || e.target.closest('#count-display')) return;
+  if (G.fillCount >= G.target) return;
+  G.fillCount++;
+  G.userCount = G.fillCount;
+
+  const garden = $('garden');
+  const rect = garden.getBoundingClientRect();
+  const x = e.clientX - rect.left - 20;
+  const y = e.clientY - rect.top  - 20;
+
+  const el = document.createElement('div');
+  el.className = 'garden-obj counted';
+  el.textContent = shuffle(EMOJIS)[0];
+  el.style.left = Math.max(4, Math.min(rect.width - 50, x)) + 'px';
+  el.style.top  = Math.max(4, Math.min(rect.height - 80, y)) + 'px';
+  el.style.pointerEvents = 'none';
+  garden.appendChild(el);
+
+  $('count-display').textContent = G.fillCount;
+  $('count-counter').textContent = `${G.fillCount} / ${G.target}`;
+  playTick(G.fillCount);
+
+  if (G.fillCount >= G.target) {
+    $('count-display').style.color = 'var(--coral)';
+  }
+}
+
+// ── Check answer ──
+function checkAnswer() {
+  let correct = false;
+  if (S.mode === 'fill') {
+    correct = G.userCount === G.target;
+    $('garden').removeEventListener('click', gardenTap);
+    $('garden').style.cursor = '';
+  } else {
+    correct = G.userCount === G.target;
+  }
+
+  if (correct) {
+    if (G.firstTryThisRound) { G.score++; G.firstTry++; }
+    playCorrect();
+    showFeedback(true, G.target);
+  } else {
+    G.firstTryThisRound = false;
+    playWrong();
+    const diff = G.userCount < G.target ? 'too few!' : 'too many!';
+    showFeedback(false, G.target, `That's ${diff} The answer is ${G.target}.`);
+    // Reset for retry
+    setTimeout(() => {
+      G.userCount = 0;
+      G.tappedIndices.clear();
+      tappedGroups.clear();
+      $('count-display').textContent = '0';
+      $('count-display').style.color = 'var(--green)';
+      document.querySelectorAll('.garden-obj').forEach(e => {
+        e.classList.remove('counted');
+        e.querySelectorAll('.count-bubble').forEach(b => b.remove());
+      });
+      document.querySelectorAll('.group-label').forEach(l => {
+        l.style.background = '';
+        l.style.borderColor = '';
+      });
+      if (S.mode === 'fill') {
+        document.querySelectorAll('.garden-obj').forEach(e => e.remove());
+        G.fillCount = 0;
+        $('count-counter').textContent = `0 / ${G.target}`;
+        $('garden').addEventListener('click', gardenTap);
+        $('garden').style.cursor = 'pointer';
+      }
+    }, 2200);
+  }
+}
+
+function showFeedback(correct, target, sub = '') {
+  const emoji = correct
+    ? ['🌟','🎉','⭐','🌻','🥳'][Math.floor(Math.random()*5)]
+    : '🤔';
+  const msg = correct
+    ? ['Amazing!','Great job!','You got it!','Excellent!','Super!'][Math.floor(Math.random()*5)]
+    : 'Try again!';
+  $('fb-emoji').textContent = emoji;
+  $('fb-msg').textContent   = msg;
+  $('fb-sub').textContent   = correct ? `The answer is ${target}!` : sub;
+  $('feedback').classList.add('show');
+  setTimeout(() => {
+    $('feedback').classList.remove('show');
+    if (correct) {
+      if (G.round >= G.totalRounds) { showWin(); } else { nextRound(); }
+    }
+  }, 1400);
+}
+
+function updateStars() {
+  const pct = G.firstTry / Math.max(1, G.round - 1);
+  $('stars-val').textContent = pct >= .9 ? '⭐⭐⭐' : pct >= .6 ? '⭐⭐' : '⭐';
+}
+
+function showWin() {
+  playCelebrate();
+  spawnConfetti();
+  const pct = G.firstTry / G.totalRounds;
+  const stars = pct >= .9 ? '⭐⭐⭐' : pct >= .6 ? '⭐⭐' : '⭐';
+  $('win-stars').textContent = stars;
+  $('win-stat').textContent  = `${G.score} / ${G.totalRounds} correct first try`;
+  $('win-sub').textContent   = pct >= .9 ? 'Perfect counting!' : pct >= .6 ? 'Great counting!' : 'Keep practising!';
+  showScreen('win');
+}
+
+function safePositions(n, forGroups = false) {
+  const garden = $('garden');
+  const W = garden.clientWidth  || 320;
+  const H = garden.clientHeight || 240;
+  const pad = forGroups ? 70 : 50;
+  const positions = [];
+  let attempts = 0;
+  while (positions.length < n && attempts < n * 40) {
+    attempts++;
+    const x = pad + Math.random() * (W - pad * 2);
+    const y = 20 + Math.random() * (H - 100);
+    const ok = positions.every(p => Math.hypot(p.x - x, p.y - y) > (forGroups ? 80 : 55));
+    if (ok) positions.push({ x, y });
+  }
+  return positions;
+}
+
+function spawnConfetti() {
+  const colors = ['#FF6B6B','#4ECDC4','#FFE66D','#56c870','#C3A6FF','#A8E6CF'];
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      const size = 6 + Math.random() * 8;
+      el.style.cssText = `left:${Math.random()*100}vw;top:-20px;width:${size}px;height:${size*(1+Math.random())}px;background:${colors[Math.floor(Math.random()*colors.length)]};animation-duration:${1.2+Math.random()*1.4}s;`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2800);
+    }, i * 28);
+  }
+}
+</script>
+</body>
+</html>

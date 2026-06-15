@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Memory Match</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --coral:  #FF6B6B;
+  --pink:   #FF6B9D;
+  --teal:   #4ECDC4;
+  --yellow: #FFE66D;
+  --mint:   #A8E6CF;
+  --purple: #C3A6FF;
+  --bg:     #FFF9F0;
+  --ink:    #2D2D3A;
+  --p1:     #FF6B9D;
+  --p2:     #4ECDC4;
+}
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  font-family: 'Nunito', sans-serif;
+  color: var(--ink);
+  touch-action: manipulation;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Screens ── */
+.screen { display: none; position: fixed; inset: 0; flex-direction: column; align-items: center; justify-content: center; }
+.screen.active { display: flex; }
+
+/* ── Splash ── */
+#splash {
+  background: linear-gradient(150deg, #FF6B9D 0%, #4ECDC4 100%);
+  gap: 20px; padding: 24px 20px;
+  overflow-y: auto;
+}
+.splash-title {
+  font-size: clamp(40px, 13vw, 68px); font-weight: 900;
+  color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15);
+  text-align: center; line-height: 1.1; letter-spacing: -1px;
+}
+.splash-emoji-row { font-size: clamp(28px, 9vw, 48px); letter-spacing: 6px; }
+.splash-label {
+  font-size: 13px; font-weight: 800; color: rgba(255,255,255,.7);
+  text-transform: uppercase; letter-spacing: 2px; text-align: center;
+}
+.opt-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.opt-btn {
+  background: rgba(255,255,255,.25); border: 2.5px solid rgba(255,255,255,.5);
+  border-radius: 40px; color: #fff; font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 800; padding: 10px 20px; cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.opt-btn.selected {
+  background: rgba(255,255,255,.9); color: var(--ink);
+  border-color: #fff; transform: scale(1.06);
+}
+.opt-btn:active { transform: scale(.97); }
+.btn-play {
+  background: #fff; color: var(--pink); border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 900;
+  padding: 16px 60px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s; letter-spacing: 1px;
+}
+.btn-play:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Turn Banner ── */
+#turn-banner {
+  width: 100%; padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+  transition: background .3s;
+}
+.player-score {
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(255,255,255,.45); border-radius: 16px;
+  padding: 6px 16px; min-width: 90px;
+}
+.player-score .ps-name { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; }
+.player-score .ps-val  { font-size: 26px; font-weight: 900; line-height: 1; }
+.turn-label { font-size: 13px; font-weight: 800; color: rgba(255,255,255,.85); text-align: center; }
+.turn-name  { font-size: 18px; font-weight: 900; color: #fff; text-align: center; text-shadow: 0 2px 0 rgba(0,0,0,.15); }
+
+/* ── Card Grid ── */
+#game { background: var(--bg); justify-content: flex-start; gap: 0; padding: 0; }
+#grid-wrap {
+  flex: 1; width: 100%; display: flex; align-items: center; justify-content: center;
+  padding: 12px;
+}
+#card-grid {
+  display: grid; gap: 10px;
+  width: 100%; max-width: 500px;
+}
+
+/* ── Card ── */
+.card {
+  aspect-ratio: 1;
+  perspective: 600px;
+  cursor: pointer;
+}
+.card-inner {
+  width: 100%; height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .35s ease;
+  border-radius: 14px;
+}
+.card.flipped .card-inner  { transform: rotateY(180deg); }
+.card.matched .card-inner  { transform: rotateY(180deg); }
+.card-face {
+  position: absolute; inset: 0;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.card-back {
+  background: linear-gradient(135deg, var(--pink), var(--teal));
+  font-size: clamp(18px, 6vw, 32px);
+  box-shadow: 0 4px 0 rgba(0,0,0,.1);
+}
+.card-back::after { content: '⭐'; opacity: .35; font-size: .9em; }
+.card-front {
+  background: #fff;
+  font-size: clamp(22px, 7vw, 44px);
+  transform: rotateY(180deg);
+  box-shadow: 0 4px 0 rgba(0,0,0,.1);
+  border: 3px solid #eee;
+}
+.card.matched .card-front {
+  background: #f0fff8;
+  border-color: var(--teal);
+  box-shadow: 0 4px 0 rgba(78,205,196,.3);
+}
+@keyframes matchPop {
+  0%   { transform: rotateY(180deg) scale(1); }
+  40%  { transform: rotateY(180deg) scale(1.15); }
+  100% { transform: rotateY(180deg) scale(1); }
+}
+.card.matched .card-inner { animation: matchPop .4s ease forwards; }
+
+/* ── Moves bar (1-player) ── */
+#solo-bar {
+  width: 100%; padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(90deg, var(--pink), var(--teal));
+  flex-shrink: 0;
+}
+.solo-stat { font-size: 13px; font-weight: 800; color: rgba(255,255,255,.8); text-transform: uppercase; letter-spacing: 1px; }
+.solo-val  { font-size: 22px; font-weight: 900; color: #fff; }
+
+/* ── Win Screen ── */
+#win {
+  background: linear-gradient(150deg, #FF6B9D 0%, #4ECDC4 100%);
+  gap: 18px; padding: 24px 20px; text-align: center;
+}
+.win-title { font-size: clamp(36px, 12vw, 60px); font-weight: 900; color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15); }
+.win-sub   { font-size: 18px; font-weight: 700; color: rgba(255,255,255,.85); }
+.win-scores {
+  display: flex; gap: 16px; justify-content: center;
+}
+.win-player {
+  background: rgba(255,255,255,.25); border-radius: 20px;
+  padding: 16px 28px; min-width: 110px;
+}
+.win-player.winner { background: rgba(255,255,255,.9); color: var(--ink); }
+.win-player .wp-name { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(255,255,255,.8); }
+.win-player.winner .wp-name { color: var(--ink); opacity: .7; }
+.win-player .wp-pairs { font-size: 42px; font-weight: 900; color: #fff; line-height: 1; }
+.win-player.winner .wp-pairs { color: var(--pink); }
+.win-player .wp-label { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7); }
+.win-player.winner .wp-label { color: rgba(0,0,0,.4); }
+.btn-again {
+  background: #fff; color: var(--pink); border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 22px; font-weight: 900;
+  padding: 14px 48px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-again:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+#back-btn {
+  position: fixed; top: 12px; left: 12px;
+  background: rgba(255,255,255,.3); border: none; border-radius: 50%;
+  width: 40px; height: 40px; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; z-index: 50;
+  transition: background .15s;
+}
+#back-btn:active { background: rgba(255,255,255,.5); }
+
+/* ── Particles ── */
+.confetti {
+  position: fixed; pointer-events: none; border-radius: 3px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+/* ── Shake ── */
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px); }
+  40%      { transform: translateX(8px); }
+  60%      { transform: translateX(-6px); }
+  80%      { transform: translateX(6px); }
+}
+.shake { animation: shake .4s ease; }
+</style>
+</head>
+<body>
+
+<!-- ── SPLASH ── -->
+<div id="splash" class="screen active">
+  <div class="splash-title">Memory<br>Match</div>
+  <div class="splash-emoji-row">🎴🃏🎴</div>
+
+  <div class="splash-label">Players</div>
+  <div class="opt-row" id="mode-opts">
+    <button class="opt-btn selected" data-val="1" onclick="pickOpt(this,'mode')">1 Player</button>
+    <button class="opt-btn"          data-val="2" onclick="pickOpt(this,'mode')">2 Players</button>
+  </div>
+
+  <div class="splash-label">Difficulty</div>
+  <div class="opt-row" id="diff-opts">
+    <button class="opt-btn selected" data-val="easy"   onclick="pickOpt(this,'diff')">Easy 4×3</button>
+    <button class="opt-btn"          data-val="medium" onclick="pickOpt(this,'diff')">Medium 4×4</button>
+    <button class="opt-btn"          data-val="hard"   onclick="pickOpt(this,'diff')">Hard 5×4</button>
+  </div>
+
+  <div class="splash-label">Theme</div>
+  <div class="opt-row" id="theme-opts">
+    <button class="opt-btn selected" data-val="animals"  onclick="pickOpt(this,'theme')">Animals 🐶</button>
+    <button class="opt-btn"          data-val="food"     onclick="pickOpt(this,'theme')">Food 🍎</button>
+    <button class="opt-btn"          data-val="vehicles" onclick="pickOpt(this,'theme')">Vehicles 🚗</button>
+    <button class="opt-btn"          data-val="mix"      onclick="pickOpt(this,'theme')">Mix 🎲</button>
+  </div>
+
+  <button class="btn-play" onclick="startGame()">PLAY</button>
+</div>
+
+<!-- ── GAME ── -->
+<div id="game" class="screen">
+  <button id="back-btn" onclick="showScreen('splash')">←</button>
+
+  <!-- 2-player turn banner -->
+  <div id="turn-banner" style="display:none">
+    <div class="player-score" id="p1-score">
+      <span class="ps-name" id="p1-name">Player 1</span>
+      <span class="ps-val"  id="p1-val">0</span>
+    </div>
+    <div style="text-align:center">
+      <div class="turn-label">TURN</div>
+      <div class="turn-name" id="turn-name-label">Player 1</div>
+    </div>
+    <div class="player-score" id="p2-score">
+      <span class="ps-name" id="p2-name">Player 2</span>
+      <span class="ps-val"  id="p2-val">0</span>
+    </div>
+  </div>
+
+  <!-- 1-player move bar -->
+  <div id="solo-bar" style="display:none">
+    <div>
+      <div class="solo-stat">Moves</div>
+      <div class="solo-val" id="moves-val">0</div>
+    </div>
+    <div style="text-align:right">
+      <div class="solo-stat">Pairs</div>
+      <div class="solo-val" id="pairs-val">0 / 0</div>
+    </div>
+  </div>
+
+  <div id="grid-wrap">
+    <div id="card-grid"></div>
+  </div>
+</div>
+
+<!-- ── WIN ── -->
+<div id="win" class="screen">
+  <div class="win-title" id="win-title">You Win!</div>
+  <div class="win-sub"   id="win-sub">All pairs found!</div>
+  <div class="win-scores" id="win-scores"></div>
+  <button class="btn-again" onclick="startGame()">PLAY AGAIN</button>
+  <button class="btn-again" style="background:rgba(255,255,255,.3);color:#fff;box-shadow:none;font-size:17px;padding:12px 32px" onclick="showScreen('splash')">CHANGE SETTINGS</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ── Settings ──
+const S = { mode: '1', diff: 'easy', theme: 'animals' };
+
+const THEMES = {
+  animals:  ['🐶','🐱','🐸','🐷','🦊','🐻','🐨','🦁','🐔','🦋'],
+  food:     ['🍎','🍌','🍓','🍕','🍦','🌮','🍩','🍇','🥑','🍉'],
+  vehicles: ['🚗','🚂','🚀','✈️','🚢','🚁','🚒','🚕','🛸','🎠'],
+};
+const DIFFS = {
+  easy:   { cols: 4, rows: 3, pairs: 6 },
+  medium: { cols: 4, rows: 4, pairs: 8 },
+  hard:   { cols: 5, rows: 4, pairs: 10 },
+};
+
+// ── Game state ──
+const G = {
+  cards: [],       // array of { emoji, el, matched }
+  flipped: [],     // indices of currently face-up unmatched cards
+  locked: false,
+  turn: 0,         // 0 = P1, 1 = P2
+  scores: [0, 0],
+  moves: 0,
+  totalPairs: 0,
+  matchedPairs: 0,
+};
+
+// ── Audio ──
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, type, dur, vol = 0.18, endFreq = null) {
+  try {
+    const ac = getAudio();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ac.currentTime);
+    if (endFreq) osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + dur);
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch {}
+}
+function playFlip() { playTone(500, 'sine', 0.08, 0.12, 350); }
+function playMatch() {
+  [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.18, 0.22), i * 90));
+}
+function playMiss() { playTone(180, 'square', 0.15, 0.15); }
+function playCelebrate() {
+  const melody = [523, 587, 659, 698, 784, 880, 988, 1046];
+  melody.forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.22, 0.25), i * 80));
+}
+
+// ── Helpers ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function pickOpt(btn, key) {
+  btn.closest('.opt-row').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  S[key] = btn.dataset.val;
+}
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ── Build grid ──
+function startGame() {
+  const diff = DIFFS[S.diff];
+  G.cards = [];
+  G.flipped = [];
+  G.locked = false;
+  G.turn = 0;
+  G.scores = [0, 0];
+  G.moves = 0;
+  G.totalPairs = diff.pairs;
+  G.matchedPairs = 0;
+
+  // Pick emojis
+  let pool;
+  if (S.theme === 'mix') {
+    pool = shuffle([...THEMES.animals, ...THEMES.food, ...THEMES.vehicles]);
+  } else {
+    pool = shuffle([...THEMES[S.theme]]);
+  }
+  const chosen = pool.slice(0, diff.pairs);
+  const emojiList = shuffle([...chosen, ...chosen]);
+
+  // Build DOM
+  const grid = $('card-grid');
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = `repeat(${diff.cols}, 1fr)`;
+  grid.style.gridTemplateRows    = `repeat(${diff.rows}, 1fr)`;
+
+  emojiList.forEach((emoji, i) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="card-inner">
+      <div class="card-face card-back"></div>
+      <div class="card-face card-front">${emoji}</div>
+    </div>`;
+    card.addEventListener('click', () => flipCard(i));
+    grid.appendChild(card);
+    G.cards.push({ emoji, el: card, matched: false });
+  });
+
+  // UI mode
+  if (S.mode === '2') {
+    $('turn-banner').style.display = 'flex';
+    $('solo-bar').style.display    = 'none';
+    updateTurnBanner();
+  } else {
+    $('turn-banner').style.display = 'none';
+    $('solo-bar').style.display    = 'flex';
+    updateSoloBar();
+  }
+
+  showScreen('game');
+}
+
+// ── Flip logic ──
+function flipCard(i) {
+  const c = G.cards[i];
+  if (G.locked || c.matched || G.flipped.includes(i)) return;
+  playFlip();
+  c.el.classList.add('flipped');
+  G.flipped.push(i);
+
+  if (G.flipped.length === 2) {
+    G.locked = true;
+    G.moves++;
+    updateSoloBar();
+    const [a, b] = G.flipped;
+    if (G.cards[a].emoji === G.cards[b].emoji) {
+      // Match!
+      setTimeout(() => {
+        G.cards[a].matched = G.cards[b].matched = true;
+        G.cards[a].el.classList.add('matched');
+        G.cards[b].el.classList.add('matched');
+        G.matchedPairs++;
+        if (S.mode === '2') {
+          G.scores[G.turn]++;
+          updateTurnBanner();
+        }
+        updateSoloBar();
+        playMatch();
+        G.flipped = [];
+        G.locked = false;
+        if (G.matchedPairs === G.totalPairs) setTimeout(showWin, 400);
+      }, 300);
+    } else {
+      // Mismatch
+      setTimeout(() => {
+        playMiss();
+        G.cards[a].el.classList.add('shake');
+        G.cards[b].el.classList.add('shake');
+        setTimeout(() => {
+          G.cards[a].el.classList.remove('flipped', 'shake');
+          G.cards[b].el.classList.remove('flipped', 'shake');
+          G.flipped = [];
+          G.locked = false;
+          if (S.mode === '2') {
+            G.turn = 1 - G.turn;
+            updateTurnBanner();
+          }
+        }, 500);
+      }, 700);
+    }
+  }
+}
+
+// ── UI updates ──
+function updateTurnBanner() {
+  const names = ['Player 1', 'Player 2'];
+  const colors = [
+    'linear-gradient(90deg, var(--p1), #ff9ec9)',
+    'linear-gradient(90deg, var(--p2), #a0f0ec)',
+  ];
+  $('turn-banner').style.background = colors[G.turn];
+  $('turn-name-label').textContent = names[G.turn];
+  $('p1-val').textContent = G.scores[0];
+  $('p2-val').textContent = G.scores[1];
+  $('p1-score').style.opacity = G.turn === 0 ? '1' : '0.55';
+  $('p2-score').style.opacity = G.turn === 1 ? '1' : '0.55';
+}
+function updateSoloBar() {
+  $('moves-val').textContent = G.moves;
+  $('pairs-val').textContent = `${G.matchedPairs} / ${G.totalPairs}`;
+}
+
+// ── Win screen ──
+function showWin() {
+  playCelebrate();
+  spawnConfetti();
+
+  $('win-title').textContent = S.mode === '2' ? '🎉 Game Over!' : '🌟 You Win!';
+
+  if (S.mode === '2') {
+    const tie = G.scores[0] === G.scores[1];
+    let sub = tie ? "It's a tie!" :
+      (G.scores[0] > G.scores[1] ? 'Player 1 wins!' : 'Player 2 wins!');
+    $('win-sub').textContent = sub;
+    $('win-scores').innerHTML = `
+      <div class="win-player ${G.scores[0] >= G.scores[1] && !tie ? 'winner' : ''}">
+        <div class="wp-name">Player 1</div>
+        <div class="wp-pairs">${G.scores[0]}</div>
+        <div class="wp-label">pairs</div>
+      </div>
+      <div class="win-player ${G.scores[1] >= G.scores[0] && !tie ? 'winner' : ''}">
+        <div class="wp-name">Player 2</div>
+        <div class="wp-pairs">${G.scores[1]}</div>
+        <div class="wp-label">pairs</div>
+      </div>`;
+  } else {
+    $('win-sub').textContent = `Found all pairs in ${G.moves} moves!`;
+    const rating = G.moves <= G.totalPairs + 2 ? '⭐⭐⭐' : G.moves <= G.totalPairs * 2 ? '⭐⭐' : '⭐';
+    $('win-scores').innerHTML = `
+      <div class="win-player winner">
+        <div class="wp-name">Moves</div>
+        <div class="wp-pairs">${G.moves}</div>
+        <div class="wp-label">${rating}</div>
+      </div>`;
+  }
+  showScreen('win');
+}
+
+// ── Confetti ──
+function spawnConfetti() {
+  const colors = ['#FF6B6B','#4ECDC4','#FFE66D','#FF6B9D','#C3A6FF','#A8E6CF'];
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      const size = 6 + Math.random() * 8;
+      el.style.cssText = `
+        left:${Math.random()*100}vw; top:-20px;
+        width:${size}px; height:${size * (1 + Math.random())}px;
+        background:${colors[Math.floor(Math.random()*colors.length)]};
+        animation-duration:${1.2 + Math.random() * 1.4}s;
+      `;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2800);
+    }, i * 28);
+  }
+}
+</script>
+</body>
+</html>

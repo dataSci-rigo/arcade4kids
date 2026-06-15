@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sort It Out</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --coral:  #FF6B6B;
+  --teal:   #4ECDC4;
+  --yellow: #FFE66D;
+  --mint:   #A8E6CF;
+  --purple: #C3A6FF;
+  --bg:     #FFF9F0;
+  --ink:    #2D2D3A;
+}
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  font-family: 'Nunito', sans-serif;
+  color: var(--ink);
+  touch-action: manipulation;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Screens ── */
+.screen { display: none; position: fixed; inset: 0; flex-direction: column; align-items: center; }
+.screen.active { display: flex; }
+
+/* ── Splash ── */
+#splash {
+  background: linear-gradient(150deg, #FFE66D 0%, #FF6B6B 100%);
+  justify-content: center; gap: 18px; padding: 24px 20px; overflow-y: auto;
+}
+.splash-title {
+  font-size: clamp(40px,13vw,68px); font-weight: 900;
+  color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15);
+  text-align: center; line-height: 1.1;
+}
+.splash-emoji-row { font-size: clamp(26px,8vw,44px); letter-spacing: 4px; }
+.splash-label {
+  font-size: 12px; font-weight: 800; color: rgba(255,255,255,.75);
+  text-transform: uppercase; letter-spacing: 2px;
+}
+.opt-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.opt-btn {
+  background: rgba(255,255,255,.25); border: 2.5px solid rgba(255,255,255,.5);
+  border-radius: 40px; color: #fff; font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 800; padding: 10px 20px; cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+.opt-btn.selected { background: rgba(255,255,255,.9); color: var(--ink); border-color: #fff; transform: scale(1.06); }
+.opt-btn:active { transform: scale(.97); }
+.btn-play {
+  background: #fff; color: var(--coral); border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 900;
+  padding: 16px 60px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-play:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Top bar ── */
+#top-bar {
+  width: 100%; padding: 10px 16px; flex-shrink: 0;
+  background: linear-gradient(90deg, var(--yellow), var(--coral));
+  display: flex; align-items: center; justify-content: space-between;
+}
+.bar-stat { display: flex; flex-direction: column; align-items: center; }
+.bar-label { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.8); text-transform: uppercase; letter-spacing: 1.5px; }
+.bar-val   { font-size: 22px; font-weight: 900; color: #fff; line-height: 1; }
+
+/* ── Item stage ── */
+#stage {
+  flex: 1; width: 100%; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #fff8f0 0%, #fdeee0 100%);
+  overflow: hidden;
+}
+#item-wrap {
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+#current-item {
+  font-size: clamp(70px, 22vw, 110px);
+  line-height: 1;
+  cursor: grab;
+  position: relative;
+  will-change: transform;
+  transition: filter .15s;
+  touch-action: none;
+}
+#current-item.dragging { cursor: grabbing; filter: drop-shadow(0 8px 16px rgba(0,0,0,.25)); }
+#item-label {
+  position: absolute; bottom: -32px; left: 50%; transform: translateX(-50%);
+  font-size: 16px; font-weight: 800; color: #aaa; white-space: nowrap;
+}
+
+/* ── Bins ── */
+#bins-area {
+  width: 100%; padding: 10px 12px 16px;
+  display: flex; gap: 10px; justify-content: center;
+  flex-shrink: 0; background: var(--bg);
+  border-top: 2px solid #eee;
+}
+.bin {
+  flex: 1; max-width: 160px;
+  border-radius: 20px; padding: 12px 8px 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+  position: relative;
+}
+.bin:active { transform: scale(.96); }
+.bin.drag-over {
+  transform: scale(1.06);
+  box-shadow: 0 8px 24px rgba(0,0,0,.15);
+  border-color: rgba(255,255,255,.6);
+}
+.bin-icon  { font-size: clamp(28px, 8vw, 42px); line-height: 1; }
+.bin-name  { font-size: clamp(12px, 3.5vw, 16px); font-weight: 900; color: #fff; text-align: center; line-height: 1.2; }
+.bin-count {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(255,255,255,.9); color: var(--ink);
+  font-size: 13px; font-weight: 900;
+  border-radius: 50%; width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 0 rgba(0,0,0,.1);
+}
+
+/* ── Fly-in animation ── */
+@keyframes itemIn {
+  0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+  70%  { transform: scale(1.15) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg);   opacity: 1; }
+}
+.item-enter { animation: itemIn .35s ease forwards; }
+
+/* ── Fly-to-bin animation ── */
+@keyframes flyOut {
+  0%   { transform: scale(1);    opacity: 1; }
+  100% { transform: scale(0.1);  opacity: 0; }
+}
+.fly-out { animation: flyOut .3s ease forwards; }
+
+/* ── Win ── */
+#win {
+  background: linear-gradient(150deg, var(--yellow) 0%, var(--coral) 100%);
+  justify-content: center; gap: 16px; padding: 24px; text-align: center;
+}
+.win-title { font-size: clamp(40px,13vw,66px); font-weight: 900; color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15); }
+.win-stars { font-size: 48px; }
+.win-sub   { font-size: 18px; font-weight: 700; color: rgba(255,255,255,.9); }
+.win-stat  { font-size: 20px; font-weight: 800; color: rgba(255,255,255,.85); }
+.btn-again {
+  background: #fff; color: var(--coral); border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 22px; font-weight: 900;
+  padding: 14px 48px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-again:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Back btn ── */
+#back-btn {
+  position: fixed; top: 12px; left: 12px;
+  background: rgba(255,255,255,.3); border: none; border-radius: 50%;
+  width: 40px; height: 40px; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; z-index: 50;
+}
+#back-btn:active { background: rgba(255,255,255,.5); }
+
+/* ── Confetti ── */
+.confetti {
+  position: fixed; pointer-events: none; border-radius: 3px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+/* ── Shake ── */
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-12px); }
+  40% { transform: translateX(12px); }
+  60% { transform: translateX(-8px); }
+  80% { transform: translateX(8px); }
+}
+.shake { animation: shake .4s ease; }
+
+/* ── Wrong flash ── */
+@keyframes wrongFlash {
+  0%,100% { background: linear-gradient(180deg, #fff8f0 0%, #fdeee0 100%); }
+  40%     { background: #ffe0e0; }
+}
+.wrong-flash { animation: wrongFlash .5s ease; }
+</style>
+</head>
+<body>
+
+<!-- ── SPLASH ── -->
+<div id="splash" class="screen active">
+  <div class="splash-title">Sort It<br>Out!</div>
+  <div class="splash-emoji-row">🐶🍎🚗</div>
+
+  <div class="splash-label">Category Set</div>
+  <div class="opt-row" id="set-opts">
+    <button class="opt-btn selected" data-val="af"  onclick="pickOpt(this,'catSet')">Animals &amp; Food</button>
+    <button class="opt-btn"          data-val="av"  onclick="pickOpt(this,'catSet')">Animals &amp; Vehicles</button>
+    <button class="opt-btn"          data-val="afv" onclick="pickOpt(this,'catSet')">Animals, Food &amp; Vehicles</button>
+    <button class="opt-btn"          data-val="bs"  onclick="pickOpt(this,'catSet')">Big &amp; Small</button>
+  </div>
+
+  <button class="btn-play" onclick="startGame()">PLAY</button>
+</div>
+
+<!-- ── GAME ── -->
+<div id="game" class="screen">
+  <button id="back-btn" onclick="showScreen('splash')">←</button>
+  <div id="top-bar">
+    <div class="bar-stat">
+      <span class="bar-label">Item</span>
+      <span class="bar-val" id="item-num-val">1 / 12</span>
+    </div>
+    <div class="bar-stat">
+      <span class="bar-label">Score</span>
+      <span class="bar-val" id="score-val">0</span>
+    </div>
+    <div class="bar-stat">
+      <span class="bar-label">Streak</span>
+      <span class="bar-val" id="streak-val">🔥0</span>
+    </div>
+  </div>
+  <div id="stage">
+    <div id="item-wrap">
+      <div id="current-item"></div>
+      <div id="item-label"></div>
+    </div>
+  </div>
+  <div id="bins-area"></div>
+</div>
+
+<!-- ── WIN ── -->
+<div id="win" class="screen">
+  <div class="win-title">All Sorted!</div>
+  <div class="win-stars" id="win-stars">⭐⭐⭐</div>
+  <div class="win-sub"   id="win-sub">Fantastic sorting!</div>
+  <div class="win-stat"  id="win-stat">12 / 12 correct</div>
+  <button class="btn-again" onclick="startGame()">PLAY AGAIN</button>
+  <button class="btn-again" style="background:rgba(255,255,255,.3);color:#fff;box-shadow:none;font-size:17px;padding:12px 32px" onclick="showScreen('splash')">CHANGE SETTINGS</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const S = { catSet: 'af' };
+
+// Category definitions
+const CATS = {
+  animals:  { label: 'Animals',  icon: '🐾', color: 'linear-gradient(135deg,#56c870,#2e9b50)', items: ['🐶','🐱','🐸','🐷','🦊','🐻','🐨','🦁','🐔','🦋','🐝','🐞'] },
+  food:     { label: 'Food',     icon: '🍽️', color: 'linear-gradient(135deg,#FF6B6B,#e05252)', items: ['🍎','🍌','🍓','🍕','🍦','🌮','🍩','🍇','🥑','🍉','🥕','🍊'] },
+  vehicles: { label: 'Vehicles', icon: '🚦', color: 'linear-gradient(135deg,#4ECDC4,#2ea89f)', items: ['🚗','🚂','🚀','✈️','🚢','🚁','🚒','🚕','🛸','🚌','🏎️','🚜'] },
+  big:      { label: 'Big',      icon: '🐘', color: 'linear-gradient(135deg,#C3A6FF,#9b6fcc)', items: ['🐘','🚢','🏠','🦣','🌳','🦛','🚌','🗻','🐋','🦒','🚜','🏟️'] },
+  small:    { label: 'Small',    icon: '🐜', color: 'linear-gradient(135deg,#FFE66D,#f0c830)', items: ['🐜','🐛','🐝','🐞','🐭','🐟','🌰','🍄','🧷','🔑','🪲','🐌'] },
+};
+
+const SETS = {
+  af:  ['animals','food'],
+  av:  ['animals','vehicles'],
+  afv: ['animals','food','vehicles'],
+  bs:  ['big','small'],
+};
+
+const G = {
+  items: [],    // [{emoji, cat}]
+  idx: 0,
+  score: 0,
+  streak: 0,
+  firstTry: 0,
+  binCats: [],
+  binEls: [],
+  totalItems: 12,
+  dragging: false,
+  dragStartX: 0, dragStartY: 0,
+  dragOffX: 0, dragOffY: 0,
+};
+
+// ── Audio ──
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, type, dur, vol = 0.18, endFreq = null) {
+  try {
+    const ac = getAudio();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ac.currentTime);
+    if (endFreq) osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + dur);
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch {}
+}
+function playCorrect() { [523,659,784].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.15,0.22),i*80)); }
+function playWrong()   { playTone(160,'square',0.18,0.18); }
+function playCelebrate() { [523,587,659,698,784,880,988,1046].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.2,0.24),i*75)); }
+
+// ── Helpers ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function pickOpt(btn, key) {
+  btn.closest('.opt-row').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  S[key] = btn.dataset.val;
+}
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+// ── Start ──
+function startGame() {
+  const cats = SETS[S.catSet];
+  G.binCats = cats;
+  G.idx = 0; G.score = 0; G.streak = 0; G.firstTry = 0;
+
+  // Build item list: equal spread across categories
+  const perCat = Math.ceil(G.totalItems / cats.length);
+  let items = [];
+  cats.forEach(cat => {
+    const emojis = shuffle([...CATS[cat].items]).slice(0, perCat);
+    emojis.forEach(emoji => items.push({ emoji, cat }));
+  });
+  G.items = shuffle(items).slice(0, G.totalItems);
+
+  buildBins();
+  showItem();
+  showScreen('game');
+}
+
+function buildBins() {
+  const area = $('bins-area');
+  area.innerHTML = '';
+  G.binEls = [];
+  G.binCats.forEach((cat, i) => {
+    const info = CATS[cat];
+    const bin = document.createElement('div');
+    bin.className = 'bin';
+    bin.style.background = info.color;
+    bin.innerHTML = `
+      <div class="bin-count" id="bin-count-${i}">0</div>
+      <div class="bin-icon">${info.icon}</div>
+      <div class="bin-name">${info.label}</div>`;
+    bin.addEventListener('click', () => sortInto(cat, bin));
+    area.appendChild(bin);
+    G.binEls.push(bin);
+  });
+}
+
+// ── Show current item ──
+function showItem() {
+  if (G.idx >= G.items.length) { showWin(); return; }
+  const item = G.items[G.idx];
+  const el = $('current-item');
+  el.textContent = item.emoji;
+  el.style.transform = '';
+  el.classList.remove('fly-out','dragging');
+  el.classList.add('item-enter');
+  setTimeout(() => el.classList.remove('item-enter'), 400);
+
+  $('item-label').textContent = CATS[item.cat].label; // hidden until answered; for accessibility
+  $('item-label').style.opacity = '0';
+
+  $('item-num-val').textContent = `${G.idx+1} / ${G.totalItems}`;
+  $('score-val').textContent = G.score;
+  $('streak-val').textContent = `🔥${G.streak}`;
+
+  setupDrag(el);
+}
+
+// ── Drag (pointer events) ──
+function setupDrag(el) {
+  el.onpointerdown = startDrag;
+}
+
+let dragEl = null, origRect = null;
+
+function startDrag(e) {
+  e.preventDefault();
+  dragEl = e.currentTarget;
+  dragEl.setPointerCapture(e.pointerId);
+  dragEl.classList.add('dragging');
+  origRect = dragEl.getBoundingClientRect();
+  G.dragging = true;
+  G.dragOffX = e.clientX - origRect.left - origRect.width/2;
+  G.dragOffY = e.clientY - origRect.top  - origRect.height/2;
+  dragEl.onpointermove = moveDrag;
+  dragEl.onpointerup   = endDrag;
+  dragEl.onpointercancel = cancelDrag;
+
+  // Highlight bins as drag-over targets
+  G.binEls.forEach(b => b.classList.remove('drag-over'));
+}
+
+function moveDrag(e) {
+  if (!G.dragging) return;
+  const stage = $('stage');
+  const sr = stage.getBoundingClientRect();
+  const x = e.clientX - sr.left - origRect.width/2 - G.dragOffX;
+  const y = e.clientY - sr.top  - origRect.height/2 - G.dragOffY;
+  dragEl.style.transform = `translate(${x}px,${y}px)`;
+
+  // Highlight bin under pointer
+  G.binEls.forEach(b => {
+    const r = b.getBoundingClientRect();
+    const over = e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
+    b.classList.toggle('drag-over', over);
+  });
+}
+
+function endDrag(e) {
+  if (!G.dragging) return;
+  G.dragging = false;
+  dragEl.classList.remove('dragging');
+  dragEl.onpointermove = null;
+  dragEl.onpointerup   = null;
+
+  // Hit-test bins
+  let hit = null;
+  G.binEls.forEach((b, i) => {
+    const r = b.getBoundingClientRect();
+    if (e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom) {
+      hit = G.binCats[i];
+      b.classList.remove('drag-over');
+    }
+  });
+  G.binEls.forEach(b => b.classList.remove('drag-over'));
+
+  if (hit) {
+    sortInto(hit, null);
+  } else {
+    // Snap back
+    dragEl.style.transform = '';
+  }
+}
+
+function cancelDrag(e) {
+  G.dragging = false;
+  if (dragEl) { dragEl.style.transform = ''; dragEl.classList.remove('dragging'); }
+  G.binEls.forEach(b => b.classList.remove('drag-over'));
+}
+
+// ── Sort decision ──
+let firstTryThis = true;
+function sortInto(cat, binEl) {
+  const item = G.items[G.idx];
+  if (cat === item.cat) {
+    // Correct
+    G.score++;
+    G.streak++;
+    if (firstTryThis) G.firstTry++;
+    firstTryThis = true;
+
+    // Increment bin count
+    const binIdx = G.binCats.indexOf(cat);
+    const countEl = $(`bin-count-${binIdx}`);
+    countEl.textContent = parseInt(countEl.textContent) + 1;
+
+    // Show label briefly
+    $('item-label').style.opacity = '1';
+
+    // Fly out animation
+    const el = $('current-item');
+    el.classList.add('fly-out');
+    playCorrect();
+
+    setTimeout(() => {
+      G.idx++;
+      firstTryThis = true;
+      showItem();
+    }, 320);
+  } else {
+    // Wrong
+    firstTryThis = false;
+    G.streak = 0;
+    $('streak-val').textContent = '🔥0';
+    playWrong();
+
+    const el = $('current-item');
+    el.style.transform = '';
+    el.classList.add('shake');
+    $('stage').classList.add('wrong-flash');
+    setTimeout(() => {
+      el.classList.remove('shake');
+      $('stage').classList.remove('wrong-flash');
+    }, 500);
+  }
+}
+
+// ── Win ──
+function showWin() {
+  playCelebrate();
+  spawnConfetti();
+  const pct = G.firstTry / G.totalItems;
+  const stars = pct >= .9 ? '⭐⭐⭐' : pct >= .6 ? '⭐⭐' : '⭐';
+  $('win-stars').textContent = stars;
+  $('win-stat').textContent  = `${G.score} / ${G.totalItems} sorted correctly`;
+  $('win-sub').textContent   = pct >= .9 ? 'Perfect sorting!' : pct >= .6 ? 'Great sorting!' : 'Keep practising!';
+  showScreen('win');
+}
+
+function spawnConfetti() {
+  const colors = ['#FF6B6B','#4ECDC4','#FFE66D','#56c870','#C3A6FF','#A8E6CF'];
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      const size = 6 + Math.random() * 8;
+      el.style.cssText = `left:${Math.random()*100}vw;top:-20px;width:${size}px;height:${size*(1+Math.random())}px;background:${colors[Math.floor(Math.random()*colors.length)]};animation-duration:${1.2+Math.random()*1.4}s;`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2800);
+    }, i * 28);
+  }
+}
+</script>
+</body>
+</html>
