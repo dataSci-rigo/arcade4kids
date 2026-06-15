@@ -470,7 +470,9 @@ function smoothRand(prev, drift) { return prev + (Math.random() - 0.5) * drift; 
 // ============================================================
 //  STATE INIT
 // ============================================================
-function initState() {
+const LEVEL_DURATION_FRAMES = 30 * 60; // 30 seconds per level
+
+function initState(level = 1, scoreBase = 0, carryHi = null) {
   theme = THEMES[selectedTheme];
   const cfg = gameSettings[selectedTheme];
   if (isMobile) cfg.scrollDir = 'vertical';
@@ -479,7 +481,8 @@ function initState() {
   const flipped  = cfg.direction === 'flipped';
   const atStart  = cfg.placement === 'start';
   const len      = isH ? W : H;
-  const startGap = theme.startGap * cfg.gapSize;
+  const gapScale = Math.max(0.70, 1 - (level - 1) * 0.05);
+  const startGap = theme.startGap * cfg.gapSize * gapScale;
   const pFixed   = atStart ? 20 : (isH ? W : H) - 20;
 
   const rows = [];
@@ -489,11 +492,13 @@ function initState() {
     rows.push({center, gap});
   }
 
+  const speedScale = 1 + (level - 1) * 0.20;
   state = {
     rows, center, gap: startGap,
-    speed:         theme.speedStart * cfg.speed,
-    score:         0,
-    hiScore:       leaderboards[selectedTheme].length ? leaderboards[selectedTheme][0].score : 0,
+    speed:         Math.min(theme.speedMax * cfg.speed, theme.speedStart * cfg.speed * speedScale),
+    score:         scoreBase,
+    scoreBase,
+    hiScore:       carryHi !== null ? carryHi : (leaderboards[selectedTheme].length ? leaderboards[selectedTheme][0].score : 0),
     alive:         true,
     started:       false,
     playerPos:     isH ? H/2 : W/2,
@@ -515,6 +520,11 @@ function initState() {
     jumpTimer:     0,
     jumpOffset:    0,
     distance:      0,
+    level,
+    levelTimer:    LEVEL_DURATION_FRAMES,
+    levelComplete: false,
+    levelCompleteTimer: 0,
+    levelBonus:    0,
     isH, flipped, pFixed, cfg,
   };
 }
@@ -563,7 +573,8 @@ function spawnRow() {
 //  UPDATE
 // ============================================================
 function update() {
-  if (!state.alive)   { state.deathTimer++; return; }
+  if (!state.alive)        { state.deathTimer++; return; }
+  if (state.levelComplete) { state.levelCompleteTimer++; return; }
   if (!state.started) return;
 
   const {isH, flipped, pFixed, cfg} = state;
@@ -594,7 +605,7 @@ function update() {
 
   state.offset   += state.speed;
   state.distance += state.speed;
-  state.score     = Math.floor(state.distance);
+  state.score     = state.scoreBase + Math.floor(state.distance);
 
   while (state.offset >= 1) { state.offset -= 1; spawnRow(); }
 
@@ -707,6 +718,16 @@ function update() {
     state.obstacles    = state.obstacles.filter(o => o.crossPos > -16);
     state.collectibles = state.collectibles.filter(c => c.crossPos > -16 && c.alive);
   }
+
+  // Level timer
+  state.levelTimer = Math.max(0, state.levelTimer - 1);
+  if (state.levelTimer === 0) {
+    state.levelBonus   = state.level * 1000;
+    state.score       += state.levelBonus;
+    state.levelComplete = true;
+    state.levelCompleteTimer = 0;
+    if (state.score > state.hiScore) state.hiScore = state.score;
+  }
 }
 
 function die() {
@@ -715,6 +736,14 @@ function die() {
   state.deathTimer = 0;
   sndDie();
   state.namePromptShown = false;
+}
+
+function nextLevel() {
+  const lvl      = state.level + 1;
+  const newBase  = state.score;
+  const hi       = Math.max(state.hiScore, newBase);
+  initState(lvl, newBase, hi);
+  state.started = true;
 }
 
 // ============================================================
@@ -904,7 +933,12 @@ function draw() {
   ctx.fillStyle = theme.hudColor;
   drawText(`SCORE ${state.score}`, 4, 4);
   drawText(`HI    ${state.hiScore}`, 4, 14);
-  drawText(`${state.speed.toFixed(1)}X`, W-24, 4);
+  const lvStr = `LV${state.level}`;
+  drawText(lvStr, W - lvStr.length * 6, 4);
+  const secsLeft = Math.ceil(state.levelTimer / 60);
+  const tStr = `${secsLeft}S`;
+  ctx.fillStyle = secsLeft <= 5 ? '#FF4444' : theme.hudColor;
+  drawText(tStr, W - tStr.length * 6, 14);
   if (cfg.hitPoints > 1) {
     for (let i = 0; i < cfg.hitPoints; i++) {
       ctx.fillStyle = i < state.health ? '#FF4444' : '#333333';
@@ -931,6 +965,23 @@ function draw() {
       ctx.fillStyle = '#888';
       const hint = selectedTheme === 'road' ? 'SPACE: JUMP' : selectedTheme === 'cave' ? 'SHIFT: WINGS' : '';
       if (hint) drawText(hint, W/2 - hint.length*3, H/2+18);
+    }
+  }
+
+  // Level clear overlay
+  if (state.levelComplete) {
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, H/2-38, W, 76);
+    ctx.fillStyle = '#FFEE00';
+    drawText('LEVEL  CLEAR!', W/2-39, H/2-30);
+    ctx.fillStyle = theme.hudColor;
+    const bonusStr = `BONUS +${state.levelBonus}`;
+    drawText(bonusStr, W/2 - bonusStr.length * 3, H/2-18);
+    drawText(`SCORE  ${state.score}`, W/2-30, H/2-6);
+    if (state.levelCompleteTimer > 60) {
+      ctx.fillStyle = '#888';
+      const cont = isMobile ? 'TAP TO CONTINUE' : 'SPACE TO CONTINUE';
+      drawText(cont, W/2 - cont.length * 3, H/2+12);
     }
   }
 
@@ -1257,6 +1308,7 @@ function hiOverlayVisible() { return document.getElementById('hi-overlay').style
 
 function handleAction() {
   if (hiOverlayVisible()) return;
+  if (state.levelComplete && state.levelCompleteTimer > 60) { nextLevel(); return; }
   if (!state.started && state.alive)         { state.started = true; return; }
   if (!state.alive && state.deathTimer > 30) { initState(); state.started = true; return; }
   if (selectedTheme === 'road' && state.started && state.alive && state.jumpTimer === 0) {
@@ -1269,13 +1321,14 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Enter') { e.preventDefault(); getAC(); showGame(); }
     return;
   }
+  if (hiOverlayVisible()) return;
   if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { input.left  = true; e.preventDefault(); }
   if (e.code === 'ArrowRight' || e.code === 'KeyD') { input.right = true; e.preventDefault(); }
   if (e.code === 'ArrowUp'    || e.code === 'KeyW') { input.left  = true; e.preventDefault(); }
   if (e.code === 'ArrowDown'  || e.code === 'KeyS') { input.right = true; e.preventDefault(); }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.action = true; e.preventDefault(); }
   if (e.code === 'Space')  { handleAction(); e.preventDefault(); }
-  if (e.code === 'Escape') { if (hiOverlayVisible()) return; showMenu(); e.preventDefault(); }
+  if (e.code === 'Escape') { showMenu(); e.preventDefault(); }
 });
 document.addEventListener('keyup', e => {
   if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { input.left  = false; if (state) state.wallBumpCount = 0; }

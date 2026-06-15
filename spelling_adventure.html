@@ -543,6 +543,11 @@ function buildKeyboard() {
 }
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (document.getElementById('wc-overlay').classList.contains('active')) { e.preventDefault(); nextWord(); }
+    else if (document.getElementById('gc-overlay').classList.contains('active')) { e.preventDefault(); goHome(); }
+    return;
+  }
   if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && !e.metaKey && !e.ctrlKey)
     pressKey(e.key.toUpperCase());
 });
