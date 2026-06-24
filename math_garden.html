@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Math Garden</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --coral:  #FF6B6B;
+  --teal:   #4ECDC4;
+  --yellow: #FFE66D;
+  --green:  #56c870;
+  --purple: #C3A6FF;
+  --blue:   #60a5fa;
+  --bg:     #FFF9F0;
+  --ink:    #2D2D3A;
+}
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  font-family: 'Nunito', sans-serif;
+  color: var(--ink);
+  touch-action: manipulation;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.screen { display: none; position: fixed; inset: 0; flex-direction: column; align-items: center; }
+.screen.active { display: flex; }
+
+/* ── Splash ── */
+#splash {
+  background: linear-gradient(150deg, #6366f1 0%, #4ECDC4 100%);
+  justify-content: center; gap: 14px; padding: 24px 20px; overflow-y: auto;
+}
+.splash-title {
+  font-size: clamp(32px, 10vw, 56px); font-weight: 900;
+  color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15);
+  text-align: center; line-height: 1.1;
+}
+.splash-emoji-row { font-size: clamp(22px, 6vw, 34px); letter-spacing: 4px; }
+.splash-label { font-size: 12px; font-weight: 800; color: rgba(255,255,255,.75); text-transform: uppercase; letter-spacing: 2px; }
+.opt-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.opt-btn {
+  background: rgba(255,255,255,.25); border: 2.5px solid rgba(255,255,255,.5);
+  border-radius: 40px; color: #fff; font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 800; padding: 10px 20px; cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+.opt-btn.selected { background: rgba(255,255,255,.9); color: var(--ink); border-color: #fff; transform: scale(1.06); }
+.opt-btn:active { transform: scale(.97); }
+.btn-play {
+  background: #fff; color: #6366f1; border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 900;
+  padding: 16px 60px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-play:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Top bar ── */
+#top-bar {
+  width: 100%; padding: 8px 16px; flex-shrink: 0;
+  background: linear-gradient(90deg, #6366f1, #4ECDC4);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.bar-stat { display: flex; flex-direction: column; align-items: center; }
+.bar-label { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.75); text-transform: uppercase; letter-spacing: 1.5px; }
+.bar-val   { font-size: 22px; font-weight: 900; color: #fff; line-height: 1; }
+
+/* ── Equation area ── */
+#equation-area {
+  width: 100%; padding: 10px 16px 6px; flex-shrink: 0;
+  text-align: center; background: #fff; border-bottom: 2px solid #eee;
+}
+#equation {
+  font-size: clamp(20px, 6.5vw, 36px); font-weight: 900;
+  line-height: 1.4; letter-spacing: 1px;
+}
+.eq-num   { color: #6366f1; }
+.eq-numA  { color: var(--teal); }
+.eq-numB  { color: var(--purple); }
+.eq-ans   { color: var(--green); }
+.eq-blank {
+  display: inline-block; min-width: 32px; text-align: center;
+  border-bottom: 4px solid #ccc; color: #bbb;
+}
+.eq-op  { color: var(--coral); }
+.eq-eq  { color: #888; }
+.eq-goal { font-size: .65em; color: #aaa; font-weight: 700; }
+#hint-text { font-size: 13px; font-weight: 700; color: #888; margin-top: 4px; }
+
+/* ── Garden ── */
+#garden {
+  flex: 1; width: 100%; position: relative;
+  background: linear-gradient(180deg, #e8f8ec 0%, #d0f0d8 100%);
+  overflow: hidden; border-top: 3px solid #b8e8c0;
+}
+#garden-ground {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 36px;
+  background: linear-gradient(180deg, #8bc34a, #689f38);
+  border-top: 3px solid #558b2f;
+}
+.garden-obj {
+  position: absolute;
+  font-size: clamp(30px, 8vw, 48px);
+  cursor: pointer; line-height: 1;
+  transform-origin: center bottom;
+  touch-action: manipulation;
+  transition: transform .12s;
+}
+.garden-obj:active { transform: scale(0.85); }
+.garden-obj.counted { filter: grayscale(60%) brightness(1.1); cursor: default; }
+.garden-obj.wilted  { filter: grayscale(85%) opacity(0.4); cursor: default; pointer-events: none; }
+.garden-img {
+  width: clamp(30px, 8vw, 48px);
+  height: clamp(30px, 8vw, 48px);
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,.75);
+  box-shadow: 0 2px 6px rgba(0,0,0,.12);
+}
+.eq-img {
+  height: 1.1em; width: 1.1em;
+  object-fit: cover; border-radius: 4px;
+  vertical-align: middle; margin: 0 1px;
+}
+
+/* Count bubble */
+.count-bubble {
+  position: absolute;
+  background: var(--yellow); color: var(--ink);
+  font-size: 14px; font-weight: 900;
+  border-radius: 50%; width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  top: -14px; left: 50%; transform: translateX(-50%);
+  box-shadow: 0 2px 0 rgba(0,0,0,.15);
+  animation: bubblePop .25s ease;
+  pointer-events: none;
+}
+@keyframes bubblePop {
+  0%   { transform: translateX(-50%) scale(0); }
+  60%  { transform: translateX(-50%) scale(1.25); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+/* Running count display */
+#count-display {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  background: rgba(255,255,255,.88); border-radius: 50px;
+  padding: 4px 20px;
+  font-size: clamp(24px, 7vw, 40px); font-weight: 900; color: var(--green);
+  box-shadow: 0 3px 0 rgba(0,0,0,.08); border: 3px solid rgba(86,200,112,.3);
+  min-width: 72px; text-align: center; pointer-events: none; transition: color .2s;
+}
+
+/* ── Bottom area ── */
+#bottom-area {
+  width: 100%; padding: 10px 14px; flex-shrink: 0;
+  display: flex; gap: 10px; justify-content: center; align-items: center;
+  background: var(--bg); border-top: 2px solid #eee; flex-wrap: wrap;
+}
+.btn-plant {
+  background: var(--teal); color: #fff; border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 900;
+  padding: 12px 22px; cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+  flex: 1; max-width: 150px; white-space: nowrap;
+}
+.btn-plant.type-b { background: var(--purple); }
+.btn-plant.remove-btn { background: var(--coral); }
+.btn-plant:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
+.btn-plant:disabled { background: #ccc; box-shadow: none; cursor: default; }
+.btn-check {
+  background: var(--green); color: #fff; border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 900;
+  padding: 12px 26px; cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-check:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
+
+/* ── Feedback ── */
+#feedback {
+  position: fixed; inset: 0; z-index: 30;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.15);
+}
+#feedback.show { display: flex; }
+.feedback-box {
+  background: #fff; border-radius: 28px; padding: 28px 44px;
+  text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+.feedback-emoji { font-size: 60px; line-height: 1; }
+.feedback-msg   { font-size: 22px; font-weight: 900; margin-top: 8px; }
+.feedback-sub   { font-size: 14px; font-weight: 700; color: #888; margin-top: 4px; }
+
+/* ── Win ── */
+#win {
+  background: linear-gradient(150deg, #6366f1 0%, #4ECDC4 100%);
+  justify-content: center; gap: 16px; padding: 24px; text-align: center;
+}
+.win-title { font-size: clamp(38px,12vw,62px); font-weight: 900; color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15); }
+.win-sub   { font-size: 18px; font-weight: 700; color: rgba(255,255,255,.85); }
+.win-stars { font-size: 44px; }
+.win-stat  { font-size: 20px; font-weight: 800; color: rgba(255,255,255,.9); }
+.btn-again {
+  background: #fff; color: #6366f1; border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 22px; font-weight: 900;
+  padding: 14px 48px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-again:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Back btn ── */
+#back-btn {
+  position: fixed; top: 12px; left: 12px;
+  background: rgba(255,255,255,.3); border: none; border-radius: 50%;
+  width: 40px; height: 40px; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; z-index: 50;
+}
+#back-btn:active { background: rgba(255,255,255,.5); }
+
+.confetti {
+  position: fixed; pointer-events: none; border-radius: 3px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(10px); }
+  60% { transform: translateX(-7px); }
+  80% { transform: translateX(7px); }
+}
+.shake { animation: shake .4s ease; }
+</style>
+</head>
+<body>
+
+<!-- ── SPLASH ── -->
+<div id="splash" class="screen active">
+  <div class="splash-title">Math<br>Garden</div>
+  <div class="splash-emoji-row">🌻 ➕ 🍄 ❓</div>
+
+  <div class="splash-label">Operation</div>
+  <div class="opt-row" id="op-opts">
+    <button class="opt-btn selected" data-val="add"  onclick="pickOpt(this,'op')">➕ Addition only</button>
+    <button class="opt-btn"          data-val="both" onclick="pickOpt(this,'op')">➕➖ Addition &amp; Subtraction</button>
+  </div>
+
+  <div class="splash-label">Mode</div>
+  <div class="opt-row" id="mode-opts">
+    <button class="opt-btn selected" data-val="count" onclick="pickOpt(this,'mode')">Count It 🔢</button>
+    <button class="opt-btn"          data-val="fill"  onclick="pickOpt(this,'mode')">Fill It 🌱</button>
+  </div>
+
+  <div class="splash-label">Difficulty</div>
+  <div class="opt-row" id="diff-opts">
+    <button class="opt-btn selected" data-val="easy"   onclick="pickOpt(this,'diff')">Easy (≤ 5)</button>
+    <button class="opt-btn"          data-val="medium" onclick="pickOpt(this,'diff')">Medium (≤ 10)</button>
+    <button class="opt-btn"          data-val="hard"   onclick="pickOpt(this,'diff')">Hard (≤ 20)</button>
+  </div>
+
+  <div class="splash-label">Rounds</div>
+  <div class="opt-row" id="rounds-opts">
+    <button class="opt-btn"          data-val="5"  onclick="pickOpt(this,'rounds')">5</button>
+    <button class="opt-btn selected" data-val="10" onclick="pickOpt(this,'rounds')">10</button>
+    <button class="opt-btn"          data-val="15" onclick="pickOpt(this,'rounds')">15</button>
+    <button class="opt-btn"          data-val="20" onclick="pickOpt(this,'rounds')">20</button>
+  </div>
+
+  <button class="btn-play" onclick="startGame()">PLAY</button>
+</div>
+
+<!-- ── GAME ── -->
+<div id="game" class="screen">
+  <button id="back-btn" onclick="showScreen('splash')">←</button>
+  <div id="top-bar">
+    <div class="bar-stat"><span class="bar-label">Round</span><span class="bar-val" id="round-val">1 / 10</span></div>
+    <div class="bar-stat"><span class="bar-label">Score</span><span class="bar-val" id="score-val">0</span></div>
+    <div class="bar-stat"><span class="bar-label">Stars</span><span class="bar-val" id="stars-val">⭐⭐⭐</span></div>
+  </div>
+  <div id="equation-area">
+    <div id="equation"></div>
+    <div id="hint-text"></div>
+  </div>
+  <div id="garden">
+    <div id="count-display">0</div>
+    <div id="garden-ground"></div>
+  </div>
+  <div id="bottom-area"></div>
+</div>
+
+<!-- ── WIN ── -->
+<div id="win" class="screen">
+  <div class="win-title">Well Done!</div>
+  <div class="win-stars" id="win-stars">⭐⭐⭐</div>
+  <div class="win-sub"   id="win-sub">Amazing maths!</div>
+  <div class="win-stat"  id="win-stat">10 / 10 correct</div>
+  <button class="btn-again" onclick="startGame()">PLAY AGAIN</button>
+  <button class="btn-again" style="background:rgba(255,255,255,.3);color:#fff;box-shadow:none;font-size:17px;padding:12px 32px" onclick="showScreen('splash')">CHANGE SETTINGS</button>
+</div>
+
+<!-- ── Feedback ── -->
+<div id="feedback">
+  <div class="feedback-box">
+    <div class="feedback-emoji" id="fb-emoji">🌟</div>
+    <div class="feedback-msg"   id="fb-msg">Great!</div>
+    <div class="feedback-sub"   id="fb-sub"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const S = { op: 'add', mode: 'count', diff: 'easy', rounds: '10', itemSetIdA: 'emoji', itemSetIdB: 'emoji' };
+const DIFFS = { easy: 5, medium: 10, hard: 20 };
+
+let ITEM_SETS = [];
+
+async function loadItemSets() {
+  try {
+    const res  = await fetch('/api/item-sets');
+    const data = await res.json();
+    ITEM_SETS = data.sets || [];
+    if (ITEM_SETS.length > 0) buildItemRows();
+  } catch {}
+}
+
+function buildItemRows() {
+  if (document.getElementById('items-row-a')) return;
+  const splash  = $('splash');
+  const playBtn = splash.querySelector('.btn-play');
+
+  function makeRow(labelText, key, rowId) {
+    const lbl = document.createElement('div');
+    lbl.className = 'splash-label'; lbl.textContent = labelText;
+    const row = document.createElement('div');
+    row.className = 'opt-row'; row.id = rowId;
+
+    function addBtn(text, val) {
+      const btn = document.createElement('button');
+      btn.className = 'opt-btn' + (val === 'emoji' ? ' selected' : '');
+      btn.dataset.val = val; btn.textContent = text;
+      btn.onclick = () => {
+        row.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        S[key] = val;
+      };
+      row.appendChild(btn);
+    }
+    addBtn('Emojis 🌻', 'emoji');
+    ITEM_SETS.forEach(s => addBtn(s.label, s.id));
+    splash.insertBefore(row, playBtn);
+    splash.insertBefore(lbl, row);
+  }
+  makeRow('Type B Items', 'itemSetIdB', 'items-row-b');
+  makeRow('Type A Items', 'itemSetIdA', 'items-row-a');
+}
+
+function getSetById(id) {
+  if (!id || id === 'emoji') return null;
+  return ITEM_SETS.find(s => s.id === id) || null;
+}
+function randImg(set) {
+  return set.images[Math.floor(Math.random() * set.images.length)];
+}
+function getImg(setId) {
+  const s = getSetById(setId);
+  return s ? randImg(s) : null;
+}
+function itemIcon(setId, emoji) {
+  const s = getSetById(setId);
+  if (s) return `<img src="${s.images[0]}" class="eq-img" alt="${s.label}">`;
+  return emoji;
+}
+
+loadItemSets();
+
+const EMOJI_PAIRS = [
+  ['🌻','🍄'], ['🌸','🐝'], ['🍎','🍊'], ['🌷','🐞'],
+  ['🍓','🫐'], ['🐸','🐢'], ['⭐','🌙'], ['🦋','🐛'],
+  ['🌺','🦜'], ['🍋','🍇'],
+];
+
+const G = {
+  round: 0, score: 0, firstTry: 0, firstTryThisRound: true,
+  totalRounds: 10,
+  op: '+', numA: 0, numB: 0,
+  emojiA: '', emojiB: '',
+  repImgA: null, repImgB: null,
+  // count mode
+  tappedA: 0, tappedB: 0, tappedIndices: new Set(),
+  // fill-add mode
+  fillA: 0, fillB: 0, plantedPositions: [],
+  // fill-sub mode
+  startCount: 0, removed: 0,
+};
+
+// ── Audio ──
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, type, dur, vol = 0.18) {
+  try {
+    const ac = getAudio();
+    const osc = ac.createOscillator(), gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.start(); osc.stop(ac.currentTime + dur);
+  } catch {}
+}
+function playTick(n)     { playTone(380 + n * 22, 'sine', 0.1, 0.2); }
+function playCorrect()   { [523,659,784,1046].forEach((f,i) => setTimeout(() => playTone(f,'sine',0.18,0.22), i*90)); }
+function playWrong()     { playTone(200, 'square', 0.18, 0.18); }
+function playCelebrate() { [523,587,659,698,784,880,988,1046].forEach((f,i) => setTimeout(() => playTone(f,'sine',0.22,0.25), i*80)); }
+
+// ── Helpers ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function pickOpt(btn, key) {
+  btn.closest('.opt-row').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  S[key] = btn.dataset.val;
+}
+function ri(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+// ── Game flow ──
+function startGame() {
+  G.round = 0; G.score = 0; G.firstTry = 0;
+  G.totalRounds = parseInt(S.rounds);
+  nextRound();
+  showScreen('game');
+}
+
+function nextRound() {
+  G.round++;
+  G.tappedA = 0; G.tappedB = 0;
+  G.tappedIndices = new Set();
+  G.fillA = 0; G.fillB = 0;
+  G.plantedPositions = [];
+  G.removed = 0;
+  G.firstTryThisRound = true;
+
+  const max = DIFFS[S.diff];
+  G.op = (S.op === 'both' && Math.random() < 0.5) ? '-' : '+';
+
+  const pair = shuffle(EMOJI_PAIRS)[0];
+  [G.emojiA, G.emojiB] = pair;
+
+  // Pick representative images for equation display (null = use emoji)
+  const setA = getSetById(S.itemSetIdA);
+  const setB = getSetById(S.itemSetIdB);
+  G.repImgA = setA ? setA.images[0] : null;
+  G.repImgB = setB ? setB.images[0] : null;
+
+  if (G.op === '+') {
+    G.numA = ri(1, max - 1);
+    G.numB = ri(1, max - G.numA);
+  } else {
+    G.numA = ri(2, max);
+    G.numB = ri(1, G.numA - 1);
+  }
+
+  $('round-val').textContent = `${G.round} / ${G.totalRounds}`;
+  $('score-val').textContent = G.score;
+  updateStars();
+  buildRound();
+}
+
+function buildRound() {
+  $('garden').querySelectorAll('.garden-obj').forEach(e => e.remove());
+  $('bottom-area').innerHTML = '';
+
+  if (S.mode === 'count') buildCountRound();
+  else                    buildFillRound();
+}
+
+// ─────────────────────────────────────────
+// COUNT IT
+// ─────────────────────────────────────────
+function buildCountRound() {
+  $('count-display').style.display = 'block';
+  $('count-display').textContent = '0';
+  $('count-display').style.color = 'var(--green)';
+
+  if (G.op === '+') {
+    const iconA = G.repImgA ? `<img src="${G.repImgA}" class="eq-img">` : G.emojiA;
+    const iconB = G.repImgB ? `<img src="${G.repImgB}" class="eq-img">` : G.emojiB;
+    $('hint-text').textContent = `Tap each item to count!`;
+    updateCountEq();
+
+    const positions = shuffle(safePositions(G.numA + G.numB));
+    positions.forEach((pos, i) => {
+      const isA = i < G.numA;
+      const imgUrl = isA ? getImg(S.itemSetIdA) : getImg(S.itemSetIdB);
+      const el = makeObj(isA ? G.emojiA : G.emojiB, pos, imgUrl);
+      el.dataset.index = i;
+      el.addEventListener('click', () => tapItem(el, i, isA ? 'a' : 'b'));
+      $('garden').appendChild(el);
+    });
+
+  } else {
+    $('hint-text').textContent = `Count the items that are left!`;
+    updateCountEq();
+
+    const positions = safePositions(G.numA);
+    const wiltedSet = new Set(shuffle([...Array(G.numA).keys()]).slice(0, G.numB));
+    positions.forEach((pos, i) => {
+      const imgUrl = getImg(S.itemSetIdA);
+      const el = makeObj(G.emojiA, pos, imgUrl);
+      el.dataset.index = i;
+      if (wiltedSet.has(i)) {
+        el.classList.add('wilted');
+      } else {
+        el.addEventListener('click', () => tapItem(el, i, 'a'));
+      }
+      $('garden').appendChild(el);
+    });
+  }
+
+  const done = makeCheckBtn('DONE ✅', checkCount);
+  $('bottom-area').appendChild(done);
+}
+
+function tapItem(el, i, type) {
+  if (G.tappedIndices.has(i)) return;
+  G.tappedIndices.add(i);
+  el.classList.add('counted');
+  if (type === 'a') G.tappedA++; else G.tappedB++;
+
+  const total = G.tappedA + G.tappedB;
+  $('count-display').textContent = total;
+  playTick(total);
+  updateCountEq();
+
+  const bubble = document.createElement('div');
+  bubble.className = 'count-bubble';
+  bubble.textContent = total;
+  el.appendChild(bubble);
+}
+
+function updateCountEq() {
+  const a = G.tappedA, b = G.tappedB;
+  const iconA = G.repImgA ? `<img src="${G.repImgA}" class="eq-img">` : G.emojiA;
+  const iconB = G.repImgB ? `<img src="${G.repImgB}" class="eq-img">` : G.emojiB;
+  if (G.op === '+') {
+    const sum  = a + b;
+    const aHtml = a ? `<span class="eq-numA">${a}</span>` : `<span class="eq-blank">?</span>`;
+    const bHtml = b ? `<span class="eq-numB">${b}</span>` : `<span class="eq-blank">?</span>`;
+    const sHtml = (a && b) ? `<span class="eq-ans">${sum}</span>` : `<span class="eq-blank">?</span>`;
+    $('equation').innerHTML = `${aHtml}${iconA} <span class="eq-op">+</span> ${bHtml}${iconB} <span class="eq-eq">=</span> ${sHtml}`;
+  } else {
+    const counted = G.tappedA;
+    const ansHtml = counted ? `<span class="eq-ans">${counted}</span>` : `<span class="eq-blank">?</span>`;
+    const wiltedIcon = G.repImgA
+      ? `<img src="${G.repImgA}" class="eq-img" style="filter:grayscale(1) opacity(.5)">`
+      : `<span style="filter:grayscale(1) opacity(.5)">${G.emojiA}</span>`;
+    $('equation').innerHTML =
+      `<span class="eq-numA">${G.numA}</span>${iconA} ` +
+      `<span class="eq-op">−</span> ` +
+      `<span class="eq-numB">${G.numB}</span>${wiltedIcon} ` +
+      `<span class="eq-eq">=</span> ${ansHtml}`;
+  }
+}
+
+function checkCount() {
+  const answer = G.op === '+' ? G.numA + G.numB : G.numA - G.numB;
+  const userAns = G.op === '+' ? G.tappedA + G.tappedB : G.tappedA;
+  const correct = userAns === answer;
+
+  if (correct) {
+    if (G.firstTryThisRound) { G.score++; G.firstTry++; }
+    playCorrect();
+    showFeedback(true, answer);
+  } else {
+    G.firstTryThisRound = false;
+    playWrong();
+    showFeedback(false, answer, `You counted ${userAns}. The answer is ${answer}.`, () => {
+      G.tappedA = 0; G.tappedB = 0;
+      G.tappedIndices.clear();
+      $('count-display').textContent = '0';
+      $('count-display').style.color = 'var(--green)';
+      document.querySelectorAll('.garden-obj').forEach(e => {
+        e.classList.remove('counted');
+        e.querySelectorAll('.count-bubble').forEach(b => b.remove());
+      });
+      updateCountEq();
+    });
+  }
+}
+
+// ─────────────────────────────────────────
+// FILL IT
+// ─────────────────────────────────────────
+function buildFillRound() {
+  $('count-display').style.display = 'none';
+
+  if (G.op === '+') {
+    const target = G.numA + G.numB;
+    const setA = getSetById(S.itemSetIdA);
+    const setB = getSetById(S.itemSetIdB);
+    const labelA = setA ? `Plant ${setA.label}` : `Plant ${G.emojiA}`;
+    const labelB = setB ? `Plant ${setB.label}` : `Plant ${G.emojiB}`;
+    $('hint-text').textContent = `Plant items to reach ${target}!`;
+    updateFillEq(target);
+
+    const btnA = document.createElement('button');
+    btnA.className = 'btn-plant';
+    btnA.id = 'btn-plant-a';
+    btnA.textContent = labelA;
+    btnA.onclick = () => plantItem('a', target);
+
+    const btnB = document.createElement('button');
+    btnB.className = 'btn-plant type-b';
+    btnB.id = 'btn-plant-b';
+    btnB.textContent = labelB;
+    btnB.onclick = () => plantItem('b', target);
+
+    const done = makeCheckBtn('DONE ✅', checkFillAdd);
+    $('bottom-area').append(btnA, btnB, done);
+
+  } else {
+    const target = G.numA - G.numB;
+    G.startCount = G.numA;
+    $('hint-text').textContent = `Tap items to remove them. Leave exactly ${target}!`;
+    updateSubFillEq();
+
+    const positions = safePositions(G.numA);
+    positions.forEach(pos => {
+      const imgUrl = getImg(S.itemSetIdA);
+      const el = makeObj(G.emojiA, pos, imgUrl);
+      el.addEventListener('click', () => removeItem(el));
+      $('garden').appendChild(el);
+    });
+
+    const done = makeCheckBtn('DONE ✅', checkFillSub);
+    $('bottom-area').appendChild(done);
+  }
+}
+
+function plantItem(type, target) {
+  if (G.fillA + G.fillB >= target) return;
+  if (type === 'a') G.fillA++; else G.fillB++;
+
+  const garden = $('garden');
+  const rect = garden.getBoundingClientRect();
+  const W = rect.width, H = rect.height;
+  let px, py, tries = 0;
+  do {
+    px = 20 + Math.random() * (W - 70);
+    py = 20 + Math.random() * (H - 110);
+    tries++;
+  } while (tries < 40 && G.plantedPositions.some(p => Math.hypot(p.x - px, p.y - py) < 52));
+  G.plantedPositions.push({ x: px, y: py });
+
+  const isA  = type === 'a';
+  const imgUrl = isA ? getImg(S.itemSetIdA) : getImg(S.itemSetIdB);
+  const el = makeObj(isA ? G.emojiA : G.emojiB, { x: px, y: py }, imgUrl);
+  el.style.pointerEvents = 'none';
+  garden.appendChild(el);
+
+  playTick(G.fillA + G.fillB);
+  updateFillEq(target);
+
+  if (G.fillA + G.fillB >= target) {
+    $('btn-plant-a').disabled = true;
+    $('btn-plant-b').disabled = true;
+  }
+}
+
+function updateFillEq(target) {
+  const a = G.fillA, b = G.fillB, sum = a + b;
+  const iconA = G.repImgA ? `<img src="${G.repImgA}" class="eq-img">` : G.emojiA;
+  const iconB = G.repImgB ? `<img src="${G.repImgB}" class="eq-img">` : G.emojiB;
+  const aHtml = a ? `<span class="eq-numA">${a}</span>` : `<span class="eq-blank">_</span>`;
+  const bHtml = b ? `<span class="eq-numB">${b}</span>` : `<span class="eq-blank">_</span>`;
+  const sHtml = sum ? `<span class="eq-ans">${sum}</span>` : `<span class="eq-blank">_</span>`;
+  $('equation').innerHTML =
+    `${aHtml}${iconA} <span class="eq-op">+</span> ${bHtml}${iconB} ` +
+    `<span class="eq-eq">=</span> ${sHtml} ` +
+    `<span class="eq-goal">(goal: ${target})</span>`;
+}
+
+function checkFillAdd() {
+  const target = G.numA + G.numB;
+  if (G.fillA + G.fillB === target) {
+    if (G.firstTryThisRound) { G.score++; G.firstTry++; }
+    playCorrect();
+    showFeedback(true, target);
+  } else {
+    G.firstTryThisRound = false;
+    playWrong();
+    showFeedback(false, target, `You planted ${G.fillA + G.fillB}. Need ${target}.`, () => {
+      $('garden').querySelectorAll('.garden-obj').forEach(e => e.remove());
+      G.fillA = 0; G.fillB = 0; G.plantedPositions = [];
+      updateFillEq(target);
+      $('btn-plant-a').disabled = false;
+      $('btn-plant-b').disabled = false;
+    });
+  }
+}
+
+// Subtraction fill
+function removeItem(el) {
+  if (el.classList.contains('wilted')) return;
+  el.classList.add('wilted');
+  el.style.pointerEvents = 'none';
+  G.removed++;
+  playTick(G.startCount - G.removed);
+  updateSubFillEq();
+}
+
+function updateSubFillEq() {
+  const remaining = G.startCount - G.removed;
+  const target    = G.numA - G.numB;
+  const iconA  = G.repImgA ? `<img src="${G.repImgA}" class="eq-img">` : G.emojiA;
+  $('equation').innerHTML =
+    `<span class="eq-numA">${G.startCount}</span>${iconA} ` +
+    `<span class="eq-op">−</span> ` +
+    `<span class="eq-numB">${G.removed}</span> ` +
+    `<span class="eq-eq">=</span> <span class="eq-ans">${remaining}</span> ` +
+    `<span class="eq-goal">(goal: ${target})</span>`;
+}
+
+function checkFillSub() {
+  const target = G.numA - G.numB;
+  const remaining = G.startCount - G.removed;
+  if (remaining === target) {
+    if (G.firstTryThisRound) { G.score++; G.firstTry++; }
+    playCorrect();
+    showFeedback(true, target);
+  } else {
+    G.firstTryThisRound = false;
+    playWrong();
+    const msg = remaining > target ? 'Still too many!' : 'Removed too many!';
+    showFeedback(false, target, `${remaining} left — ${msg} Goal: ${target}.`, () => {
+      const garden = $('garden');
+      garden.querySelectorAll('.garden-obj').forEach(e => e.remove());
+      G.removed = 0;
+      updateSubFillEq();
+      safePositions(G.numA).forEach(pos => {
+        const imgUrl = getImg(S.itemSetIdA);
+        const el = makeObj(G.emojiA, pos, imgUrl);
+        el.addEventListener('click', () => removeItem(el));
+        garden.appendChild(el);
+      });
+    });
+  }
+}
+
+// ─────────────────────────────────────────
+// Shared
+// ─────────────────────────────────────────
+function makeObj(emoji, pos, imgUrl = null) {
+  let el;
+  if (imgUrl) {
+    el = document.createElement('img');
+    el.className = 'garden-obj garden-img';
+    el.src = imgUrl;
+    el.draggable = false;
+    el.alt = emoji;
+  } else {
+    el = document.createElement('div');
+    el.className = 'garden-obj';
+    el.textContent = emoji;
+  }
+  el.style.left = pos.x + 'px';
+  el.style.top  = pos.y + 'px';
+  return el;
+}
+
+function makeCheckBtn(label, fn) {
+  const btn = document.createElement('button');
+  btn.className = 'btn-check';
+  btn.textContent = label;
+  btn.onclick = fn;
+  return btn;
+}
+
+function safePositions(n) {
+  const garden = $('garden');
+  const W = garden.clientWidth  || 320;
+  const H = garden.clientHeight || 240;
+  const positions = [];
+  let attempts = 0;
+  while (positions.length < n && attempts < n * 50) {
+    attempts++;
+    const x = 20 + Math.random() * (W - 80);
+    const y = 20 + Math.random() * (H - 110);
+    if (positions.every(p => Math.hypot(p.x - x, p.y - y) > 58))
+      positions.push({ x, y });
+  }
+  return positions;
+}
+
+function showFeedback(correct, answer, sub = '', onRetry = null) {
+  const CORRECT_MSGS = ['Amazing!','Great job!','You got it!','Excellent!','Super!'];
+  $('fb-emoji').textContent = correct ? ['🌟','🎉','⭐','🌻','🥳'][ri(0,4)] : '🤔';
+  $('fb-msg').textContent   = correct ? CORRECT_MSGS[ri(0,4)] : 'Try again!';
+  $('fb-sub').textContent   = correct ? `The answer is ${answer}! 🎉` : sub;
+  $('feedback').classList.add('show');
+  setTimeout(() => {
+    $('feedback').classList.remove('show');
+    if (correct) {
+      if (G.round >= G.totalRounds) showWin(); else nextRound();
+    } else if (onRetry) onRetry();
+  }, 1600);
+}
+
+function updateStars() {
+  const pct = G.firstTry / Math.max(1, G.round - 1);
+  $('stars-val').textContent = pct >= .9 ? '⭐⭐⭐' : pct >= .6 ? '⭐⭐' : '⭐';
+}
+
+function showWin() {
+  playCelebrate(); spawnConfetti();
+  const pct = G.firstTry / G.totalRounds;
+  $('win-stars').textContent = pct >= .9 ? '⭐⭐⭐' : pct >= .6 ? '⭐⭐' : '⭐';
+  $('win-stat').textContent  = `${G.score} / ${G.totalRounds} correct first try`;
+  $('win-sub').textContent   = pct >= .9 ? 'Perfect maths!' : pct >= .6 ? 'Great work!' : 'Keep practising!';
+  showScreen('win');
+}
+
+function spawnConfetti() {
+  const colors = ['#FF6B6B','#4ECDC4','#FFE66D','#56c870','#C3A6FF','#6366f1'];
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      const size = 6 + Math.random() * 8;
+      el.style.cssText = `left:${Math.random()*100}vw;top:-20px;width:${size}px;height:${size*(1+Math.random())}px;background:${colors[ri(0,colors.length-1)]};animation-duration:${1.2+Math.random()*1.4}s;`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2800);
+    }, i * 28);
+  }
+}
+</script>
+</body>
+</html>

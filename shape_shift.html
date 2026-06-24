@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+  <title>Shape Shift</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --sub: #94a3b8;
+      --muted: #64748b;
+      --accent: #f97316;
+      --accent2: #fb923c;
+      --correct: #22c55e;
+      --wrong: #ef4444;
+      --text: #f1f5f9;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* ── SCREENS ── */
+    .screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .screen.active { display: flex; }
+
+    /* ── SPLASH ── */
+    #screen-splash { gap: 0; padding: 32px 24px; }
+
+    .splash-logo {
+      font-size: clamp(2.4rem, 9vw, 4rem);
+      font-weight: 900;
+      letter-spacing: 4px;
+      background: linear-gradient(135deg, #f97316 0%, #fb923c 50%, #fbbf24 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .splash-sub {
+      color: var(--sub);
+      font-size: 0.9rem;
+      font-weight: 800;
+      letter-spacing: 3px;
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    .splash-preview {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 44px;
+      justify-content: center;
+    }
+    .splash-preview canvas {
+      border-radius: 14px;
+      background: var(--card);
+    }
+
+    /* ── BUTTONS ── */
+    .play-btn {
+      background: linear-gradient(135deg, #f97316, #fb923c);
+      color: white;
+      border: none;
+      border-radius: 18px;
+      padding: 18px 72px;
+      font-family: inherit;
+      font-size: 1.35rem;
+      font-weight: 900;
+      letter-spacing: 4px;
+      cursor: pointer;
+      box-shadow: 0 8px 32px rgba(249,115,22,0.45);
+      transition: transform 0.12s, box-shadow 0.12s;
+    }
+    .play-btn:hover  { transform: scale(1.03); }
+    .play-btn:active { transform: scale(0.95); box-shadow: 0 4px 16px rgba(249,115,22,0.3); }
+
+    .ghost-btn {
+      background: var(--card);
+      color: var(--sub);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 36px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .ghost-btn:hover { border-color: var(--sub); color: var(--text); }
+
+    /* ── GAME SCREEN ── */
+    #screen-game {
+      justify-content: flex-start;
+      padding: 0;
+    }
+
+    .game-header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px 10px;
+      flex-shrink: 0;
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.6rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px 8px;
+      transition: color 0.15s;
+    }
+    .back-btn:hover { color: var(--text); }
+
+    .progress-dots {
+      display: flex;
+      gap: 10px;
+    }
+    .dot {
+      width: 11px; height: 11px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: background 0.3s;
+    }
+    .dot.done    { background: var(--correct); }
+    .dot.current { background: var(--accent); }
+
+    /* Save checkbox — top right */
+    .save-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .save-wrap .save-label {
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      transition: color 0.2s;
+    }
+    #save-cb { display: none; }
+    .save-box {
+      width: 22px; height: 22px;
+      border: 2.5px solid var(--border);
+      border-radius: 5px;
+      background: var(--card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, background 0.2s;
+      flex-shrink: 0;
+    }
+    .save-box::after {
+      content: '✓';
+      color: white;
+      font-size: 13px;
+      font-weight: 900;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    #save-cb:checked ~ .save-box {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+    #save-cb:checked ~ .save-box::after { opacity: 1; }
+
+    .transform-banner {
+      width: 100%;
+      background: linear-gradient(135deg, #f97316, #fb923c);
+      padding: 13px 20px;
+      text-align: center;
+      font-size: clamp(0.9rem, 3vw, 1.2rem);
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .game-body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      width: 100%;
+      padding: 18px 20px 24px;
+      gap: 20px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Desktop: side by side */
+    @media (min-width: 640px) and (min-height: 500px) {
+      .game-body {
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        gap: 40px;
+      }
+    }
+
+    .orig-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .section-tag {
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 3px;
+    }
+    .canvas-card {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 8px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+    }
+    canvas { display: block; }
+
+    .choices-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .choices-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    /* On desktop with side-by-side, stack choices vertically */
+    @media (min-width: 640px) and (min-height: 500px) {
+      .choices-row { flex-direction: column; }
+    }
+
+    .choice-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+    .choice-card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 7px;
+      cursor: pointer;
+      outline: 3px solid transparent;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+      transition: transform 0.12s, box-shadow 0.12s, outline-color 0.15s;
+    }
+    .choice-card:hover  { transform: scale(1.04); box-shadow: 0 8px 28px rgba(0,0,0,0.4); }
+    .choice-card:active { transform: scale(0.96); }
+    .choice-card.correct { outline-color: var(--correct); box-shadow: 0 0 24px rgba(34,197,94,0.5); }
+    .choice-card.wrong   { outline-color: var(--wrong);   box-shadow: 0 0 24px rgba(239,68,68,0.45); }
+    .choice-card.locked  { pointer-events: none; }
+
+    .choice-letter {
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    /* ── RESULT ── */
+    #screen-result { gap: 8px; padding: 24px; }
+
+    .result-stars { font-size: clamp(2.4rem, 10vw, 3.8rem); margin-bottom: 4px; }
+    .result-title {
+      font-size: clamp(1.8rem, 7vw, 3rem);
+      font-weight: 900;
+      letter-spacing: 3px;
+      background: linear-gradient(135deg, #f97316, #fbbf24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 6px;
+    }
+    .result-score {
+      color: var(--sub);
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .result-saved {
+      color: var(--accent);
+      font-size: 0.9rem;
+      font-weight: 700;
+      min-height: 22px;
+      margin-bottom: 28px;
+    }
+    .result-btns { display: flex; gap: 12px; align-items: center; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(90px);
+      background: var(--accent);
+      color: white;
+      padding: 11px 28px;
+      border-radius: 40px;
+      font-weight: 800;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
+      z-index: 200;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- ── SPLASH ─────────────────────────────────────────────────────────── -->
+<div id="screen-splash" class="screen active">
+  <div class="splash-logo">SHAPE SHIFT</div>
+  <div class="splash-sub">ROTATE · FLIP · BIGGER · SMALLER</div>
+  <div class="splash-preview" id="splash-preview"></div>
+  <button class="play-btn" onclick="startGame()">PLAY</button>
+</div>
+
+<!-- ── GAME ───────────────────────────────────────────────────────────── -->
+<div id="screen-game" class="screen">
+  <div class="game-header">
+    <button class="back-btn" onclick="goHome()">←</button>
+    <div class="progress-dots">
+      <div class="dot" id="dot-0"></div>
+      <div class="dot" id="dot-1"></div>
+      <div class="dot" id="dot-2"></div>
+      <div class="dot" id="dot-3"></div>
+    </div>
+    <label class="save-wrap" title="Save this shape">
+      <span class="save-label">SAVE</span>
+      <input type="checkbox" id="save-cb">
+      <span class="save-box"></span>
+    </label>
+  </div>
+
+  <div class="transform-banner" id="transform-banner">FIND THE ROTATED SHAPE</div>
+
+  <div class="game-body">
+    <div class="orig-section">
+      <div class="section-tag">ORIGINAL</div>
+      <div class="canvas-card">
+        <canvas id="orig-canvas" width="130" height="130"></canvas>
+      </div>
+    </div>
+
+    <div class="choices-section">
+      <div class="section-tag">PICK THE MATCH</div>
+      <div class="choices-row">
+        <div class="choice-wrap">
+          <div class="choice-card" id="cc-0" onclick="handleChoice(0)">
+            <canvas id="choice-0" width="130" height="130"></canvas>
+          </div>
+          <div class="choice-letter">A</div>
+        </div>
+        <div class="choice-wrap">
+          <div class="choice-card" id="cc-1" onclick="handleChoice(1)">
+            <canvas id="choice-1" width="130" height="130"></canvas>
+          </div>
+          <div class="choice-letter">B</div>
+        </div>
+        <div class="choice-wrap">
+          <div class="choice-card" id="cc-2" onclick="handleChoice(2)">
+            <canvas id="choice-2" width="130" height="130"></canvas>
+          </div>
+          <div class="choice-letter">C</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RESULT ─────────────────────────────────────────────────────────── -->
+<div id="screen-result" class="screen">
+  <div class="result-stars"  id="result-stars">⭐⭐⭐⭐</div>
+  <div class="result-title"  id="result-title">PERFECT!</div>
+  <div class="result-score"  id="result-score">4 / 4 correct</div>
+  <div class="result-saved"  id="result-saved"></div>
+  <div class="result-btns">
+    <button class="ghost-btn" onclick="goHome()">HOME</button>
+    <button class="play-btn"  onclick="startGame()">PLAY AGAIN</button>
+  </div>
+</div>
+
+<div id="toast">💾 Shape saved!</div>
+
+<script>
+'use strict';
+
+// ── CONSTANTS ─────────────────────────────────────────────────────────────
+
+const SHAPES = ['arrow','lshape','bolt','fshape','rtriangle','step','flag','zshape'];
+
+const TRANSFORMS = ['rotate','flip','bigger','smaller'];
+
+const TRANSFORM_LABELS = {
+  rotate:  'FIND THE ROTATED SHAPE',
+  flip:    'FIND THE FLIPPED SHAPE',
+  bigger:  'FIND THE BIGGER SHAPE',
+  smaller: 'FIND THE SMALLER SHAPE',
+};
+
+const SHAPE_COLORS  = ['#7C3AED','#2563EB','#059669','#be185d','#b45309','#0e7490'];
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+
+let G = {};
+
+// ── UTILS ─────────────────────────────────────────────────────────────────
+
+function shuffle(a) { return [...a].sort(() => Math.random() - 0.5); }
+function pick(a)    { return a[Math.floor(Math.random() * a.length)]; }
+function pickExclude(a, x) { return pick(a.filter(v => v !== x)); }
+
+// ── SHAPE PATHS ───────────────────────────────────────────────────────────
+
+function drawShapePath(ctx, shape, sz) {
+  const s = sz * 0.88;
+  ctx.beginPath();
+  switch (shape) {
+
+    case 'arrow':
+      ctx.moveTo(-s*0.65, -s*0.30);
+      ctx.lineTo( s*0.08, -s*0.30);
+      ctx.lineTo( s*0.08, -s*0.62);
+      ctx.lineTo( s*0.78,  0);
+      ctx.lineTo( s*0.08,  s*0.62);
+      ctx.lineTo( s*0.08,  s*0.30);
+      ctx.lineTo(-s*0.65,  s*0.30);
+      ctx.closePath();
+      break;
+
+    case 'lshape':
+      ctx.moveTo(-s*0.55, -s*0.65);
+      ctx.lineTo(-s*0.05, -s*0.65);
+      ctx.lineTo(-s*0.05,  s*0.15);
+      ctx.lineTo( s*0.65,  s*0.15);
+      ctx.lineTo( s*0.65,  s*0.65);
+      ctx.lineTo(-s*0.55,  s*0.65);
+      ctx.closePath();
+      break;
+
+    case 'bolt':
+      ctx.moveTo( s*0.22, -s*0.78);
+      ctx.lineTo(-s*0.32,  s*0.05);
+      ctx.lineTo( s*0.06,  s*0.05);
+      ctx.lineTo(-s*0.22,  s*0.78);
+      ctx.lineTo( s*0.46, -s*0.10);
+      ctx.lineTo( s*0.06, -s*0.10);
+      ctx.closePath();
+      break;
+
+    case 'fshape':
+      // Capital letter F
+      ctx.moveTo(-s*0.52, -s*0.72);
+      ctx.lineTo( s*0.52, -s*0.72);
+      ctx.lineTo( s*0.52, -s*0.36);
+      ctx.lineTo(-s*0.08, -s*0.36);
+      ctx.lineTo(-s*0.08, -s*0.06);
+      ctx.lineTo( s*0.42, -s*0.06);
+      ctx.lineTo( s*0.42,  s*0.30);
+      ctx.lineTo(-s*0.08,  s*0.30);
+      ctx.lineTo(-s*0.08,  s*0.72);
+      ctx.lineTo(-s*0.52,  s*0.72);
+      ctx.closePath();
+      break;
+
+    case 'rtriangle':
+      // Right triangle — clearly asymmetric
+      ctx.moveTo(-s*0.68,  s*0.68);
+      ctx.lineTo( s*0.68,  s*0.68);
+      ctx.lineTo(-s*0.68, -s*0.68);
+      ctx.closePath();
+      break;
+
+    case 'step':
+      // 2-step staircase going up-right
+      ctx.moveTo(-s*0.68,  s*0.68);
+      ctx.lineTo(-s*0.68,  s*0.05);
+      ctx.lineTo(-s*0.05,  s*0.05);
+      ctx.lineTo(-s*0.05, -s*0.58);
+      ctx.lineTo( s*0.68, -s*0.58);
+      ctx.lineTo( s*0.68,  s*0.68);
+      ctx.closePath();
+      break;
+
+    case 'flag':
+      // Pole on left, triangular flag pointing right
+      ctx.moveTo(-s*0.55, -s*0.78);
+      ctx.lineTo(-s*0.55,  s*0.78);
+      ctx.lineTo(-s*0.28,  s*0.78);
+      ctx.lineTo(-s*0.28,  s*0.15);
+      ctx.lineTo( s*0.68, -s*0.30);
+      ctx.lineTo(-s*0.28, -s*0.78);
+      ctx.closePath();
+      break;
+
+    case 'zshape':
+      // Capital letter Z
+      ctx.moveTo(-s*0.62, -s*0.68);
+      ctx.lineTo( s*0.62, -s*0.68);
+      ctx.lineTo( s*0.62, -s*0.28);
+      ctx.lineTo(-s*0.14, -s*0.28);
+      ctx.lineTo( s*0.62,  s*0.28);
+      ctx.lineTo( s*0.62,  s*0.68);
+      ctx.lineTo(-s*0.62,  s*0.68);
+      ctx.lineTo(-s*0.62,  s*0.28);
+      ctx.lineTo( s*0.14,  s*0.28);
+      ctx.lineTo(-s*0.62, -s*0.28);
+      ctx.closePath();
+      break;
+  }
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+
+/**
+ * opts: { size, color, rotate, flipX, flipY, scaleX, scaleY, skewX }
+ */
+function renderShape(canvas, shape, opts = {}) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+
+  if (opts.rotate)              ctx.rotate(opts.rotate);
+  if (opts.flipX)               ctx.scale(-1, 1);
+  if (opts.flipY)               ctx.scale(1, -1);
+  const sx = opts.scaleX || 1, sy = opts.scaleY || 1;
+  if (sx !== 1 || sy !== 1)     ctx.scale(sx, sy);
+  if (opts.skewX)               ctx.transform(1, 0, opts.skewX, 1, 0, 0);
+
+  ctx.fillStyle   = opts.color || '#7C3AED';
+  ctx.strokeStyle = 'rgba(255,255,255,0.38)';
+  ctx.lineWidth   = 2.5;
+
+  drawShapePath(ctx, shape, opts.size || 44);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// ── CHOICE BUILDING ───────────────────────────────────────────────────────
+
+function correctOpts(transform, color, size) {
+  switch (transform) {
+    case 'rotate':  return { color, size, rotate: Math.PI / 2 };
+    case 'flip':    return { color, size, flipX: true };
+    case 'bigger':  return { color, size: size * 1.65 };
+    case 'smaller': return { color, size: size * 0.45 };
+  }
+}
+
+function wrongTransformOpts(transform, color, size) {
+  // Apply a different transform type — same shape, same color, wrong operation
+  const other = pickExclude(TRANSFORMS, transform);
+  return correctOpts(other, color, size);
+}
+
+function wrongDistortOpts(transform, color, size) {
+  // Correct transform + visible skew — clearly wrong because it's leaning
+  return { ...correctOpts(transform, color, size), skewX: 0.44 };
+}
+
+// ── GAME LOGIC ────────────────────────────────────────────────────────────
+
+function startGame() {
+  G = {
+    shapes:     shuffle(SHAPES).slice(0, 4),
+    transforms: shuffle([...TRANSFORMS]),
+    round:      0,
+    score:      0,
+    savedCount: 0,
+    correctIdx: -1,
+    answered:   false,
+    color:      null,
+  };
+  showScreen('game');
+  showRound();
+}
+
+function showRound() {
+  const shape     = G.shapes[G.round];
+  const transform = G.transforms[G.round];
+  const color     = pick(SHAPE_COLORS);
+  G.color      = color;
+  G.answered   = false;
+
+  // Progress dots
+  for (let i = 0; i < 4; i++) {
+    const d = document.getElementById(`dot-${i}`);
+    d.className = 'dot' + (i < G.round ? ' done' : i === G.round ? ' current' : '');
+  }
+
+  // Banner
+  document.getElementById('transform-banner').textContent = TRANSFORM_LABELS[transform];
+
+  // Reset checkbox
+  document.getElementById('save-cb').checked = false;
+
+  // Reset choice cards
+  for (let i = 0; i < 3; i++) {
+    document.getElementById(`cc-${i}`).className = 'choice-card';
+  }
+
+  // Draw original (no transform)
+  renderShape(document.getElementById('orig-canvas'), shape, { color, size: 40 });
+
+  // Build three choices, shuffle
+  const choiceSet = shuffle([
+    { opts: correctOpts(transform, color, 40),        correct: true  },
+    { opts: wrongTransformOpts(transform, color, 40),  correct: false },
+    { opts: wrongDistortOpts(transform, color, 40),   correct: false },
+  ]);
+  G.correctIdx = choiceSet.findIndex(c => c.correct);
+
+  choiceSet.forEach((c, i) => {
+    renderShape(document.getElementById(`choice-${i}`), shape, c.opts);
+  });
+}
+
+function handleChoice(idx) {
+  if (G.answered) return;
+  G.answered = true;
+
+  // Handle save
+  if (document.getElementById('save-cb').checked) {
+    persistShape(G.shapes[G.round], G.transforms[G.round], G.color);
+    G.savedCount++;
+  }
+
+  const correct = idx === G.correctIdx;
+  if (correct) G.score++;
+
+  // Visual feedback on all cards
+  for (let i = 0; i < 3; i++) {
+    const cc = document.getElementById(`cc-${i}`);
+    cc.classList.add('locked');
+    if (i === G.correctIdx) cc.classList.add('correct');
+    else if (i === idx)     cc.classList.add('wrong');
+  }
+
+  setTimeout(() => {
+    G.round++;
+    if (G.round >= 4) showResult();
+    else showRound();
+  }, 1300);
+}
+
+function showResult() {
+  showScreen('result');
+  const s = G.score;
+  const STARS  = ['⭐', '⭐⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐'];
+  const TITLES = ['TRY AGAIN', 'KEEP GOING', 'GOOD TRY!', 'GREAT!', 'PERFECT!'];
+  document.getElementById('result-stars').textContent = STARS[s];
+  document.getElementById('result-title').textContent = TITLES[s];
+  document.getElementById('result-score').textContent = `${s} / 4 correct`;
+  document.getElementById('result-saved').textContent =
+    G.savedCount > 0
+      ? `💾 ${G.savedCount} shape${G.savedCount > 1 ? 's' : ''} saved`
+      : '';
+}
+
+function goHome() {
+  showScreen('splash');
+}
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(`screen-${name}`).classList.add('active');
+}
+
+// ── SAVE TO LOCALSTORAGE ──────────────────────────────────────────────────
+
+function persistShape(shape, transform, color) {
+  try {
+    const key   = 'shapeshift_saved';
+    const saved = JSON.parse(localStorage.getItem(key) || '[]');
+    saved.push({ shape, transform, color, date: new Date().toISOString() });
+    localStorage.setItem(key, JSON.stringify(saved));
+    showToast('💾 Shape saved!');
+  } catch (_) {}
+}
+
+let _toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ── SPLASH PREVIEW ────────────────────────────────────────────────────────
+
+(function initSplash() {
+  const wrap = document.getElementById('splash-preview');
+  const demo = [
+    { shape: 'arrow',     color: '#7C3AED', rotate: 0 },
+    { shape: 'bolt',      color: '#f97316', rotate: Math.PI / 6 },
+    { shape: 'lshape',    color: '#2563EB', rotate: Math.PI / 3 },
+    { shape: 'fshape',    color: '#059669', rotate: Math.PI / 2 },
+  ];
+  demo.forEach(d => {
+    const c = document.createElement('canvas');
+    c.width = 72; c.height = 72;
+    c.style.borderRadius = '12px';
+    wrap.appendChild(c);
+    renderShape(c, d.shape, { color: d.color, size: 26, rotate: d.rotate });
+  });
+})();
+</script>
+</body>
+</html>
