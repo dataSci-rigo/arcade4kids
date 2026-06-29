@@ -2,15 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Spelling Adventure</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap');
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+  font-family: 'Baloo 2', system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -67,6 +70,19 @@ body {
   cursor: pointer; font-family: inherit; color: white;
   margin-top: 14px; display: inline-block;
 }
+
+/* word set selector */
+.ws-section { margin: 18px 0 6px; }
+.ws-label { font-size: .85em; font-weight: 700; opacity: .75; margin-bottom: 8px; letter-spacing: .05em; }
+.ws-options { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.ws-btn {
+  padding: 8px 18px; border-radius: 20px; border: 2px solid rgba(255,255,255,.5);
+  background: rgba(255,255,255,.15); color: white; font-family: inherit;
+  font-size: .85em; font-weight: 700; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.ws-btn.selected { background: rgba(255,255,255,.35); border-color: white; }
+.ws-btn:hover { background: rgba(255,255,255,.25); }
 
 /* ── GAME ── */
 #game {
@@ -125,12 +141,12 @@ body {
 }
 
 /* keyboard */
-.keyboard { display: flex; flex-direction: column; gap: 7px; align-items: center; margin-top: 14px; }
-.kb-row { display: flex; gap: 5px; }
+.keyboard { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 14px; }
+.kb-row { display: flex; gap: 6px; }
 
 .key {
-  width: 40px; height: 40px; border: none; border-radius: 8px;
-  background: #ecf0f1; font-size: .95em; font-weight: bold;
+  width: 42px; height: 46px; border: none; border-radius: 9px;
+  background: #ecf0f1; font-size: 1.05em; font-weight: 700;
   cursor: pointer; font-family: inherit;
   box-shadow: 0 3px 0 #bdc3c7; transition: transform .08s, box-shadow .08s;
   color: #2c3e50;
@@ -139,11 +155,36 @@ body {
 .key.correct { background: #2ecc71 !important; color: white !important; box-shadow: 0 3px 0 #27ae60; }
 .key.wrong { animation: shake .28s; }
 
+/* mobile native-keyboard input — disabled; always use custom keyboard */
+.mobile-input-wrap { display: none !important; }
+.mobile-input {
+  width: 220px; height: 56px; border-radius: 16px;
+  border: 3px solid #667eea; background: #f5f6ff;
+  font-family: inherit; font-size: 1.3em; font-weight: 700;
+  text-align: center; color: #333; letter-spacing: .1em;
+  text-transform: uppercase; outline: none;
+  caret-color: transparent;
+}
+.mobile-input:focus { border-color: #f9ca24; background: #fffdf2; }
+.mobile-hint { text-align: center; color: #999; font-size: .85em; margin-top: 6px; }
+
 @keyframes shake {
   0%,100% { transform: translateX(0); }
   25%     { transform: translateX(-6px); }
   75%     { transform: translateX(6px); }
 }
+
+.speak-btn {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 auto 10px;
+  padding: 9px 22px; border: none; border-radius: 24px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff; font-family: inherit; font-size: 1em; font-weight: 700;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(102,126,234,.4);
+  transition: transform .12s, box-shadow .12s;
+}
+.speak-btn:active { transform: scale(.94); box-shadow: none; }
+.speak-btn.playing { background: linear-gradient(135deg, #f9ca24, #f0932b); }
 
 /* ── WORD-COMPLETE OVERLAY ── */
 #wc-overlay {
@@ -256,11 +297,49 @@ body {
 }
 
 /* ── RESPONSIVE ── */
+
+/* Full-screen mobile layout */
+@media (max-width: 600px) {
+  html, body {
+    height: 100%; overflow: hidden;
+    padding: 0; align-items: stretch;
+  }
+  body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .screen { padding: 0; width: 100%; }
+  #splash { padding: 20px 16px 28px; }
+  #game {
+    border-radius: 0; box-shadow: none;
+    padding: 16px; min-height: 100dvh; min-height: 100vh;
+    overflow-y: auto;
+  }
+  #test-mode { border-radius: 0; max-height: none; min-height: 100vh; padding: 16px; }
+
+  /* Keyboard: keys fill the row, no wrapping */
+  .keyboard { width: 100%; }
+  .kb-row   { width: 100%; flex-wrap: nowrap; gap: 3px; }
+  .key {
+    flex: 1; min-width: 0; height: 40px;
+    font-size: .8em; padding: 0;
+    border-radius: 7px; border-radius: 7px;
+  }
+
+  .hint-img, .hint-placeholder { width: 130px; height: 130px; }
+  .lbox  { width: 36px; height: 46px; font-size: 1.4em; gap: 5px; }
+  #word-display { gap: 5px; }
+  #splash h1 { font-size: 1.9em; }
+  .diff-btn  { padding: 10px 14px; font-size: .95em; }
+  .play-btn  { padding: 14px 44px; font-size: 1.45em; }
+  .speak-btn { font-size: .9em; padding: 7px 16px; }
+}
+
+@media (max-width: 380px) {
+  .key  { font-size: .72em; height: 36px; }
+  .lbox { width: 32px; height: 40px; font-size: 1.25em; }
+  .hint-img, .hint-placeholder { width: 110px; height: 110px; }
+}
+
 @media (max-width: 480px) {
-  .lbox  { width: 34px; height: 44px; font-size: 1.4em; }
-  .key   { width: 31px; height: 34px; font-size: .8em; }
-  .hint-img, .hint-placeholder { width: 150px; height: 150px; }
-  #splash h1 { font-size: 2em; }
+  .mobile-input { width: 200px; height: 60px; font-size: 1.5em; }
 }
 </style>
 </head>
@@ -286,6 +365,13 @@ body {
     </button>
   </div>
 
+  <div class="ws-section">
+    <div class="ws-label">WORD SET</div>
+    <div class="ws-options" id="ws-options">
+      <button class="ws-btn selected" data-wsid="" onclick="selectWordSet('',this)">🎲 Random</button>
+    </div>
+  </div>
+
   <button class="play-btn" onclick="startGame()">▶ Play!</button><br>
   <button class="mgr-btn" onclick="openTestMode()">🔍 Manage Images</button>
 </div>
@@ -302,7 +388,16 @@ body {
   </div>
 
   <div id="word-display"></div>
+  <button class="speak-btn" id="speak-btn" onclick="speakWord()">🔊 Hear the word</button>
   <div class="keyboard" id="keyboard"></div>
+  <div class="mobile-input-wrap" id="mobile-input-wrap">
+    <div>
+      <input id="mobile-input" class="mobile-input" type="text" maxlength="1"
+             autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"
+             inputmode="text">
+      <div class="mobile-hint">Tap & type the letter</div>
+    </div>
+  </div>
 </div>
 
 <!-- ════════════ WORD-COMPLETE OVERLAY ════════════ -->
@@ -345,8 +440,9 @@ const WORDS = [
 ];
 
 // ── STATE ──────────────────────────────────────────────────
-let difficulty    = 1;
-let selectedWords = [];
+let difficulty      = 1;
+let selectedWords   = [];
+let selectedWordSet = null;  // null = random; object = { id, label, words }
 let wordIndex     = 0;
 let blanks        = [];   // char-positions that need filling
 let blankPos      = 0;    // which blank we're on
@@ -423,6 +519,34 @@ async function ensureImages(word, minCount = 3) {
   return cache[k];
 }
 
+// ── WORD SET SELECTOR ──────────────────────────────────────
+function selectWordSet(id, btn) {
+  document.querySelectorAll('.ws-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedWordSet = id ? (window._spellingSets || []).find(s => s.id === id) || null : null;
+}
+
+async function loadSpellingSets() {
+  try {
+    const res = await fetch('/api/spelling-sets');
+    const data = await res.json();
+    window._spellingSets = data.sets || [];
+    const wrap = document.getElementById('ws-options');
+    // Remove any previously injected custom buttons
+    wrap.querySelectorAll('[data-wsid]:not([data-wsid=""])').forEach(el => el.remove());
+    (data.sets || []).forEach(set => {
+      const btn = document.createElement('button');
+      btn.className = 'ws-btn';
+      btn.dataset.wsid = set.id;
+      btn.textContent = '📝 ' + set.label;
+      btn.onclick = () => selectWordSet(set.id, btn);
+      wrap.appendChild(btn);
+    });
+  } catch {}
+}
+
+loadSpellingSets();
+
 // ── DIFFICULTY ─────────────────────────────────────────────
 function setDiff(level, btn) {
   difficulty = level;
@@ -440,13 +564,19 @@ function goHome() {
   clearParticles();
   document.getElementById('wc-overlay').classList.remove('active');
   document.getElementById('gc-overlay').classList.remove('active');
+  loadSpellingSets();
   showScreen('splash');
 }
 
 // ── GAME START ─────────────────────────────────────────────
 async function startGame() {
-  const shuffled = [...WORDS].sort(() => Math.random() - .5);
-  selectedWords = shuffled.slice(0, 5);
+  if (selectedWordSet) {
+    const shuffled = [...selectedWordSet.words].sort(() => Math.random() - .5);
+    selectedWords = shuffled.slice(0, 5);
+  } else {
+    const shuffled = [...WORDS].sort(() => Math.random() - .5);
+    selectedWords = shuffled.slice(0, 5);
+  }
   wordIndex = 0;
   showScreen('game');
   await loadWord(0);
@@ -477,6 +607,7 @@ async function loadWord(idx) {
 
   setupBlanks(word);
   buildKeyboard();
+  setTimeout(speakWord, 600);
 }
 
 // ── BLANK SETUP ────────────────────────────────────────────
@@ -524,6 +655,9 @@ function renderWord(word) {
 }
 
 // ── KEYBOARD ───────────────────────────────────────────────
+const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+
 function buildKeyboard() {
   const kb = document.getElementById('keyboard');
   kb.innerHTML = '';
@@ -540,6 +674,61 @@ function buildKeyboard() {
     }
     kb.appendChild(r);
   });
+}
+
+const mobileInputEl = document.getElementById('mobile-input');
+mobileInputEl.addEventListener('input', () => {
+  const v = mobileInputEl.value;
+  mobileInputEl.value = '';
+  if (v) {
+    const letter = v.slice(-1).toUpperCase();
+    if (/[A-Z]/.test(letter)) pressKey(letter);
+  }
+});
+mobileInputEl.addEventListener('blur', () => {
+  if (document.getElementById('game').classList.contains('active')
+      && !document.getElementById('wc-overlay').classList.contains('active')) {
+    setTimeout(() => mobileInputEl.focus(), 50);
+  }
+});
+
+let _spellingAC = null;
+function getSpellingAC() {
+  if (!_spellingAC) _spellingAC = new (window.AudioContext || window.webkitAudioContext)();
+  if (_spellingAC.state === 'suspended') _spellingAC.resume();
+  return _spellingAC;
+}
+function playSpellingChime(big) {
+  try {
+    const ac = getSpellingAC();
+    const notes = big ? [523, 659, 784, 1047] : [523, 659, 784];
+    notes.forEach((freq, i) => {
+      setTimeout(() => {
+        const osc = ac.createOscillator(), gain = ac.createGain();
+        osc.type = 'sine'; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(big ? 0.28 : 0.22, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.28);
+        osc.connect(gain); gain.connect(ac.destination);
+        osc.start(); osc.stop(ac.currentTime + 0.3);
+      }, i * 95);
+    });
+  } catch(e) {}
+}
+
+let _ttsAudio = null;
+function speakWord() {
+  const word = selectedWords[wordIndex];
+  if (!word) return;
+  if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
+  const btn = document.getElementById('speak-btn');
+  btn.classList.add('playing');
+  const audio = new Audio(`/api/tts?word=${encodeURIComponent(word)}`);
+  _ttsAudio = audio;
+  audio.onended = audio.onerror = () => {
+    btn.classList.remove('playing');
+    if (_ttsAudio === audio) _ttsAudio = null;
+  };
+  audio.play().catch(() => btn.classList.remove('playing'));
 }
 
 document.addEventListener('keydown', e => {
@@ -586,6 +775,7 @@ async function wordComplete() {
   // Pick and run a celebration
   CELEBRATIONS[Math.floor(Math.random() * 5)]();
   document.getElementById('wc-msg').textContent = CEL_MSGS[Math.floor(Math.random() * 5)];
+  playSpellingChime(false);
 
   // Extra images (indices 1 & 2)
   await ensureImages(word, 3);
@@ -605,10 +795,12 @@ async function wordComplete() {
     box.innerHTML = '<div style="color:white;font-size:3.5em">🎉 🎊 🎉</div>';
   }
 
+  if (isMobile) document.getElementById('mobile-input').blur();
   document.getElementById('wc-overlay').classList.add('active');
 }
 
 function nextWord() {
+  if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
   clearParticles();
   document.getElementById('wc-overlay').classList.remove('active');
   wordIndex++;
@@ -623,6 +815,7 @@ function nextWord() {
 // ── GAME COMPLETE ──────────────────────────────────────────
 function showGameComplete() {
   document.getElementById('gc-overlay').classList.add('active');
+  playSpellingChime(true);
   doConfetti();
   setTimeout(doFireworks, 500);
   setTimeout(doStars, 900);

@@ -4,6 +4,8 @@ import io
 import base64
 import re
 import random
+import hashlib
+import sqlite3
 import urllib.request
 import urllib.parse
 from flask import Flask, render_template, send_from_directory, abort, request, jsonify
@@ -12,6 +14,10 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(BASE_DIR, 'settings.json')
+CUSTOM_SETS_FILE = os.path.join(BASE_DIR, 'custom_sets.json')
+VOCAB_DB = os.path.join(BASE_DIR, 'vocab.db')
+IMG_CACHE_DIR = os.path.join(BASE_DIR, 'img_cache')
+os.makedirs(IMG_CACHE_DIR, exist_ok=True)
 
 GAMES = [
     {
@@ -87,6 +93,15 @@ GAMES = [
         'stripe':   'linear-gradient(90deg,#A8E6CF,#FFE66D)',
     },
     {
+        'key':      'math_garden',
+        'title':    'MATH GARDEN',
+        'desc':     ['COUNT · ADD · SUBTRACT', 'GROW YOUR EQUATIONS'],
+        'desktop':  'math_garden.html',
+        'mobile':   'math_garden.html',
+        'color':    '#6366f1',
+        'stripe':   'linear-gradient(90deg,#6366f1,#4ECDC4)',
+    },
+    {
         'key':      'sort_game',
         'title':    'SORT IT OUT',
         'desc':     ['DRAG TO THE RIGHT BIN', 'ANIMALS · FOOD · VEHICLES'],
@@ -95,31 +110,62 @@ GAMES = [
         'color':    '#FFE66D',
         'stripe':   'linear-gradient(90deg,#FFE66D,#FF6B6B)',
     },
+    {
+        'key':      'shape_shift',
+        'title':    'SHAPE SHIFT',
+        'desc':     ['ROTATE · FLIP · BIGGER · SMALLER', 'FIND THE MATCH'],
+        'desktop':  'shape_shift.html',
+        'mobile':   'shape_shift.html',
+        'color':    '#f97316',
+        'stripe':   'linear-gradient(90deg,#f97316,#fbbf24)',
+    },
+    {
+        'key':      'vocab_builder',
+        'title':    'VOCAB BUILDER',
+        'desc':     ['MATCH THE WORD · LEARN FAST', 'EN · ES · AI LEVELS'],
+        'desktop':  'vocab_builder.html',
+        'mobile':   'vocab_builder.html',
+        'color':    '#FF6B9D',
+        'stripe':   'linear-gradient(90deg,#FF6B9D,#c77dff)',
+    },
+    {
+        'key':      'sort_builder',
+        'title':    'CUSTOM ITEMS BUILDER',
+        'desc':     ['IMAGES FOR ALL GAMES', 'SORT · COUNT · MATH · VOCAB'],
+        'desktop':  'sort_set_builder.html',
+        'mobile':   'sort_set_builder.html',
+        'color':    '#9B59B6',
+        'stripe':   'linear-gradient(90deg,#9B59B6,#FFE66D)',
+    },
+    {
+        'key':      'sound_speller',
+        'title':    'SOUND SPELLER',
+        'desc':     ['HEAR IT · BUILD IT', '6 PHONICS LEVELS'],
+        'desktop':  'sound_speller.html',
+        'mobile':   'sound_speller.html',
+        'color':    '#FF8A5B',
+        'stripe':   'linear-gradient(90deg,#5B5BD6,#FF8A5B)',
+    },
+    {
+        'key':      'pip_bear',
+        'title':    'PIP THE BEAR',
+        'desc':     ['A PICTURE BOOK ADVENTURE', '7 PAGES · MATH QUESTIONS'],
+        'desktop':  'pip_the_bear.html',
+        'mobile':   'pip_the_bear.html',
+        'color':    '#8B5A2B',
+        'stripe':   'linear-gradient(90deg,#2a3f5f,#5e4b8e)',
+    },
 ]
 
 # Only files explicitly registered above can be served
 _ALLOWED = {g['desktop'] for g in GAMES} | {g['mobile'] for g in GAMES}
 
-# ── EMNIST inference (lazy-loaded) ────────────────────────────────────────────
-_sess = None
+# ── Letter recognition (Claude Haiku) ────────────────────────────────────────
 _word_img_cache = {}  # word → image URL
 
-def _get_sess():
-    global _sess
-    if _sess is None:
-        try:
-            import onnxruntime as ort
-            model_path = os.path.join(BASE_DIR, 'models', 'emnist_letters.onnx')
-            _sess = ort.InferenceSession(model_path)
-        except Exception as e:
-            raise RuntimeError(f"Could not load EMNIST model: {e}. Run fetch_model.py first.")
-    return _sess
 
-
-def _ddg_image(query):
-    """Fetch first DDG image result for query. Returns URL string or ''."""
-    if query in _word_img_cache:
-        return _word_img_cache[query]
+def _ddg_images(query, n=1):
+    """Fetch up to n DDG image result URLs for query (safe-search on via p=1)."""
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (compatible; arcade/1.0)'}
         vqd_url = f"https://duckduckgo.com/?q={urllib.parse.quote(query)}&ia=images"
@@ -127,7 +173,7 @@ def _ddg_image(query):
         html = urllib.request.urlopen(req, timeout=6).read().decode('utf-8', errors='ignore')
         m = re.search(r'vqd=([^&"\'>\s]+)', html)
         if not m:
-            return ''
+            return []
         vqd = m.group(1)
         api_url = (
             "https://duckduckgo.com/i.js?l=us-en&o=json"
@@ -135,11 +181,329 @@ def _ddg_image(query):
         )
         req2 = urllib.request.Request(api_url, headers=headers)
         data = json.loads(urllib.request.urlopen(req2, timeout=6).read())
-        url = data['results'][0]['image']
-        _word_img_cache[query] = url
-        return url
+        return [r['image'] for r in data['results'][:n] if r.get('image')]
     except Exception:
-        return ''
+        return []
+
+
+def _ddg_image(query):
+    """Fetch first DDG image result for query. Returns URL string or ''."""
+    if query in _word_img_cache:
+        return _word_img_cache[query]
+    urls = _ddg_images(query, n=1)
+    url = urls[0] if urls else ''
+    if url:
+        _word_img_cache[query] = url
+    return url
+
+
+def _cache_image(url):
+    """Download and cache an image locally. Returns /img-cache/ path or original URL on failure."""
+    if not url or url.startswith('/img-cache/'):
+        return url
+    h = hashlib.md5(url.encode()).hexdigest()
+    ext = '.jpg'
+    clean = url.split('?')[0].lower()
+    for e in ('.png', '.gif', '.webp', '.jpeg'):
+        if clean.endswith(e):
+            ext = '.jpg' if e == '.jpeg' else e
+            break
+    filename = h + ext
+    local_path = os.path.join(IMG_CACHE_DIR, filename)
+    if not os.path.exists(local_path):
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0 (compatible; arcade/1.0)'}
+            req = urllib.request.Request(url, headers=headers)
+            data = urllib.request.urlopen(req, timeout=8).read()
+            if len(data) > 200:
+                with open(local_path, 'wb') as f:
+                    f.write(data)
+        except Exception:
+            return url
+    return f'/img-cache/{filename}'
+
+
+# ── Vocab SQLite DB ───────────────────────────────────────────────────────────
+
+def _vocab_conn():
+    return sqlite3.connect(VOCAB_DB, check_same_thread=False)
+
+
+def _vocab_init():
+    con = _vocab_conn()
+    cur = con.cursor()
+    cur.executescript("""
+        CREATE TABLE IF NOT EXISTS vocab_words (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lang TEXT NOT NULL,
+            level INTEGER NOT NULL,
+            word TEXT NOT NULL,
+            search TEXT NOT NULL,
+            easy_json TEXT NOT NULL,
+            hard_json TEXT NOT NULL,
+            source TEXT DEFAULT 'builtin',
+            UNIQUE(lang, word)
+        );
+        CREATE TABLE IF NOT EXISTS vocab_images (
+            search TEXT NOT NULL,
+            url TEXT NOT NULL,
+            added_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (search, url)
+        );
+        CREATE TABLE IF NOT EXISTS vocab_custom_sets (
+            id TEXT PRIMARY KEY,
+            label TEXT NOT NULL,
+            words_json TEXT NOT NULL
+        );
+    """)
+
+    def js(lst):
+        return json.dumps(lst)
+
+    seed = [
+        # lang, level, word, search, easy_json, hard_json
+        # English level 1
+        ('en', 1, 'excavator',  'excavator machine',
+         js([{'w':'bee','s':'bee insect'},{'w':'rainbow','s':'rainbow sky'}]),
+         js([{'w':'bulldozer','s':'bulldozer machine'},{'w':'dump truck','s':'dump truck vehicle'}])),
+        ('en', 1, 'elephant',   'elephant animal',
+         js([{'w':'pencil','s':'pencil school'},{'w':'lamp','s':'lamp light'}]),
+         js([{'w':'rhinoceros','s':'rhinoceros animal'},{'w':'hippopotamus','s':'hippopotamus animal'}])),
+        ('en', 1, 'sunflower',  'sunflower plant',
+         js([{'w':'shoe','s':'shoe footwear'},{'w':'clock','s':'clock time'}]),
+         js([{'w':'daisy','s':'daisy flower'},{'w':'tulip','s':'tulip flower'}])),
+        ('en', 1, 'lighthouse', 'lighthouse coast',
+         js([{'w':'butterfly','s':'butterfly insect'},{'w':'fork','s':'fork utensil'}]),
+         js([{'w':'windmill','s':'windmill building'},{'w':'water tower','s':'water tower structure'}])),
+        ('en', 1, 'pineapple',  'pineapple fruit',
+         js([{'w':'hammer','s':'hammer tool'},{'w':'sock','s':'sock clothing'}]),
+         js([{'w':'mango','s':'mango fruit'},{'w':'papaya','s':'papaya fruit'}])),
+        ('en', 1, 'strawberry', 'strawberry fruit',
+         js([{'w':'airplane','s':'airplane aircraft'},{'w':'wrench','s':'wrench tool'}]),
+         js([{'w':'raspberry','s':'raspberry fruit'},{'w':'blueberry','s':'blueberry fruit'}])),
+        ('en', 1, 'cactus',     'cactus desert',
+         js([{'w':'fish','s':'fish animal'},{'w':'bed','s':'bed furniture'}]),
+         js([{'w':'aloe vera','s':'aloe vera plant'},{'w':'yucca','s':'yucca plant'}])),
+        ('en', 1, 'volcano',    'volcano erupting',
+         js([{'w':'cupcake','s':'cupcake dessert'},{'w':'mitten','s':'mitten clothing'}]),
+         js([{'w':'mountain','s':'mountain landscape'},{'w':'geyser','s':'geyser nature'}])),
+        ('en', 1, 'accordion',  'accordion instrument',
+         js([{'w':'apple','s':'apple fruit'},{'w':'ladder','s':'ladder tool'}]),
+         js([{'w':'harmonica','s':'harmonica instrument'},{'w':'concertina','s':'concertina instrument'}])),
+        ('en', 1, 'flamingo',   'flamingo bird',
+         js([{'w':'pizza','s':'pizza food'},{'w':'umbrella','s':'umbrella rain'}]),
+         js([{'w':'pelican','s':'pelican bird'},{'w':'heron','s':'heron bird'}])),
+        # English level 2
+        ('en', 2, 'trebuchet',  'trebuchet siege weapon',
+         js([{'w':'fish','s':'fish animal'},{'w':'cupcake','s':'cupcake dessert'}]),
+         js([{'w':'catapult','s':'catapult siege weapon'},{'w':'ballista','s':'ballista siege weapon'}])),
+        ('en', 2, 'platypus',   'platypus animal',
+         js([{'w':'car','s':'car vehicle'},{'w':'house','s':'house building'}]),
+         js([{'w':'echidna','s':'echidna animal'},{'w':'beaver','s':'beaver animal'}])),
+        ('en', 2, 'mangrove',   'mangrove forest',
+         js([{'w':'bicycle','s':'bicycle vehicle'},{'w':'hat','s':'hat clothing'}]),
+         js([{'w':'cypress tree','s':'cypress tree forest'},{'w':'banyan tree','s':'banyan tree forest'}])),
+        ('en', 2, 'geode',      'geode crystal',
+         js([{'w':'sock','s':'sock clothing'},{'w':'spoon','s':'spoon utensil'}]),
+         js([{'w':'amethyst','s':'amethyst crystal'},{'w':'quartz','s':'quartz crystal'}])),
+        ('en', 2, 'periscope',  'periscope submarine',
+         js([{'w':'flower','s':'flower plant'},{'w':'glove','s':'glove clothing'}]),
+         js([{'w':'telescope','s':'telescope instrument'},{'w':'kaleidoscope','s':'kaleidoscope toy'}])),
+        ('en', 2, 'trowel',     'trowel garden tool',
+         js([{'w':'cloud','s':'cloud sky'},{'w':'shoe','s':'shoe footwear'}]),
+         js([{'w':'spatula','s':'spatula kitchen tool'},{'w':'palette knife','s':'palette knife art'}])),
+        ('en', 2, 'kayak',      'kayak paddling',
+         js([{'w':'pencil','s':'pencil school'},{'w':'mushroom','s':'mushroom plant'}]),
+         js([{'w':'canoe','s':'canoe boat'},{'w':'rowboat','s':'rowboat boat'}])),
+        ('en', 2, 'abacus',     'abacus counting beads',
+         js([{'w':'dog','s':'dog animal'},{'w':'balloon','s':'balloon toy'}]),
+         js([{'w':'calculator','s':'calculator device'},{'w':'slide rule','s':'slide rule calculator'}])),
+        ('en', 2, 'stalactite', 'stalactite cave',
+         js([{'w':'apple','s':'apple fruit'},{'w':'lamp','s':'lamp light'}]),
+         js([{'w':'stalagmite','s':'stalagmite cave'},{'w':'icicle','s':'icicle ice'}])),
+        ('en', 2, 'catamaran',  'catamaran sailboat',
+         js([{'w':'chair','s':'chair furniture'},{'w':'tomato','s':'tomato vegetable'}]),
+         js([{'w':'trimaran','s':'trimaran sailboat'},{'w':'sailboat','s':'sailboat ocean'}])),
+        # Spanish level 1
+        ('es', 1, 'excavadora', 'excavator machine',
+         js([{'w':'abeja','s':'bee insect'},{'w':'arcoíris','s':'rainbow sky'}]),
+         js([{'w':'bulldozer','s':'bulldozer machine'},{'w':'camión volquete','s':'dump truck vehicle'}])),
+        ('es', 1, 'elefante',   'elephant animal',
+         js([{'w':'lápiz','s':'pencil school'},{'w':'lámpara','s':'lamp light'}]),
+         js([{'w':'rinoceronte','s':'rhinoceros animal'},{'w':'hipopótamo','s':'hippopotamus animal'}])),
+        ('es', 1, 'girasol',    'sunflower plant',
+         js([{'w':'zapato','s':'shoe footwear'},{'w':'reloj','s':'clock time'}]),
+         js([{'w':'margarita','s':'daisy flower'},{'w':'tulipán','s':'tulip flower'}])),
+        ('es', 1, 'faro',       'lighthouse coast',
+         js([{'w':'mariposa','s':'butterfly insect'},{'w':'tenedor','s':'fork utensil'}]),
+         js([{'w':'molino de viento','s':'windmill building'},{'w':'torre de agua','s':'water tower structure'}])),
+        ('es', 1, 'piña',       'pineapple fruit',
+         js([{'w':'martillo','s':'hammer tool'},{'w':'calcetín','s':'sock clothing'}]),
+         js([{'w':'mango','s':'mango fruit'},{'w':'papaya','s':'papaya fruit'}])),
+        ('es', 1, 'fresa',      'strawberry fruit',
+         js([{'w':'avión','s':'airplane aircraft'},{'w':'llave inglesa','s':'wrench tool'}]),
+         js([{'w':'frambuesa','s':'raspberry fruit'},{'w':'arándano','s':'blueberry fruit'}])),
+        ('es', 1, 'cactus',     'cactus desert',
+         js([{'w':'pez','s':'fish animal'},{'w':'cama','s':'bed furniture'}]),
+         js([{'w':'aloe vera','s':'aloe vera plant'},{'w':'yuca','s':'yucca plant'}])),
+        ('es', 1, 'volcán',     'volcano erupting',
+         js([{'w':'pastelito','s':'cupcake dessert'},{'w':'manopla','s':'mitten clothing'}]),
+         js([{'w':'montaña','s':'mountain landscape'},{'w':'géiser','s':'geyser nature'}])),
+        ('es', 1, 'acordeón',   'accordion instrument',
+         js([{'w':'manzana','s':'apple fruit'},{'w':'escalera','s':'ladder tool'}]),
+         js([{'w':'armónica','s':'harmonica instrument'},{'w':'concertina','s':'concertina instrument'}])),
+        ('es', 1, 'flamenco',   'flamingo bird',
+         js([{'w':'pizza','s':'pizza food'},{'w':'paraguas','s':'umbrella rain'}]),
+         js([{'w':'pelícano','s':'pelican bird'},{'w':'garza','s':'heron bird'}])),
+        # Spanish level 2
+        ('es', 2, 'trabuco',         'trebuchet siege weapon',
+         js([{'w':'pez','s':'fish animal'},{'w':'pastelito','s':'cupcake dessert'}]),
+         js([{'w':'catapulta','s':'catapult siege weapon'},{'w':'ballesta','s':'ballista siege weapon'}])),
+        ('es', 2, 'ornitorrinco',    'platypus animal',
+         js([{'w':'coche','s':'car vehicle'},{'w':'casa','s':'house building'}]),
+         js([{'w':'equidna','s':'echidna animal'},{'w':'castor','s':'beaver animal'}])),
+        ('es', 2, 'manglar',         'mangrove forest',
+         js([{'w':'bicicleta','s':'bicycle vehicle'},{'w':'sombrero','s':'hat clothing'}]),
+         js([{'w':'ciprés','s':'cypress tree forest'},{'w':'baniano','s':'banyan tree forest'}])),
+        ('es', 2, 'geoda',           'geode crystal',
+         js([{'w':'calcetín','s':'sock clothing'},{'w':'cuchara','s':'spoon utensil'}]),
+         js([{'w':'amatista','s':'amethyst crystal'},{'w':'cuarzo','s':'quartz crystal'}])),
+        ('es', 2, 'periscopio',      'periscope submarine',
+         js([{'w':'flor','s':'flower plant'},{'w':'guante','s':'glove clothing'}]),
+         js([{'w':'telescopio','s':'telescope instrument'},{'w':'calidoscopio','s':'kaleidoscope toy'}])),
+        ('es', 2, 'paleta de albañil', 'trowel masonry tool',
+         js([{'w':'nube','s':'cloud sky'},{'w':'zapato','s':'shoe footwear'}]),
+         js([{'w':'espátula','s':'spatula kitchen tool'},{'w':'paleta de pintor','s':'palette knife art'}])),
+        ('es', 2, 'kayak',           'kayak paddling',
+         js([{'w':'lápiz','s':'pencil school'},{'w':'seta','s':'mushroom plant'}]),
+         js([{'w':'canoa','s':'canoe boat'},{'w':'bote de remos','s':'rowboat boat'}])),
+        ('es', 2, 'ábaco',           'abacus counting beads',
+         js([{'w':'perro','s':'dog animal'},{'w':'globo','s':'balloon toy'}]),
+         js([{'w':'calculadora','s':'calculator device'},{'w':'regla de cálculo','s':'slide rule calculator'}])),
+        ('es', 2, 'estalactita',     'stalactite cave',
+         js([{'w':'manzana','s':'apple fruit'},{'w':'lámpara','s':'lamp light'}]),
+         js([{'w':'estalagmita','s':'stalagmite cave'},{'w':'carámbano','s':'icicle ice'}])),
+        ('es', 2, 'catamarán',       'catamaran sailboat',
+         js([{'w':'silla','s':'chair furniture'},{'w':'tomate','s':'tomato vegetable'}]),
+         js([{'w':'trimarán','s':'trimaran sailboat'},{'w':'velero','s':'sailboat ocean'}])),
+    ]
+
+    # INSERT OR IGNORE so re-running doesn't duplicate or overwrite
+    cur.executemany(
+        "INSERT OR IGNORE INTO vocab_words (lang,level,word,search,easy_json,hard_json) VALUES (?,?,?,?,?,?)",
+        seed
+    )
+    con.commit()
+    con.close()
+
+
+_vocab_init()
+
+
+def _vocab_get_images(search, n=4):
+    con = _vocab_conn()
+    cur = con.cursor()
+    rows = cur.execute(
+        "SELECT url FROM vocab_images WHERE search=? LIMIT ?", (search, n)
+    ).fetchall()
+    urls = [r[0] for r in rows]
+    if len(urls) >= n:
+        con.close()
+        return urls
+    fetched = _ddg_images(search, n=6)
+    if fetched:
+        cur.executemany(
+            "INSERT OR IGNORE INTO vocab_images (search,url) VALUES (?,?)",
+            [(search, u) for u in fetched]
+        )
+        con.commit()
+        all_rows = cur.execute(
+            "SELECT url FROM vocab_images WHERE search=? LIMIT ?", (search, n)
+        ).fetchall()
+        urls = [r[0] for r in all_rows]
+    con.close()
+    return urls
+
+
+def _slugify(text):
+    slug = re.sub(r'[^a-z0-9]+', '_', text.lower()).strip('_')
+    return slug or 'set'
+
+
+def _load_custom_sets():
+    try:
+        with open(CUSTOM_SETS_FILE) as f:
+            return json.load(f).get('sets', [])
+    except FileNotFoundError:
+        return []
+
+
+def _save_custom_sets(sets):
+    try:
+        with open(CUSTOM_SETS_FILE) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        data = {}
+    data['sets'] = sets
+    with open(CUSTOM_SETS_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def _load_spelling_sets():
+    try:
+        with open(CUSTOM_SETS_FILE) as f:
+            return json.load(f).get('spelling_sets', [])
+    except FileNotFoundError:
+        return []
+
+
+def _save_spelling_sets(sets):
+    try:
+        with open(CUSTOM_SETS_FILE) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        data = {}
+    data['spelling_sets'] = sets
+    with open(CUSTOM_SETS_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def _load_item_sets():
+    try:
+        with open(CUSTOM_SETS_FILE) as f:
+            return json.load(f).get('item_sets', [])
+    except FileNotFoundError:
+        return []
+
+
+def _save_item_sets(sets):
+    try:
+        with open(CUSTOM_SETS_FILE) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        data = {}
+    data['item_sets'] = sets
+    with open(CUSTOM_SETS_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def _load_ss_word_sets():
+    try:
+        with open(CUSTOM_SETS_FILE) as f:
+            return json.load(f).get('ss_word_sets', [])
+    except FileNotFoundError:
+        return []
+
+
+def _save_ss_word_sets(sets):
+    try:
+        with open(CUSTOM_SETS_FILE) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        data = {}
+    data['ss_word_sets'] = sets
+    with open(CUSTOM_SETS_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -154,6 +518,51 @@ def serve_game(filename):
     if filename not in _ALLOWED:
         abort(404)
     return send_from_directory(BASE_DIR, filename)
+
+
+@app.route('/audio/<path:filename>')
+def serve_audio(filename):
+    if not re.fullmatch(r'[a-z0-9_]+\.mp3', filename):
+        abort(404)
+    audio_dir = os.path.join(BASE_DIR, 'audio')
+    if not os.path.isfile(os.path.join(audio_dir, filename)):
+        abort(404)
+    return send_from_directory(audio_dir, filename)
+
+
+@app.route('/img-cache/<filename>')
+def serve_img_cache(filename):
+    if not re.fullmatch(r'[a-f0-9]{32}\.(jpg|png|gif|webp)', filename):
+        abort(404)
+    filepath = os.path.join(IMG_CACHE_DIR, filename)
+    if not os.path.isfile(filepath):
+        abort(404)
+    return send_from_directory(IMG_CACHE_DIR, filename)
+
+
+_tts_cache = {}  # (word, lang) → cached mp3 bytes
+
+@app.route('/api/tts')
+def tts_word():
+    word = request.args.get('word', '').strip()[:40]
+    lang = request.args.get('lang', 'en').strip()[:5]
+    if lang not in ('en', 'es', 'fr', 'de', 'pt', 'it', 'ja', 'zh'):
+        lang = 'en'
+    # Allow unicode letters for Spanish words (ñ, á, etc.)
+    if not word or not re.match(r'^[\w\s\'\-áéíóúüñÁÉÍÓÚÜÑ]+$', word, re.UNICODE):
+        abort(400)
+    key = (word.lower(), lang)
+    if key not in _tts_cache:
+        try:
+            from gtts import gTTS
+            import io as _io
+            buf = _io.BytesIO()
+            gTTS(text=word, lang=lang, slow=True).write_to_fp(buf)
+            _tts_cache[key] = buf.getvalue()
+        except Exception:
+            abort(500)
+    from flask import Response
+    return Response(_tts_cache[key], mimetype='audio/mpeg')
 
 
 @app.route('/api/settings', methods=['GET'])
@@ -183,9 +592,204 @@ def save_settings():
     return '', 204
 
 
+@app.route('/api/custom-sets', methods=['GET'])
+def list_custom_sets():
+    return jsonify({'sets': _load_custom_sets()})
+
+
+@app.route('/api/custom-sets/preview', methods=['POST'])
+def preview_custom_set():
+    data = request.get_json(force=True, silent=True) or {}
+    bins = data.get('bins', [])
+    if not (2 <= len(bins) <= 4):
+        return jsonify({'error': 'need 2-4 bins'}), 400
+
+    out_bins = []
+    for b in bins:
+        label = (b.get('label') or '').strip()
+        query = (b.get('query') or label).strip()
+        if not label or not query:
+            return jsonify({'error': 'each bin needs a label'}), 400
+        images = _ddg_images(query, n=10)
+        out_bins.append({'label': label, 'query': query, 'images': images})
+    return jsonify({'bins': out_bins})
+
+
+@app.route('/api/custom-sets', methods=['POST'])
+def create_custom_set():
+    data = request.get_json(force=True, silent=True) or {}
+    label = (data.get('label') or '').strip()
+    bins = data.get('bins', [])
+    if not label or not (2 <= len(bins) <= 4):
+        return jsonify({'error': 'need a label and 2-4 bins'}), 400
+
+    clean_bins = []
+    for b in bins:
+        blabel = (b.get('label') or '').strip()
+        images = [u for u in b.get('images', []) if isinstance(u, str) and (u.startswith('http') or u.startswith('/img-cache/'))]
+        if not blabel or len(images) < 2:
+            return jsonify({'error': 'each bin needs a label and at least 2 images'}), 400
+        cached = [_cache_image(u) for u in images]
+        clean_bins.append({
+            'key':    _slugify(blabel),
+            'label':  blabel,
+            'icon':   (b.get('icon') or '📦')[:8],
+            'images': cached,
+        })
+
+    sets = _load_custom_sets()
+    base_id = _slugify(label)
+    existing_ids = {s['id'] for s in sets}
+    set_id = base_id
+    i = 2
+    while set_id in existing_ids:
+        set_id = f"{base_id}_{i}"
+        i += 1
+
+    new_set = {'id': set_id, 'label': label, 'bins': clean_bins}
+    sets.append(new_set)
+    _save_custom_sets(sets)
+    return jsonify(new_set), 201
+
+
+@app.route('/api/custom-sets/<set_id>', methods=['DELETE'])
+def delete_custom_set(set_id):
+    sets = _load_custom_sets()
+    sets = [s for s in sets if s['id'] != set_id]
+    _save_custom_sets(sets)
+    return '', 204
+
+
+@app.route('/api/spelling-sets', methods=['GET'])
+def list_spelling_sets():
+    return jsonify({'sets': _load_spelling_sets()})
+
+
+@app.route('/api/spelling-sets', methods=['POST'])
+def create_spelling_set():
+    data = request.get_json(force=True, silent=True) or {}
+    label = (data.get('label') or '').strip()
+    words = data.get('words', [])
+    if not label:
+        return jsonify({'error': 'need a label'}), 400
+    clean = [w.strip().upper() for w in words if isinstance(w, str) and w.strip()]
+    clean = [w for w in clean if re.match(r"^[A-Z][A-Z'\- ]*$", w)]
+    if len(clean) < 2:
+        return jsonify({'error': 'need at least 2 valid words'}), 400
+
+    sets = _load_spelling_sets()
+    base_id = _slugify(label)
+    existing_ids = {s['id'] for s in sets}
+    set_id = base_id
+    i = 2
+    while set_id in existing_ids:
+        set_id = f"{base_id}_{i}"
+        i += 1
+    new_set = {'id': set_id, 'label': label, 'words': clean}
+    sets.append(new_set)
+    _save_spelling_sets(sets)
+    return jsonify(new_set), 201
+
+
+@app.route('/api/spelling-sets/<set_id>', methods=['DELETE'])
+def delete_spelling_set(set_id):
+    sets = [s for s in _load_spelling_sets() if s['id'] != set_id]
+    _save_spelling_sets(sets)
+    return '', 204
+
+
+@app.route('/api/images/search', methods=['POST'])
+def images_search():
+    data = request.get_json(force=True, silent=True) or {}
+    query = (data.get('query') or '').strip()
+    if not query or len(query) > 120:
+        return jsonify({'error': 'query required'}), 400
+    images = _ddg_images(query, n=12)
+    return jsonify({'images': images})
+
+
+@app.route('/api/item-sets', methods=['GET'])
+def list_item_sets():
+    return jsonify({'sets': _load_item_sets()})
+
+
+@app.route('/api/item-sets', methods=['POST'])
+def create_item_set():
+    data = request.get_json(force=True, silent=True) or {}
+    label = (data.get('label') or '').strip()
+    images = data.get('images', [])
+    if not label:
+        return jsonify({'error': 'need a label'}), 400
+    clean = [u for u in images if isinstance(u, str) and (u.startswith('http') or u.startswith('/img-cache/'))]
+    if len(clean) < 2:
+        return jsonify({'error': 'need at least 2 images'}), 400
+    cached = [_cache_image(u) for u in clean]
+
+    sets = _load_item_sets()
+    base_id = _slugify(label)
+    existing_ids = {s['id'] for s in sets}
+    set_id = base_id
+    i = 2
+    while set_id in existing_ids:
+        set_id = f'{base_id}_{i}'
+        i += 1
+    new_set = {'id': set_id, 'label': label, 'images': cached}
+    sets.append(new_set)
+    _save_item_sets(sets)
+    return jsonify(new_set), 201
+
+
+@app.route('/api/item-sets/<set_id>', methods=['DELETE'])
+def delete_item_set(set_id):
+    sets = [s for s in _load_item_sets() if s['id'] != set_id]
+    _save_item_sets(sets)
+    return '', 204
+
+
+@app.route('/api/word-image')
+def word_image():
+    word = re.sub(r'[^a-zA-Z\s]', '', request.args.get('word', '').strip().lower())[:40]
+    if not word:
+        return jsonify({'url': None})
+    imgs = _ddg_images(word, n=4)
+    for url in imgs:
+        cached = _cache_image(url)
+        if cached and cached.startswith('/img-cache/'):
+            return jsonify({'url': cached})
+    return jsonify({'url': None})
+
+
+@app.route('/api/ss-word-sets', methods=['GET'])
+def list_ss_word_sets():
+    return jsonify({'sets': _load_ss_word_sets()})
+
+
+@app.route('/api/ss-word-sets', methods=['POST'])
+def create_ss_word_set():
+    data = request.get_json(force=True, silent=True) or {}
+    label = (data.get('label') or '').strip()[:60]
+    raw = data.get('words', [])
+    words = [w.strip().lower() for w in raw if isinstance(w, str) and w.strip()]
+    words = [w for w in words if re.match(r'^[a-z]{2,20}$', w)][:100]
+    if not label or len(words) < 1:
+        return jsonify({'error': 'label and at least 1 word required'}), 400
+    set_id = 'ssw_' + hashlib.md5((label + '|' + ','.join(words)).encode()).hexdigest()[:8]
+    sets = _load_ss_word_sets()
+    new_set = {'id': set_id, 'label': label, 'words': words}
+    sets.append(new_set)
+    _save_ss_word_sets(sets)
+    return jsonify(new_set), 201
+
+
+@app.route('/api/ss-word-sets/<set_id>', methods=['DELETE'])
+def delete_ss_word_set(set_id):
+    sets = [s for s in _load_ss_word_sets() if s['id'] != set_id]
+    _save_ss_word_sets(sets)
+    return '', 204
+
+
 @app.route('/api/letter-words')
 def letter_words():
-    """Return a random word + DDG image URL for the given letter."""
     letter = request.args.get('letter', 'A').upper()
     words_file = os.path.join(BASE_DIR, 'letter_words.json')
     try:
@@ -201,7 +805,8 @@ def letter_words():
 
 @app.route('/api/recognize-letter', methods=['POST'])
 def recognize_letter():
-    """Run EMNIST inference on a base64-encoded canvas PNG."""
+    """Use Claude Haiku vision to identify the handwritten letter."""
+    import anthropic
     import numpy as np
     from PIL import Image
 
@@ -209,50 +814,257 @@ def recognize_letter():
     if not data or 'image' not in data:
         return jsonify({'error': 'missing image'}), 400
 
-    # Decode base64 PNG from canvas.toDataURL('image/png')
-    header, b64 = data['image'].split(',', 1)
+    img_data = data['image']
+    _, b64 = img_data.split(',', 1) if ',' in img_data else ('', img_data)
+
+    # Crop to ink bounding box so Haiku gets a clean, well-framed letter
     img_bytes = base64.b64decode(b64)
-    img = Image.open(io.BytesIO(img_bytes)).convert('L')  # grayscale
-
-    # Crop to bounding box of ink, then resize to 28×28
-    arr_full = __import__('numpy').array(img)
-    # Find rows/cols with dark pixels (ink is dark on white canvas)
-    dark = arr_full < 200
-    rows = dark.any(axis=1)
-    cols = dark.any(axis=0)
+    img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
+    gray = np.array(img.convert('L'))
+    dark = gray < 200
+    rows, cols = dark.any(axis=1), dark.any(axis=0)
     if rows.any() and cols.any():
-        r0, r1 = rows.argmax(), len(rows) - rows[::-1].argmax()
-        c0, c1 = cols.argmax(), len(cols) - cols[::-1].argmax()
-        pad = max((r1 - r0), (c1 - c0)) // 6
-        r0 = max(0, r0 - pad); r1 = min(arr_full.shape[0], r1 + pad)
-        c0 = max(0, c0 - pad); c1 = min(arr_full.shape[1], c1 + pad)
-        cropped = img.crop((c0, r0, c1, r1))
-        # Pad to square
-        w, h = cropped.size
-        side = max(w, h)
-        square = Image.new('L', (side, side), 255)
-        square.paste(cropped, ((side - w) // 2, (side - h) // 2))
-        img = square
+        r0, r1 = int(rows.argmax()), int(len(rows) - rows[::-1].argmax())
+        c0, c1 = int(cols.argmax()), int(len(cols) - cols[::-1].argmax())
+        pad = max(r1 - r0, c1 - c0) // 5
+        r0 = max(0, r0 - pad); r1 = min(gray.shape[0], r1 + pad)
+        c0 = max(0, c0 - pad); c1 = min(gray.shape[1], c1 + pad)
+        img = img.crop((c0, r0, c1, r1))
 
-    arr = np.array(img.resize((28, 28), Image.LANCZOS), dtype=np.float32)
-    # Invert: EMNIST expects white letter on black background
-    arr = 1.0 - arr / 255.0
-    # EMNIST images are transposed relative to how we draw — rotate 90° + flip
-    arr = np.rot90(arr, k=3)          # rotate CCW 270° = CW 90°
-    arr = np.fliplr(arr)
-    arr = arr.reshape(1, 1, 28, 28)   # NCHW
+    img = img.resize((280, 280), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    b64_clean = base64.b64encode(buf.getvalue()).decode()
 
-    sess = _get_sess()
-    out = sess.run(None, {sess.get_inputs()[0].name: arr})[0][0]
-    ex = np.exp(out - out.max())
-    probs = (ex / ex.sum()).tolist()
-    top3 = sorted(enumerate(probs), key=lambda x: -x[1])[:3]
+    target = (data.get('target') or '').strip().upper()
+    stroke_count = data.get('stroke_count', '?')
 
-    return jsonify({
-        'letter': chr(65 + top3[0][0]),
-        'confidence': round(top3[0][1], 4),
-        'top3': [{'letter': chr(65 + i), 'prob': round(p, 4)} for i, p in top3],
-    })
+    if not (len(target) == 1 and target.isalpha()):
+        return jsonify({'error': 'missing target letter'}), 400
+
+    prompt = (
+        f"A young child (pre-K/kindergarten, age 3-6) is practicing writing the "
+        f"uppercase letter '{target}'. They used {stroke_count} stroke(s). "
+        f"Does this drawing show a reasonable attempt at '{target}'? "
+        f"Be encouraging and lenient — wobbly or partial shapes count if the "
+        f"general form is recognizable. Reply with exactly one word: YES or NO."
+    )
+
+    try:
+        client = anthropic.Anthropic()
+        msg = client.messages.create(
+            model='claude-haiku-4-5-20251001',
+            max_tokens=5,
+            messages=[{'role': 'user', 'content': [
+                {'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/png', 'data': b64_clean}},
+                {'type': 'text', 'text': prompt},
+            ]}],
+        )
+        accepted = msg.content[0].text.strip().upper().startswith('Y')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify({'accepted': accepted, 'letter': target})
+
+
+# ── Vocab Builder routes ──────────────────────────────────────────────────────
+
+def _build_rounds(words, mode):
+    rounds = []
+    for row in words:
+        word, search, easy_json, hard_json = row[2], row[3], row[4], row[5]
+        distractors = json.loads(easy_json if mode == 'easy' else hard_json)
+        target_imgs = [_cache_image(u) for u in _vocab_get_images(search, n=3) if u]
+        choices = [{'word': word, 'display_word': word, 'images': target_imgs, 'correct': True}]
+        for d in distractors[:2]:
+            d_imgs = [_cache_image(u) for u in _vocab_get_images(d['s'], n=3) if u]
+            choices.append({'word': d['w'], 'display_word': d['w'], 'images': d_imgs, 'correct': False})
+        random.shuffle(choices)
+        rounds.append({'word': word, 'display_word': word, 'choices': choices})
+    return rounds
+
+
+@app.route('/api/vocab/level')
+def vocab_level():
+    lang = request.args.get('lang', 'en').strip()
+    try:
+        level = int(request.args.get('level', 1))
+    except ValueError:
+        level = 1
+    mode = request.args.get('mode', 'easy').strip()
+    if mode not in ('easy', 'challenge'):
+        mode = 'easy'
+
+    con = _vocab_conn()
+    rows = con.execute(
+        "SELECT id,lang,word,search,easy_json,hard_json FROM vocab_words WHERE lang=? AND level=?",
+        (lang, level)
+    ).fetchall()
+    con.close()
+
+    if not rows:
+        return jsonify({'error': 'no words found for this level'}), 404
+
+    selected = random.sample(rows, min(5, len(rows)))
+    rounds = _build_rounds(selected, mode)
+    return jsonify({'level': level, 'lang': lang, 'mode': mode, 'rounds': rounds})
+
+
+@app.route('/api/vocab/generate-level', methods=['POST'])
+def vocab_generate_level():
+    import anthropic as _anthropic
+    data = request.get_json(force=True, silent=True) or {}
+    lang = data.get('lang', 'en')
+    current_level = int(data.get('current_level', 1))
+    seed_words = data.get('seed_words', [])
+    next_level = current_level + 1
+
+    con = _vocab_conn()
+    existing = con.execute(
+        "SELECT COUNT(*) FROM vocab_words WHERE lang=? AND level=?", (lang, next_level)
+    ).fetchone()[0]
+
+    if existing > 0:
+        con.close()
+        return jsonify({'level': next_level, 'words_added': 0, 'existed': True})
+
+    lang_name = 'Spanish' if lang == 'es' else 'English'
+    prompt = (
+        f"You are building a vocabulary game for children ages 4-10. "
+        f"Generate 10 concrete nouns in {lang_name} that are more advanced than: {', '.join(seed_words)}. "
+        f"Return a JSON array of objects, each with: "
+        f"word (the display word in {lang_name}), "
+        f"search (English image search term for finding photos), "
+        f"easy (array of 2 objects {{w, s}} where w is the distractor display word and s is its English image search term — choose very different objects), "
+        f"hard (array of 2 objects {{w, s}} — choose similar objects in the same category as the word). "
+        f"Return only the JSON array, no markdown."
+    )
+
+    try:
+        client = _anthropic.Anthropic()
+        msg = client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=2000,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        raw = msg.content[0].text.strip()
+        # Strip markdown fences if present
+        raw = re.sub(r'^```[a-z]*\n?', '', raw, flags=re.MULTILINE)
+        raw = re.sub(r'\n?```$', '', raw, flags=re.MULTILINE)
+        words = json.loads(raw)
+    except Exception as e:
+        con.close()
+        return jsonify({'error': str(e)}), 500
+
+    added = 0
+    for w in words:
+        try:
+            easy_json = json.dumps(w.get('easy', []))
+            hard_json = json.dumps(w.get('hard', []))
+            cur = con.execute(
+                "INSERT OR IGNORE INTO vocab_words (lang,level,word,search,easy_json,hard_json,source) VALUES (?,?,?,?,?,?,?)",
+                (lang, next_level, w['word'], w['search'], easy_json, hard_json, 'ai')
+            )
+            added += cur.rowcount
+        except Exception:
+            pass
+    con.commit()
+    con.close()
+    return jsonify({'level': next_level, 'words_added': added})
+
+
+@app.route('/api/vocab/custom-sets', methods=['GET'])
+def list_vocab_custom_sets():
+    con = _vocab_conn()
+    rows = con.execute("SELECT id, label, words_json FROM vocab_custom_sets").fetchall()
+    con.close()
+    sets = [{'id': r[0], 'label': r[1], 'words': json.loads(r[2])} for r in rows]
+    return jsonify({'sets': sets})
+
+
+@app.route('/api/vocab/custom-sets', methods=['POST'])
+def create_vocab_custom_set():
+    data = request.get_json(force=True, silent=True) or {}
+    label = (data.get('label') or '').strip()
+    words = data.get('words', [])
+
+    if not label:
+        return jsonify({'error': 'need a label'}), 400
+    if len(words) < 2:
+        return jsonify({'error': 'need at least 2 words'}), 400
+
+    clean = []
+    for w in words:
+        if not isinstance(w, dict):
+            continue
+        word = (w.get('word') or '').strip()
+        search = (w.get('search') or '').strip()
+        easy = w.get('easy', [])
+        hard = w.get('hard', [])
+        if not word or not search:
+            return jsonify({'error': f'word entry missing word or search'}), 400
+        if len(easy) < 2 or len(hard) < 2:
+            return jsonify({'error': f'"{word}" needs 2 easy and 2 hard distractors'}), 400
+        clean.append({'word': word, 'search': search, 'easy': easy[:2], 'hard': hard[:2]})
+
+    con = _vocab_conn()
+    base_id = _slugify(label)
+    existing_ids = {r[0] for r in con.execute("SELECT id FROM vocab_custom_sets").fetchall()}
+    set_id = base_id
+    i = 2
+    while set_id in existing_ids:
+        set_id = f"{base_id}_{i}"
+        i += 1
+
+    con.execute(
+        "INSERT INTO vocab_custom_sets (id, label, words_json) VALUES (?,?,?)",
+        (set_id, label, json.dumps(clean))
+    )
+    con.commit()
+    con.close()
+    return jsonify({'id': set_id, 'label': label, 'words': clean}), 201
+
+
+@app.route('/api/vocab/custom-sets/<set_id>', methods=['DELETE'])
+def delete_vocab_custom_set(set_id):
+    con = _vocab_conn()
+    con.execute("DELETE FROM vocab_custom_sets WHERE id=?", (set_id,))
+    con.commit()
+    con.close()
+    return '', 204
+
+
+@app.route('/api/vocab/custom-set-round')
+def vocab_custom_set_round():
+    set_id = request.args.get('set_id', '').strip()
+    mode = request.args.get('mode', 'easy').strip()
+    if mode not in ('easy', 'challenge'):
+        mode = 'easy'
+
+    con = _vocab_conn()
+    row = con.execute(
+        "SELECT words_json FROM vocab_custom_sets WHERE id=?", (set_id,)
+    ).fetchone()
+    con.close()
+
+    if not row:
+        return jsonify({'error': 'custom set not found'}), 404
+
+    words = json.loads(row[0])
+    selected = random.sample(words, min(5, len(words)))
+
+    # Build pseudo-rows matching the format _build_rounds expects
+    pseudo_rows = []
+    for w in selected:
+        pseudo_rows.append((
+            None, None,
+            w['word'], w['search'],
+            json.dumps(w['easy']),
+            json.dumps(w['hard'])
+        ))
+
+    rounds = _build_rounds(pseudo_rows, mode)
+    return jsonify({'mode': mode, 'rounds': rounds})
 
 
 if __name__ == '__main__':

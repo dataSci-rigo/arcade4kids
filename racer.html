@@ -521,7 +521,7 @@ function initState(level = 1, scoreBase = 0, carryHi = null) {
     jumpOffset:    0,
     distance:      0,
     level,
-    levelTimer:    LEVEL_DURATION_FRAMES,
+    levelTimer:    (level <= 2 ? 15 * 60 : LEVEL_DURATION_FRAMES),
     levelComplete: false,
     levelCompleteTimer: 0,
     levelBonus:    0,
@@ -862,7 +862,7 @@ function draw() {
   // Invincibility — rainbow orbiting particle rings
   if (state.invincible > 0) {
     const t  = state.invincible;
-    const cx = px + 4, cy = drawPy + 4;
+    const cx = px, cy = drawPy;
     const RC = ['#FF4444','#FF8800','#FFDD00','#44FF44','#00CCFF','#AA44FF'];
     for (let ring = 0; ring < 3; ring++) {
       const radius = 6 + ring * 4;
@@ -886,7 +886,7 @@ function draw() {
   if (isH && selectedTheme === 'cave' && state.wingSweep > 0.02) {
     const sw     = state.wingSweep;
     const rootX  = px;
-    const rootY  = drawPy + 4;
+    const rootY  = drawPy;
     const span   = 4 + Math.round(sw * 5);    // 4 swept → 9 extended
     const tipOfs = Math.round((1 - sw) * 5);  // 0 extended → 5 swept back
     const c1 = theme.palette[2] || '#88CCFF';

@@ -114,6 +114,14 @@ html, body {
 }
 .garden-obj:active { transform: scale(0.88); }
 .garden-obj.counted { filter: grayscale(60%) brightness(1.1); }
+.garden-img {
+  width: clamp(36px, 9vw, 54px);
+  height: clamp(36px, 9vw, 54px);
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid rgba(255,255,255,.75);
+  box-shadow: 0 2px 6px rgba(0,0,0,.12);
+}
 
 /* Count bubble */
 .count-bubble {
@@ -268,6 +276,32 @@ html, body {
     <button class="opt-btn"          data-val="4" onclick="pickOpt(this,'skip')">4s</button>
   </div>
 
+  <div class="splash-label">Rounds</div>
+  <div class="opt-row" id="rounds-opts">
+    <button class="opt-btn" data-val="5"  onclick="pickOpt(this,'rounds')">5</button>
+    <button class="opt-btn selected" data-val="10" onclick="pickOpt(this,'rounds')">10</button>
+    <button class="opt-btn" data-val="15" onclick="pickOpt(this,'rounds')">15</button>
+    <button class="opt-btn" data-val="20" onclick="pickOpt(this,'rounds')">20</button>
+  </div>
+
+  <div class="splash-label">Read Aloud</div>
+  <div class="opt-row" id="readaloud-opts">
+    <button class="opt-btn selected" data-val="on"  onclick="pickOpt(this,'readAloud')">On 🔊</button>
+    <button class="opt-btn"          data-val="off" onclick="pickOpt(this,'readAloud')">Off 🔇</button>
+  </div>
+
+  <div class="splash-label">Show Number</div>
+  <div class="opt-row" id="shownum-opts">
+    <button class="opt-btn selected" data-val="off" onclick="pickOpt(this,'showNum')">Hidden 🙈</button>
+    <button class="opt-btn"          data-val="on"  onclick="pickOpt(this,'showNum')">Visible 🔢</button>
+  </div>
+
+  <div class="splash-label">Two Groups (Count It)</div>
+  <div class="opt-row" id="twogroups-opts">
+    <button class="opt-btn selected" data-val="off" onclick="pickOpt(this,'twoGroups')">Off</button>
+    <button class="opt-btn"          data-val="on"  onclick="pickOpt(this,'twoGroups')">On 🌻+🐸</button>
+  </div>
+
   <button class="btn-play" onclick="startGame()">PLAY</button>
 </div>
 
@@ -325,7 +359,7 @@ html, body {
 <script>
 const $ = id => document.getElementById(id);
 
-const S = { mode: 'count', diff: 'easy', skip: '1' };
+const S = { mode: 'count', diff: 'easy', skip: '1', rounds: '10', readAloud: 'on', itemSetId: 'emoji', showNum: 'off', twoGroups: 'off' };
 
 const DIFFS = {
   easy:   { min: 1, max: 5 },
@@ -342,7 +376,79 @@ const G = {
   userCount: 0, tappedIndices: new Set(),
   fillCount: 0,
   totalRounds: 10,
+  fillEmoji: '',
+  groupASplit: 0, groupATapped: 0,
+  emojiA: '', emojiB: '',
 };
+
+let ITEM_SETS = [];
+
+async function loadItemSets() {
+  try {
+    const res  = await fetch('/api/item-sets');
+    const data = await res.json();
+    ITEM_SETS = data.sets || [];
+    if (ITEM_SETS.length > 0) buildItemRow();
+  } catch {}
+}
+
+function buildItemRow() {
+  if (document.getElementById('items-opt-row')) return;
+  const splash  = $('splash');
+  const playBtn = splash.querySelector('.btn-play');
+  const lbl = document.createElement('div');
+  lbl.className = 'splash-label';
+  lbl.textContent = 'Items';
+  const row = document.createElement('div');
+  row.className = 'opt-row'; row.id = 'items-opt-row';
+
+  function addItemBtn(label, val) {
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn' + (val === 'emoji' ? ' selected' : '');
+    btn.dataset.val = val;
+    btn.textContent = label;
+    btn.onclick = () => {
+      row.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      S.itemSetId = val;
+    };
+    row.appendChild(btn);
+  }
+  addItemBtn('Emojis 🌻', 'emoji');
+  ITEM_SETS.forEach(s => addItemBtn(s.label, s.id));
+  splash.insertBefore(row, playBtn);
+  splash.insertBefore(lbl, row);
+}
+
+function getItemSet() {
+  if (S.itemSetId === 'emoji') return null;
+  return ITEM_SETS.find(s => s.id === S.itemSetId) || null;
+}
+function randImg(set) {
+  return set.images[Math.floor(Math.random() * set.images.length)];
+}
+function makeItemEl(pos, emoji, small = false) {
+  const set = getItemSet();
+  let el;
+  if (set) {
+    el = document.createElement('img');
+    el.className = 'garden-obj garden-img';
+    el.src = randImg(set);
+    el.draggable = false;
+    el.alt = set.label;
+    if (small) { el.style.width = 'clamp(26px,7vw,38px)'; el.style.height = 'clamp(26px,7vw,38px)'; }
+  } else {
+    el = document.createElement('div');
+    el.className = 'garden-obj';
+    el.textContent = emoji;
+    if (small) el.style.fontSize = 'clamp(28px,7vw,40px)';
+  }
+  el.style.left = pos.x + 'px';
+  el.style.top  = pos.y + 'px';
+  return el;
+}
+
+loadItemSets();
 
 // ── Audio ──
 let audioCtx;
@@ -378,13 +484,10 @@ function playCelebrate() {
     setTimeout(() => playTone(f,'sine',0.22,0.25), i*80));
 }
 
-// ── TTS ──
-function speak(text) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.85; u.pitch = 1.15;
-  window.speechSynthesis.speak(u);
+// ── Read aloud (pre-recorded clips) ──
+function playClip(id) {
+  if (S.readAloud === 'off') return;
+  try { new Audio(`/audio/${id}.mp3`).play().catch(() => {}); } catch {}
 }
 
 // ── Helpers ──
@@ -410,6 +513,7 @@ function shuffle(arr) {
 // ── Start ──
 function startGame() {
   G.round = 0; G.score = 0; G.firstTry = 0;
+  G.totalRounds = parseInt(S.rounds);
   nextRound();
   showScreen('game');
 }
@@ -418,13 +522,17 @@ function nextRound() {
   G.round++;
   G.userCount = 0;
   G.tappedIndices = new Set();
+  tappedGroups.clear();
   G.fillCount = 0;
+  plantedPositions = [];
   G.firstTryThisRound = true;
+  G.groupASplit = 0;
+  G.groupATapped = 0;
 
   const diff = DIFFS[S.diff];
   G.step = parseInt(S.skip);
 
-  if (S.mode === 'skip') {
+  if (S.mode === 'skip' || (S.mode === 'fill' && G.step > 1)) {
     // target must be a multiple of step
     const maxMult = Math.floor(diff.max / G.step);
     const minMult = Math.max(1, Math.floor(diff.min / G.step));
@@ -442,35 +550,50 @@ function nextRound() {
 
 function buildGarden() {
   const garden = $('garden');
-  // Clear old objects (keep ground and count display)
   garden.querySelectorAll('.garden-obj,.group-label').forEach(e => e.remove());
   $('count-display').textContent = '0';
   $('count-display').style.color = 'var(--green)';
 
   const emoji = shuffle(EMOJIS)[0];
+  G.fillEmoji = emoji;
 
   if (S.mode === 'count') {
-    // Scatter G.target objects; player taps each
-    $('question-text').textContent = 'How many are there?';
-    $('question-num').textContent = '';
     $('question-hint').textContent = 'Tap each one to count!';
     $('check-btn').textContent = 'DONE ✅';
     $('count-counter').textContent = '';
 
-    const positions = safePositions(G.target);
-    positions.forEach((pos, i) => {
-      const el = document.createElement('div');
-      el.className = 'garden-obj';
-      el.textContent = emoji;
-      el.style.left = pos.x + 'px';
-      el.style.top  = pos.y + 'px';
-      el.addEventListener('click', () => tapObject(el, i));
-      garden.appendChild(el);
-    });
-    setTimeout(() => speak(`How many ${emoji} can you count?`), 300);
+    if (S.twoGroups === 'on' && G.target >= 2) {
+      const a = 1 + Math.floor(Math.random() * (G.target - 1));
+      const b = G.target - a;
+      G.groupASplit = a;
+      G.groupATapped = 0;
+      const emojis = shuffle(EMOJIS);
+      G.emojiA = emojis[0];
+      G.emojiB = emojis[1];
+      $('question-text').textContent = 'How many in all?';
+      $('question-num').textContent = S.showNum === 'on' ? `${a} + ${b} = ?` : '';
+      const positions = safePositions(G.target);
+      positions.forEach((pos, i) => {
+        const isA = i < a;
+        const el = makeItemEl(pos, isA ? G.emojiA : G.emojiB);
+        el.dataset.group = isA ? 'a' : 'b';
+        if (!isA) { el.style.opacity = '0.45'; el.style.filter = 'grayscale(40%)'; }
+        el.addEventListener('click', () => tapObject(el, i));
+        garden.appendChild(el);
+      });
+    } else {
+      $('question-text').textContent = 'How many are there?';
+      $('question-num').textContent = S.showNum === 'on' ? G.target : '';
+      const positions = safePositions(G.target);
+      positions.forEach((pos, i) => {
+        const el = makeItemEl(pos, emoji);
+        el.addEventListener('click', () => tapObject(el, i));
+        garden.appendChild(el);
+      });
+    }
+    setTimeout(() => playClip('count_it_prompt'), 300);
 
   } else if (S.mode === 'skip') {
-    // Objects in groups of G.step
     const groups = G.target / G.step;
     $('question-text').textContent = `Count by ${G.step}s!`;
     $('question-num').textContent = '';
@@ -480,20 +603,17 @@ function buildGarden() {
 
     const groupPositions = safePositions(groups, true);
     groupPositions.forEach((pos, gi) => {
-      // Cluster G.step objects near pos
       for (let k = 0; k < G.step; k++) {
-        const el = document.createElement('div');
-        el.className = 'garden-obj';
-        el.textContent = emoji;
         const ox = (k % 2) * 28 - 14;
         const oy = Math.floor(k / 2) * -28;
-        el.style.left = Math.max(10, Math.min(garden.clientWidth - 60, pos.x + ox)) + 'px';
-        el.style.top  = Math.max(10, Math.min(garden.clientHeight - 80, pos.y + oy)) + 'px';
-        el.style.fontSize = 'clamp(28px,7vw,40px)';
+        const ipos = {
+          x: Math.max(10, Math.min(garden.clientWidth - 60, pos.x + ox)),
+          y: Math.max(10, Math.min(garden.clientHeight - 80, pos.y + oy)),
+        };
+        const el = makeItemEl(ipos, emoji, true);
         el.dataset.group = gi;
         garden.appendChild(el);
       }
-      // Group label + invisible tap zone
       const lbl = document.createElement('div');
       lbl.className = 'group-label';
       lbl.textContent = `+${G.step}`;
@@ -504,33 +624,50 @@ function buildGarden() {
       lbl.addEventListener('click', () => tapGroup(gi, lbl));
       garden.appendChild(lbl);
     });
-    setTimeout(() => speak(`Count by ${G.step}s. Tap each group!`), 300);
+    setTimeout(() => playClip(`skip_by_${G.step}`), 300);
 
   } else {
-    // Fill it: shown a target number; tap + to plant objects
     $('question-text').textContent = 'Plant exactly';
     $('question-num').textContent  = G.target;
-    $('question-hint').textContent = 'Tap the garden to plant!';
-    $('check-btn').textContent = `DONE ✅`;
+    $('question-hint').textContent = G.step > 1
+      ? `Tap to plant ${G.step} at a time!`
+      : 'Tap the garden to plant!';
+    $('check-btn').textContent = 'DONE ✅';
     $('count-counter').textContent = `0 / ${G.target}`;
     garden.style.cursor = 'pointer';
-    garden.addEventListener('click', gardenTap, { once: false });
-    setTimeout(() => speak(`Plant ${G.target} flowers in the garden!`), 300);
+    garden.removeEventListener('click', gardenTap);
+    garden.addEventListener('click', gardenTap);
+    setTimeout(() => playClip('fill_it_prompt'), 300);
   }
 }
 
 // ── Count It mode ──
 function tapObject(el, i) {
   if (G.tappedIndices.has(i)) return;
+  // Two-group locking: block group B until group A is fully counted
+  if (S.twoGroups === 'on' && el.dataset.group === 'b' && G.groupATapped < G.groupASplit) {
+    el.classList.add('shake');
+    setTimeout(() => el.classList.remove('shake'), 400);
+    return;
+  }
   G.tappedIndices.add(i);
   G.userCount++;
   el.classList.add('counted');
+  el.style.opacity = '1';
+  el.style.filter = '';
 
-  // Show bubble
+  if (S.twoGroups === 'on' && el.dataset.group === 'a') {
+    G.groupATapped++;
+    if (G.groupATapped === G.groupASplit) {
+      document.querySelectorAll('.garden-obj[data-group="b"]').forEach(e => {
+        e.style.opacity = '1'; e.style.filter = ''; e.style.transition = 'opacity 0.3s';
+      });
+    }
+  }
+
   const bubble = document.createElement('div');
   bubble.className = 'count-bubble';
   bubble.textContent = G.userCount;
-  el.style.position = 'absolute'; // ensure relative for bubble
   el.appendChild(bubble);
 
   $('count-display').textContent = G.userCount;
@@ -539,6 +676,7 @@ function tapObject(el, i) {
 
 // ── Skip Count mode ──
 const tappedGroups = new Set();
+let plantedPositions = [];
 function tapGroup(gi, lbl) {
   if (tappedGroups.has(gi)) return;
   tappedGroups.add(gi);
@@ -553,25 +691,46 @@ function tapGroup(gi, lbl) {
 }
 
 // ── Fill It mode ──
-let gardenTapHandler = null;
 function gardenTap(e) {
   if (e.target.closest('#garden-ground') || e.target.closest('#count-display')) return;
   if (G.fillCount >= G.target) return;
-  G.fillCount++;
-  G.userCount = G.fillCount;
 
   const garden = $('garden');
   const rect = garden.getBoundingClientRect();
-  const x = e.clientX - rect.left - 20;
-  const y = e.clientY - rect.top  - 20;
+  const W = rect.width, H = rect.height;
+  const toPlant = Math.min(G.step, G.target - G.fillCount);
 
-  const el = document.createElement('div');
-  el.className = 'garden-obj counted';
-  el.textContent = shuffle(EMOJIS)[0];
-  el.style.left = Math.max(4, Math.min(rect.width - 50, x)) + 'px';
-  el.style.top  = Math.max(4, Math.min(rect.height - 80, y)) + 'px';
-  el.style.pointerEvents = 'none';
-  garden.appendChild(el);
+  for (let k = 0; k < toPlant; k++) {
+    // Find a non-overlapping random position across the garden
+    let px, py, tries = 0;
+    do {
+      px = 20 + Math.random() * (W - 70);
+      py = 20 + Math.random() * (H - 110);
+      tries++;
+    } while (tries < 40 && plantedPositions.some(p => Math.hypot(p.x - px, p.y - py) < 50));
+    plantedPositions.push({ x: px, y: py });
+
+    G.fillCount++;
+    G.userCount = G.fillCount;
+
+    const set = getItemSet();
+    let el;
+    if (set) {
+      el = document.createElement('img');
+      el.className = 'garden-obj garden-img counted';
+      el.src = randImg(set);
+      el.draggable = false;
+      el.alt = set.label;
+    } else {
+      el = document.createElement('div');
+      el.className = 'garden-obj counted';
+      el.textContent = G.fillEmoji || shuffle(EMOJIS)[0];
+    }
+    el.style.left = px + 'px';
+    el.style.top  = py + 'px';
+    el.style.pointerEvents = 'none';
+    garden.appendChild(el);
+  }
 
   $('count-display').textContent = G.fillCount;
   $('count-counter').textContent = `${G.fillCount} / ${G.target}`;
@@ -607,10 +766,13 @@ function checkAnswer() {
       G.userCount = 0;
       G.tappedIndices.clear();
       tappedGroups.clear();
+      G.groupATapped = 0;
       $('count-display').textContent = '0';
       $('count-display').style.color = 'var(--green)';
       document.querySelectorAll('.garden-obj').forEach(e => {
         e.classList.remove('counted');
+        e.style.opacity = (S.twoGroups === 'on' && e.dataset.group === 'b') ? '0.45' : '1';
+        e.style.filter  = (S.twoGroups === 'on' && e.dataset.group === 'b') ? 'grayscale(40%)' : '';
         e.querySelectorAll('.count-bubble').forEach(b => b.remove());
       });
       document.querySelectorAll('.group-label').forEach(l => {
@@ -620,7 +782,9 @@ function checkAnswer() {
       if (S.mode === 'fill') {
         document.querySelectorAll('.garden-obj').forEach(e => e.remove());
         G.fillCount = 0;
+        plantedPositions = [];
         $('count-counter').textContent = `0 / ${G.target}`;
+        $('garden').removeEventListener('click', gardenTap);
         $('garden').addEventListener('click', gardenTap);
         $('garden').style.cursor = 'pointer';
       }

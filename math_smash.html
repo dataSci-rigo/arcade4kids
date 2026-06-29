@@ -219,6 +219,7 @@
       opacity: 0;
       transition: opacity .35s ease, transform .35s ease;
       line-height: 1.45; z-index: 25;
+      cursor: pointer; user-select: none;
     }
     #speech-bubble.show {
       opacity: 1;
@@ -612,7 +613,7 @@
     <div id="scene-decos"></div>
     <div id="round-badge">Round <span id="rnum">1</span> / 5</div>
     <button id="tts-btn" onclick="toggleTTS()" title="Toggle Read Aloud">🔊</button>
-    <div id="speech-bubble"></div>
+    <div id="speech-bubble" onclick="tapBubble()"></div>
     <div id="char-wrap">
       <div id="char-circle">
         <div id="char-emoji">🧙‍♀️</div>
@@ -697,7 +698,7 @@ const SCENES = [
     txt:"I'm deep in an enchanted forest! Everything here glows with ancient magic!"
   },
   { name:"Castle Hall",
-    img:IMG('1548154521-13fae5903895'),
+    img:IMG('1533154683836-84ea7a0bc310'),
     bg:"linear-gradient(180deg,#3d2b1f 0%,#5c3d2e 50%,#7a5c47 100%)",
     floor:"rgba(61,43,31,.6)", floorH:"20%",
     deco:["🏰","🕯️","🛡️","⚔️","👑","🔮","🗝️","📜","🦅","🎭"],
@@ -705,7 +706,7 @@ const SCENES = [
     txt:"I'm inside a grand castle hall! The king himself invited me today!"
   },
   { name:"Rainbow Meadow",
-    img:IMG('1490633874781-1c63cc1c5fe5'),
+    img:IMG('1500382017468-9049fed747ef'),
     bg:"linear-gradient(180deg,#87CEEB 0%,#b5e6ff 40%,#90EE90 78%,#7CFC00 100%)",
     floor:"rgba(124,252,0,.25)", floorH:"28%",
     deco:["🌈","🦄","🌻","🌼","🦋","🌸","🐑","🌷","☁️","🌞"],
@@ -745,7 +746,7 @@ const SCENES = [
     txt:"I live in the Cloud Kingdom! You can bounce on these clouds like trampolines!"
   },
   { name:"Mushroom Village",
-    img:IMG('1440999810519-a43fa0a9a5c6'),
+    img:IMG('1518531933037-91b2f5f229cc'),
     bg:"linear-gradient(180deg,#16a34a 0%,#15803d 40%,#166534 100%)",
     floor:"rgba(21,128,61,.4)", floorH:"25%",
     deco:["🍄","🐛","🐞","🦋","🌸","🌿","🐸","🌺","🍃","✨"],
@@ -761,7 +762,7 @@ const SCENES = [
     txt:"I'm inside a magical crystal cave! Every wall sparkles like a rainbow!"
   },
   { name:"Ancient Temple",
-    img:IMG('1469022563149-aa64dbd37d11'),
+    img:IMG('1539768942893-daf53e448371'),
     bg:"linear-gradient(180deg,#451a03 0%,#78350f 42%,#92400e 80%,#d97706 100%)",
     floor:"rgba(69,26,3,.5)", floorH:"22%",
     deco:["🏛️","🗿","🪬","🔯","🦁","🦅","📿","🌺","⚱️","🕌"],
@@ -793,7 +794,7 @@ const SCENES = [
     txt:"I'm walking through the autumn forest! The leaves crunch with every step!"
   },
   { name:"Night Market",
-    img:IMG('1495511792253-6f6e9c2c8f0f'),
+    img:IMG('1573455494060-c5595004fb6c'),
     bg:"linear-gradient(180deg,#0c0a20 0%,#1e1b4b 42%,#312e81 100%)",
     floor:"rgba(30,27,75,.5)", floorH:"20%",
     deco:["🏮","🎆","🎇","✨","🌙","⭐","🎋","🎍","🎎","🌟"],
@@ -801,7 +802,7 @@ const SCENES = [
     txt:"I'm at a magical night market! The lanterns light up the whole sky!"
   },
   { name:"Magic Library",
-    img:IMG('1507842217343-583bb2dc3e4a'),
+    img:IMG('1521587760476-6c12a4b040da'),
     bg:"linear-gradient(180deg,#1c0a00 0%,#3b1f0a 44%,#5c3317 100%)",
     floor:"rgba(59,31,10,.5)", floorH:"22%",
     deco:["📚","🔮","🦉","✨","📜","🕯️","🗝️","⭐","🌙","🎩"],
@@ -847,7 +848,7 @@ const CHARS = [
     lines:["I've traveled to 42 different planets and counting!",
            "My spaceship runs on stardust and good math skills!",
            "I once high-fived an alien and we became best friends!"] },
-  { name:"Finn", title:"the Brave Pirate", emoji:"🧑‍✈️", color:"#E67E22",
+  { name:"Finn", title:"the Brave Pirate", emoji:"🏴‍☠️", color:"#E67E22",
     lines:["I've sailed the seven seas looking for treasure!",
            "My parrot Polly can solve math problems too!",
            "I found twelve treasure chests just last Tuesday!"] },
@@ -873,7 +874,8 @@ const G = {
   minV:1, maxV:10, ops:'add',
   round:0, answer:0, input:'',
   inputOn:false, tts:true, showItems:false,
-  qa:0, qb:0, qop:'+'
+  qa:0, qb:0, qop:'+',
+  usedQs:new Set()
 };
 
 const HELP_ICON_PAIRS = [
@@ -1272,20 +1274,63 @@ function showScreen(id) {
 function goSplash() {
   showScreen('splash');
   document.getElementById('fx').innerHTML='';
+  clearStoryTimers();
+}
+
+/* ── PRE-RECORDED AUDIO (per-character voices) ──────── */
+let _currentClip = null;
+function playClip(id) {
+  if (!G.tts) return;
+  if (_currentClip) { try { _currentClip.pause(); _currentClip.currentTime = 0; } catch {} _currentClip = null; }
+  try {
+    const a = new Audio(`/audio/${id}.mp3`);
+    _currentClip = a;
+    a.addEventListener('ended', () => { if (_currentClip === a) _currentClip = null; });
+    a.play().catch(() => {});
+  } catch {}
 }
 
 /* ═══════════════════════════════════════════════════════
    ROUND LOGIC
 ═══════════════════════════════════════════════════════ */
-let curChar, curScene;
+let curChar, curScene, curSceneIdx, curCharLineIdx;
 
 function startGame() {
   ac(); // unlock audio on user gesture
   // Pre-load TTS voices (needed on some browsers)
   if (window.speechSynthesis) window.speechSynthesis.getVoices();
   G.round=0;
+  G.usedQs=new Set();
   showScreen('game');
   nextRound();
+}
+
+/* ── STORY SKIP CONTROLS (desktop: Space = advance, Shift = skip) ── */
+let storyStep = 0;       // 0=idle, 1=intro shown, 2=scene shown, 3=question shown
+let storyTimers = [];
+let storyNextFn = null;
+let storyQuestionFn = null;
+
+function scheduleStory(fn, delay) {
+  storyNextFn = fn;
+  const id = setTimeout(()=>{ storyNextFn=null; fn(); }, delay);
+  storyTimers.push(id);
+}
+function clearStoryTimers() {
+  storyTimers.forEach(clearTimeout);
+  storyTimers=[];
+  storyNextFn=null;
+}
+function advanceStory() {
+  if(storyStep>=3 || !storyNextFn) return;
+  clearStoryTimers();
+  const fn=storyNextFn;
+  fn();
+}
+function skipStory() {
+  if(storyStep>=3 || !storyQuestionFn) return;
+  clearStoryTimers();
+  storyQuestionFn();
 }
 
 function nextRound() {
@@ -1296,38 +1341,62 @@ function nextRound() {
   G.input='';
   resetBox();
   setSmash(false);
+  clearStoryTimers();
+  storyStep=0;
 
   document.getElementById('rnum').textContent=G.round;
   document.getElementById('math-panel').classList.remove('show');
 
-  curScene=SCENES[Math.floor(Math.random()*SCENES.length)];
-  curChar =CHARS [Math.floor(Math.random()*CHARS.length)];
+  curSceneIdx = Math.floor(Math.random()*SCENES.length);
+  curScene    = SCENES[curSceneIdx];
+  curChar     = CHARS [Math.floor(Math.random()*CHARS.length)];
+  curCharLineIdx = Math.floor(Math.random()*curChar.lines.length);
 
   renderScene(curScene);
   renderChar(curChar);
 
-  const charLine = curChar.lines[Math.floor(Math.random()*curChar.lines.length)];
+  const charLine = curChar.lines[curCharLineIdx];
   const intro = `Hi! I'm ${curChar.name}! ${charLine}`;
+  const charKey = curChar.name.toLowerCase();
+  const isBolt  = charKey === 'bolt';
 
   // Phase 1 — character intro
-  setTimeout(()=>{ sndPop(); showBubble(intro); }, 400);
+  function showIntro() {
+    storyStep=1;
+    sndPop(); showBubble(intro, isBolt);
+    if (!isBolt) playClip(`ms_${charKey}_intro_${curCharLineIdx}`);
+    scheduleStory(showSceneText, isMobile ? 2300 : 12000);
+  }
 
-  // Phase 2 — scene comment (extra time on desktop so user can read without typewriter rushing)
-  setTimeout(()=>{ sndPop(); showBubble(curScene.txt); }, isMobile ? 2700 : 4000);
+  // Phase 2 — scene comment
+  function showSceneText() {
+    storyStep=2;
+    sndPop(); showBubble(curScene.txt, false);
+    playClip(`ms_scene_${curSceneIdx}`);
+    scheduleStory(showQuestion, isMobile ? 2200 : 10000);
+  }
 
   // Phase 3 — show panel + question
-  setTimeout(()=>{
+  function showQuestion() {
+    storyStep=3;
     closeHelp();
-    const q=genQ();
+    const q=genUniqueQ();
     G.answer=q.answer; G.qa=q.a; G.qb=q.b; G.qop=q.op;
     curHelpIcons=HELP_ICON_PAIRS[Math.floor(Math.random()*HELP_ICON_PAIRS.length)];
     document.getElementById('equation').textContent=`${q.a} ${q.op} ${q.b} = ?`;
     updateCountingDisplay(q.a,q.b,q.op);
     sndSlide();
     document.getElementById('math-panel').classList.add('show');
-    setTimeout(()=>{ sndPop(); showBubble("Please answer this for me! 🙏"); }, 520);
+    setTimeout(()=>{
+      sndPop(); showBubble("Please answer this for me! 🙏", isBolt);
+      if (!isBolt) playClip(`ms_${charKey}_prompt`);
+    }, 520);
     setTimeout(()=>{ G.inputOn=true; }, 600);
-  }, isMobile ? 4900 : 7000);
+  }
+
+  // Desktop only: Space advances to the next phase early, Shift jumps straight to the question
+  storyQuestionFn = showQuestion;
+  scheduleStory(showIntro, 400);
 }
 
 function renderScene(sc) {
@@ -1403,11 +1472,25 @@ function genQ() {
 
 function ri(lo,hi) { return Math.floor(Math.random()*(hi-lo+1))+lo; }
 
+// Avoid repeating the same equation within a single play session
+function genUniqueQ() {
+  let q, key, tries=0;
+  do {
+    q=genQ();
+    key=`${q.a}${q.op}${q.b}`;
+    tries++;
+  } while(G.usedQs.has(key) && tries<60);
+  G.usedQs.add(key);
+  return q;
+}
+
 /* ── SPEECH BUBBLE + TTS ────────────────────────────── */
 let _typeTimer = null;
+let _bubbleFullText = '';
 
-function showBubble(txt) {
+function showBubble(txt, useSpeechApi = false) {
   const b = document.getElementById('speech-bubble');
+  _bubbleFullText = txt;
 
   // Cancel in-flight typewriter and speech
   if (_typeTimer) { clearTimeout(_typeTimer); _typeTimer = null; }
@@ -1435,17 +1518,17 @@ function showBubble(txt) {
     b.textContent = txt;
   }
 
-  // Text-to-speech (strip emoji for cleaner speech)
-  if (G.tts && window.speechSynthesis) {
+  // Bolt uses Web Speech API with a robotic voice profile; all others use playClip()
+  if (useSpeechApi && G.tts && window.speechSynthesis) {
     const clean = txt.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]/gu, '')
                      .replace(/\s+/g, ' ').trim();
     if (clean) {
       const u = new SpeechSynthesisUtterance(clean);
-      u.rate  = 0.88;
-      u.pitch = 1.1;
-      // Try to pick a friendly voice (child-like or female)
+      u.rate  = 1.15;
+      u.pitch = 0.5;
+      // Prefer a deep/male voice for the robot
       const voices = window.speechSynthesis.getVoices();
-      const pref = voices.find(v => /Samantha|Karen|Moira|Tessa|Victoria|Google US/i.test(v.name))
+      const pref = voices.find(v => /Daniel|Alex|Fred|Google UK.*Male|Microsoft David/i.test(v.name))
                 || voices.find(v => v.lang.startsWith('en'));
       if (pref) u.voice = pref;
       window.speechSynthesis.speak(u);
@@ -1457,6 +1540,29 @@ function hideBubble() {
   if (_typeTimer) { clearTimeout(_typeTimer); _typeTimer = null; }
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   document.getElementById('speech-bubble').classList.remove('show');
+}
+
+function skipBubble() {
+  if (_typeTimer) {
+    // Typewriter in progress — complete it instantly
+    clearTimeout(_typeTimer); _typeTimer = null;
+    document.getElementById('speech-bubble').textContent = _bubbleFullText;
+  } else {
+    hideBubble();
+  }
+}
+
+function tapBubble() {
+  // During question phase, tapping the bubble just completes typewriter or hides it
+  if (storyStep >= 3) { skipBubble(); return; }
+  if (_typeTimer) {
+    // Typewriter still running — complete it first; next tap will advance
+    clearTimeout(_typeTimer); _typeTimer = null;
+    document.getElementById('speech-bubble').textContent = _bubbleFullText;
+  } else {
+    // Text fully shown — advance to next dialog box
+    advanceStory();
+  }
 }
 
 function setTTS(on) {
@@ -1592,6 +1698,7 @@ function pressNum(d) {
     if(newIn===ans) {
       box.classList.add('correct');
       setSmash(true);
+      closeHelp();
     }
     sndChime();
   } else {
@@ -1632,10 +1739,12 @@ function trySmash() {
 
   G.inputOn=false;
   const eff=EFFECTS[Math.floor(Math.random()*EFFECTS.length)];
-  const msg=CELEB_MSGS[Math.floor(Math.random()*CELEB_MSGS.length)];
+  const celebIdx=Math.floor(Math.random()*CELEB_MSGS.length);
+  const msg=CELEB_MSGS[celebIdx];
 
   function celebrate() {
-    showBubble(msg);
+    showBubble(msg, false);
+    playClip(`ms_celeb_${celebIdx}`);
     runEffect(eff);
     // Second wave effect after 1.1s for extra energy
     const wave2=['confetti','starfall','fireworks','dancing'];
@@ -1658,12 +1767,21 @@ function trySmash() {
 
 // Keyboard support (desktop)
 document.addEventListener('keydown',e=>{
+  if(e.code==='Space') {
+    e.preventDefault();
+    if(storyStep<3) { skipStory(); }          // Space = skip all dialogs → question
+    else { skipBubble(); }
+    return;
+  }
   if(e.key>='0'&&e.key<='9') pressNum(+e.key);
   else if(e.key==='Backspace'||e.key==='Delete') clearInput();
   else if(e.key==='Enter') trySmash();
   else if(e.key==='Shift') {
     e.preventDefault();
-    document.getElementById('help-modal').classList.contains('open') ? closeHelp() : openHelp();
+    if(storyStep<3) { tapBubble(); }           // Shift = next dialog box
+    else {
+      document.getElementById('help-modal').classList.contains('open') ? closeHelp() : openHelp();
+    }
   }
 });
 

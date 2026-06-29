@@ -24,11 +24,12 @@ html,body{
 #splash{
   position:absolute;inset:0;
   display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
+  align-items:center;justify-content:flex-start;
   gap:0;
   z-index:100;
   overflow-y:auto;
-  padding:20px 16px;
+  padding:clamp(16px,4vh,40px) 16px 24px;
+  -webkit-overflow-scrolling:touch;
 }
 
 /* Scanline overlay */
@@ -103,9 +104,15 @@ html,body{
   transition:transform .15s,border-color .2s,box-shadow .2s;
   animation:cardIn .5s ease-out both;
 }
-.card:nth-child(2){animation-delay:.12s}
-.card:nth-child(3){animation-delay:.24s}
-.card:nth-child(4){animation-delay:.36s}
+.card:nth-child(2){animation-delay:.10s}
+.card:nth-child(3){animation-delay:.20s}
+.card:nth-child(4){animation-delay:.30s}
+.card:nth-child(5){animation-delay:.40s}
+.card:nth-child(6){animation-delay:.50s}
+.card:nth-child(7){animation-delay:.60s}
+.card:nth-child(8){animation-delay:.70s}
+.card:nth-child(9){animation-delay:.80s}
+.card:nth-child(10){animation-delay:.90s}
 @keyframes cardIn{
   from{opacity:0;transform:translateY(30px) scale(.95)}
   to{opacity:1;transform:translateY(0) scale(1)}
@@ -507,6 +514,129 @@ const PREVIEW_FNS = {
     ctx.fill();
     ctx.shadowBlur = 0;
   },
+  shape_shift(ctx, w, h, t) {
+    // Orange background
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, w, h);
+
+    // Helpers
+    function drawArrow(cx, cy, sz, angle, color) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      ctx.fillStyle = color;
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 1.5;
+      const s = sz * 0.88;
+      ctx.beginPath();
+      ctx.moveTo(-s*0.65, -s*0.30);
+      ctx.lineTo( s*0.08, -s*0.30);
+      ctx.lineTo( s*0.08, -s*0.62);
+      ctx.lineTo( s*0.78,  0);
+      ctx.lineTo( s*0.08,  s*0.62);
+      ctx.lineTo( s*0.08,  s*0.30);
+      ctx.lineTo(-s*0.65,  s*0.30);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const baseAngle = (t * 0.6) % (Math.PI * 2);
+    const pulse     = 0.75 + Math.sin(t * 3) * 0.25;
+    const shapes    = [
+      { x: w*0.22, y: h*0.38, sz: Math.min(w,h)*0.14, angle: baseAngle,                 color: '#7C3AED' },
+      { x: w*0.62, y: h*0.38, sz: Math.min(w,h)*0.14, angle: baseAngle + Math.PI/2,      color: '#f97316' },
+      { x: w*0.22, y: h*0.72, sz: Math.min(w,h)*0.14, angle: baseAngle + Math.PI,        color: '#2563EB' },
+      { x: w*0.62, y: h*0.72, sz: Math.min(w,h)*0.14, angle: baseAngle + Math.PI*1.5,    color: '#059669' },
+    ];
+
+    // Title area
+    ctx.fillStyle = 'rgba(249,115,22,0.15)';
+    ctx.fillRect(0, 0, w, h*0.22);
+    ctx.fillStyle = '#f97316';
+    ctx.shadowColor = '#f97316';
+    ctx.shadowBlur  = 10 * pulse;
+    ctx.font = `bold ${Math.round(h * 0.14)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SHAPE SHIFT', w/2, h*0.12);
+    ctx.shadowBlur = 0;
+
+    shapes.forEach(d => drawArrow(d.x, d.y, d.sz, d.angle, d.color));
+  },
+
+  vocab_builder(ctx, w, h, t) {
+    const grad = ctx.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, '#1a0a2e');
+    grad.addColorStop(1, '#2e0a1a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    const words = ['CAT', 'SUN', 'FISH'];
+    const wi = Math.floor(t * 0.5) % words.length;
+    const word = words[wi];
+    const wordPhase = (t * 0.5) % 1;
+    const wordAlpha = wordPhase < 0.15 ? wordPhase / 0.15
+                    : wordPhase > 0.85 ? (1 - wordPhase) / 0.15
+                    : 1;
+
+    ctx.save();
+    ctx.globalAlpha = wordAlpha;
+    ctx.fillStyle = '#FF6B9D';
+    ctx.shadowColor = '#FF6B9D';
+    ctx.shadowBlur = 18;
+    ctx.font = `bold ${Math.round(h * 0.22)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(word, w / 2, h * 0.22);
+    ctx.restore();
+
+    const cardW = w * 0.26;
+    const cardH = h * 0.46;
+    const cardY = h * 0.43;
+    const gap = (w - 3 * cardW) / 4;
+    const glowIdx = Math.floor(t * 0.5) % 3;
+    const glowPulse = 0.7 + Math.sin(t * 4) * 0.3;
+    const colors = ['#c77dff', '#FF6B9D', '#4ECDC4'];
+    const glowColors = ['#44dd44', '#44dd44', '#44dd44'];
+
+    for (let i = 0; i < 3; i++) {
+      const cx = gap + i * (cardW + gap) + cardW / 2;
+      const cy = cardY + cardH / 2;
+      const isGlow = i === glowIdx;
+
+      ctx.save();
+      const scale = isGlow ? 1 + Math.sin(t * 5) * 0.04 : 1;
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+
+      ctx.fillStyle = isGlow ? 'rgba(68,221,68,0.18)' : 'rgba(255,255,255,0.06)';
+      ctx.strokeStyle = isGlow ? `rgba(68,221,68,${glowPulse})` : colors[i] + '88';
+      ctx.lineWidth = isGlow ? 3 : 2;
+      ctx.shadowColor = isGlow ? '#44dd44' : colors[i];
+      ctx.shadowBlur = isGlow ? 16 * glowPulse : 6;
+      ctx.beginPath();
+      ctx.roundRect(-cardW / 2, -cardH / 2, cardW, cardH, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = isGlow ? '#44dd44' : colors[i];
+      ctx.globalAlpha = isGlow ? glowPulse : 0.7;
+      ctx.font = `bold ${Math.round(cardH * 0.28)}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(['🐱','☀️','🐟'][i], 0, -cardH * 0.06);
+
+      ctx.globalAlpha = isGlow ? 1 : 0.5;
+      ctx.fillStyle = isGlow ? '#44dd44' : '#fff';
+      ctx.font = `bold ${Math.round(cardH * 0.14)}px sans-serif`;
+      ctx.fillText(word, 0, cardH * 0.32);
+      ctx.restore();
+    }
+  },
+
   big_green(ctx, w, h, t) {
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, w, h);
@@ -552,6 +682,412 @@ const PREVIEW_FNS = {
     ctx.fillStyle = '#cc2222';
     ctx.fillRect(ex - w * 0.065, ey + playerH * 0.2, w * 0.02, playerH * 0.3);
     ctx.fillRect(ex + w * 0.045, ey + playerH * 0.2, w * 0.02, playerH * 0.3);
+  },
+
+  letter_draw(ctx, w, h, t) {
+    ctx.fillStyle = '#0d0d1a';
+    ctx.fillRect(0, 0, w, h);
+
+    const letters = ['A','B','C','D','E'];
+    const li = Math.floor(t * 0.4) % letters.length;
+    const letter = letters[li];
+    const progress = (t * 0.4) % 1;
+
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    const sz = Math.min(w, h) * 0.52;
+
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#FF6B9D';
+    ctx.font = `bold ${sz}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(letter, 0, 0);
+
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#FF6B9D';
+    ctx.lineWidth = sz * 0.08;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = '#FF6B9D';
+    ctx.shadowBlur = 12;
+
+    const full = sz * 8;
+    ctx.setLineDash([full * progress, full]);
+    ctx.strokeText(letter, 0, 0);
+    ctx.setLineDash([]);
+
+    const pulse = 0.9 + Math.sin(t * 8) * 0.1;
+    ctx.fillStyle = '#FFE66D';
+    ctx.shadowColor = '#FFE66D';
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(Math.cos(t * 3) * sz * 0.3, Math.sin(t * 2) * sz * 0.3, sz * 0.06 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  },
+
+  spelling_adventure(ctx, w, h, t) {
+    ctx.fillStyle = '#0e0a1a';
+    ctx.fillRect(0, 0, w, h);
+
+    const words = ['CAT','DOG','SUN','BEE','MAP'];
+    const wi = Math.floor(t * 0.3) % words.length;
+    const word = words[wi];
+    const reveal = (t * 0.3) % 1;
+
+    const n = word.length;
+    const spacing = Math.min(w / (n + 1), h * 0.28);
+    const startX = w / 2 - (n - 1) * spacing / 2;
+    const midY = h * 0.55;
+    const sz = spacing * 0.72;
+
+    ctx.font = `bold ${sz}px 'Press Start 2P', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    word.split('').forEach((ch, i) => {
+      const x = startX + i * spacing;
+      const shown = reveal > i / n;
+      const dropY = shown ? 0 : -h * 0.3;
+      const alpha = shown ? 1 : 0;
+      const colors = ['#c77dff','#FFE66D','#4ECDC4','#FF6B6B','#44ff88'];
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.shadowColor = colors[i % colors.length];
+      ctx.shadowBlur = 10;
+      ctx.fillText(ch, x, midY + dropY);
+    });
+
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+
+    for (let i = 0; i < 5; i++) {
+      const a = (t * 1.1 + i * 1.26) % (Math.PI * 2);
+      const r = Math.min(w, h) * 0.38;
+      const sx = w / 2 + Math.cos(a) * r * (0.6 + Math.sin(t + i) * 0.3);
+      const sy = h / 2 + Math.sin(a) * r * 0.5;
+      const alpha2 = 0.4 + Math.sin(t * 3 + i) * 0.3;
+      ctx.globalAlpha = alpha2;
+      ctx.fillStyle = '#c77dff';
+      ctx.font = `${Math.round(h * 0.1)}px serif`;
+      ctx.fillText('✦', sx, sy);
+    }
+    ctx.globalAlpha = 1;
+  },
+
+  memory_match(ctx, w, h, t) {
+    ctx.fillStyle = '#0a0a18';
+    ctx.fillRect(0, 0, w, h);
+
+    const cols = 4, rows = 3;
+    const pad = w * 0.04;
+    const cw = (w - pad * (cols + 1)) / cols;
+    const ch = (h - pad * (rows + 1)) / rows;
+
+    const emojis = ['🌟','🌙','🍀','🎈','🌟','🌙','🍀','🎈','🦋','🐠','🦋','🐠'];
+    const flipPeriod = 3.2;
+    const flipCard = Math.floor(t / flipPeriod * 2) % 12;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        const x = pad + c * (cw + pad);
+        const y = pad + r * (ch + pad);
+        const isFlipping = idx === flipCard;
+        const flip = isFlipping ? Math.sin((t % (flipPeriod / 2)) / (flipPeriod / 2) * Math.PI) : 0;
+        const scaleX = Math.abs(Math.cos(flip * Math.PI / 2));
+
+        ctx.save();
+        ctx.translate(x + cw / 2, y + ch / 2);
+        ctx.scale(scaleX, 1);
+
+        if (flip > 0.5 || isFlipping) {
+          ctx.fillStyle = '#1a1a3a';
+          ctx.strokeStyle = '#FF6B9D';
+        } else {
+          ctx.fillStyle = '#0f0f2a';
+          ctx.strokeStyle = '#4ECDC4';
+        }
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(-cw / 2, -ch / 2, cw, ch, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        if (flip > 0.5 && isFlipping) {
+          ctx.font = `${Math.round(ch * 0.55)}px serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(emojis[idx], 0, 0);
+        } else if (!isFlipping) {
+          ctx.fillStyle = '#4ECDC4';
+          ctx.font = `bold ${Math.round(ch * 0.4)}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('?', 0, 0);
+        }
+        ctx.restore();
+      }
+    }
+  },
+
+  counting_game(ctx, w, h, t) {
+    ctx.fillStyle = '#0a1a0a';
+    ctx.fillRect(0, 0, w, h);
+
+    const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+    sky.addColorStop(0, '#0a1a2e');
+    sky.addColorStop(1, '#0a1a0a');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h * 0.6);
+
+    ctx.fillStyle = '#1a3a1a';
+    ctx.fillRect(0, h * 0.72, w, h * 0.28);
+    ctx.fillStyle = '#A8E6CF';
+    ctx.fillRect(0, h * 0.72, w, 3);
+
+    const count = Math.floor((t * 0.7) % 6) + 1;
+    const spacing = w / (count + 1);
+    for (let i = 0; i < count; i++) {
+      const fx = spacing * (i + 1);
+      const growProgress = Math.min(1, (t * 0.7 - i) * 2);
+      const stemH = h * 0.28 * growProgress;
+      const fy = h * 0.72 - stemH;
+
+      ctx.strokeStyle = '#44cc44';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(fx, h * 0.72);
+      ctx.lineTo(fx, fy);
+      ctx.stroke();
+
+      if (growProgress > 0.7) {
+        const petalAlpha = (growProgress - 0.7) / 0.3;
+        ctx.globalAlpha = petalAlpha;
+        ctx.font = `${Math.round(h * 0.14)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🌸', fx, fy);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    ctx.fillStyle = 'rgba(168,230,207,0.15)';
+    ctx.strokeStyle = '#A8E6CF';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(w * 0.5 - 22, h * 0.04, 44, h * 0.22, 8);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#FFE66D';
+    ctx.font = `bold ${Math.round(h * 0.18)}px 'Press Start 2P', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(count, w * 0.5, h * 0.15);
+  },
+
+  math_garden(ctx, w, h, t) {
+    ctx.fillStyle = '#0a0a1e';
+    ctx.fillRect(0, 0, w, h);
+
+    // Garden ground
+    ctx.fillStyle = '#1a3a1a';
+    ctx.fillRect(0, h * 0.72, w, h * 0.28);
+    ctx.fillStyle = '#4ECDC4';
+    ctx.fillRect(0, h * 0.72, w, 3);
+
+    // Bouncing emoji pair
+    const beat = (Math.sin(t * 1.8) + 1) / 2;
+    const emojiA = '🌻', emojiB = '🍄';
+    const fy = h * 0.55 - beat * h * 0.1;
+    ctx.font = `${Math.round(h * 0.16)}px serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(emojiA, w * 0.3, fy);
+    ctx.fillText(emojiB, w * 0.7, fy);
+
+    // Equation display cycling through answers
+    const eqCycle = Math.floor(t * 0.4) % 3;
+    const eqs = ['3+4=?','3+4=7','5-2=3'];
+    const colors = ['#a5b4fc','#FFE66D','#4ade80'];
+    ctx.font = `bold ${Math.round(h * 0.14)}px 'Press Start 2P', monospace`;
+    ctx.fillStyle = colors[eqCycle];
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(eqs[eqCycle], w * 0.5, h * 0.22);
+
+    // Title
+    ctx.fillStyle = '#fff';
+    ctx.globalAlpha = 0.9;
+    ctx.font = `bold ${Math.round(h * 0.085)}px 'Press Start 2P', monospace`;
+    ctx.fillText('MATH', w * 0.5, h * 0.84);
+    ctx.fillText('GARDEN', w * 0.5, h * 0.93);
+    ctx.globalAlpha = 1;
+  },
+
+  sort_game(ctx, w, h, t) {
+    ctx.fillStyle = '#111108';
+    ctx.fillRect(0, 0, w, h);
+
+    const binW = w * 0.3;
+    const binH = h * 0.3;
+    const binY = h * 0.65;
+    const bins = [
+      { x: w * 0.12, label: '🐾', color: '#FFE66D' },
+      { x: w * 0.58, label: '🍕', color: '#FF6B9D' },
+    ];
+    bins.forEach(b => {
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 3;
+      ctx.fillStyle = b.color + '22';
+      ctx.beginPath();
+      ctx.roundRect(b.x, binY, binW, binH, 8);
+      ctx.fill(); ctx.stroke();
+      ctx.font = `${Math.round(binH * 0.4)}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(b.label, b.x + binW / 2, binY + binH * 0.5);
+    });
+
+    const items = [
+      { emoji: '🐶', target: 0 },
+      { emoji: '🍔', target: 1 },
+      { emoji: '🐱', target: 0 },
+      { emoji: '🌮', target: 1 },
+    ];
+    const period = 1.8;
+    const idx = Math.floor(t / period) % items.length;
+    const item = items[idx];
+    const prog = (t % period) / period;
+    const eased = prog < 0.5 ? 2 * prog * prog : 1 - Math.pow(-2 * prog + 2, 2) / 2;
+
+    const targetBin = bins[item.target];
+    const startX = w / 2;
+    const startY = h * 0.22;
+    const endX = targetBin.x + binW / 2;
+    const endY = binY + binH * 0.3;
+    const arc = Math.sin(prog * Math.PI) * h * 0.3;
+
+    const ix = startX + (endX - startX) * eased;
+    const iy = startY + (endY - startY) * eased - arc;
+
+    ctx.font = `${Math.round(h * 0.18)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.emoji, ix, iy);
+
+    ctx.fillStyle = '#FFE66D';
+    ctx.globalAlpha = 0.2 * (1 - prog);
+    ctx.beginPath();
+    ctx.arc(ix, iy, h * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  },
+
+  sort_builder(ctx, w, h, t) {
+    ctx.fillStyle = '#0a0812';
+    ctx.fillRect(0, 0, w, h);
+
+    const grad = ctx.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, 'rgba(155,89,182,0.15)');
+    grad.addColorStop(1, 'rgba(255,230,109,0.1)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    const categories = [
+      { label: '🦋', color: '#9B59B6', x: 0.22 },
+      { label: '🪲', color: '#FFE66D', x: 0.78 },
+    ];
+    const binH = h * 0.35;
+    const binW = w * 0.32;
+    const binY = h * 0.58;
+    categories.forEach(cat => {
+      const bx = cat.x * w - binW / 2;
+      ctx.strokeStyle = cat.color;
+      ctx.lineWidth = 2.5;
+      ctx.fillStyle = cat.color + '18';
+      ctx.beginPath();
+      ctx.roundRect(bx, binY, binW, binH, 8);
+      ctx.fill(); ctx.stroke();
+      ctx.font = `${Math.round(binH * 0.38)}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(cat.label, cat.x * w, binY + binH * 0.5);
+    });
+
+    const emojis = ['🦋','🪲','🦋','🪲'];
+    const period = 2.0;
+    const eidx = Math.floor(t / period) % emojis.length;
+    const prog = (t % period) / period;
+    const eased = prog < 0.5 ? 2 * prog * prog : 1 - Math.pow(-2 * prog + 2, 2) / 2;
+    const targetX = categories[eidx % 2].x * w;
+    const ix = w / 2 + (targetX - w / 2) * eased;
+    const iy = h * 0.2 + (binY + binH * 0.3 - h * 0.2) * eased - Math.sin(prog * Math.PI) * h * 0.2;
+
+    ctx.font = `${Math.round(h * 0.17)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emojis[eidx], ix, iy);
+
+    ctx.fillStyle = '#9B59B6';
+    ctx.globalAlpha = 0.15 * (1 - prog);
+    ctx.beginPath();
+    ctx.arc(ix, iy, h * 0.055, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#9B59B6';
+    ctx.globalAlpha = 0.5 + Math.sin(t * 2) * 0.2;
+    ctx.font = `bold ${Math.round(h * 0.1)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('BUILD YOUR OWN', w / 2, h * 0.12);
+    ctx.globalAlpha = 1;
+  },
+
+  sound_speller(ctx, w, h, t) {
+    ctx.fillStyle = '#F6F0E2';
+    ctx.fillRect(0, 0, w, h);
+
+    const words = [['c','a','t'],['sh','i','p'],['r','ai','n'],['n','igh','t']];
+    const phons = [['k','a','t'],['SH','i','p'],['r','AI','n'],['n','IE','t']];
+    const wi = Math.floor(t * 0.4) % words.length;
+    const word = words[wi];
+    const n = word.length;
+    const boxSize = Math.min(w / (n + 1.5), h * 0.32);
+    const gap = boxSize * 0.18;
+    const totalW = n * boxSize + (n - 1) * gap;
+    const startX = (w - totalW) / 2;
+    const boxY = h * 0.38;
+    const teamColors = {SH:'#FFD24A',AI:'#FFD24A',IE:'#FFD24A',OA:'#FFD24A',EE:'#FFD24A'};
+
+    word.forEach((g, i) => {
+      const ph = phons[wi][i];
+      const bx = startX + i * (boxSize + gap);
+      const isTeam = teamColors[ph];
+      ctx.fillStyle = isTeam ? '#EEF0FF' : '#FBFAF6';
+      ctx.strokeStyle = '#21202E';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(bx, boxY, boxSize, boxSize, 8);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#21202E';
+      ctx.font = `bold ${Math.round(boxSize * 0.42)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(g.replace('_','–'), bx + boxSize / 2, boxY + boxSize / 2);
+    });
+
+    ctx.fillStyle = '#5B5BD6';
+    ctx.globalAlpha = 0.7 + Math.sin(t * 2.5) * 0.2;
+    ctx.font = `bold ${Math.round(h * 0.11)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('HEAR IT · BUILD IT', w / 2, h * 0.16);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#FF8A5B';
+    ctx.font = `bold ${Math.round(h * 0.09)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🔊 ' + word.join(''), w / 2, h * 0.82);
   },
 };
 

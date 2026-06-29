@@ -96,6 +96,11 @@ html, body {
   touch-action: none;
 }
 #current-item.dragging { cursor: grabbing; filter: drop-shadow(0 8px 16px rgba(0,0,0,.25)); }
+.item-img {
+  width: clamp(130px, 38vw, 210px); height: clamp(130px, 38vw, 210px);
+  object-fit: cover; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,.2);
+  pointer-events: none; display: block;
+}
 #item-label {
   position: absolute; bottom: -32px; left: 50%; transform: translateX(-50%);
   font-size: 16px; font-weight: 800; color: #aaa; white-space: nowrap;
@@ -186,23 +191,22 @@ html, body {
   0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
   100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
 }
-
-/* ── Shake ── */
-@keyframes shake {
-  0%,100% { transform: translateX(0); }
-  20% { transform: translateX(-12px); }
-  40% { transform: translateX(12px); }
-  60% { transform: translateX(-8px); }
-  80% { transform: translateX(8px); }
+.sort-toast {
+  position: fixed; top: 38%; left: 50%;
+  transform: translateX(-50%) scale(0);
+  background: linear-gradient(135deg, #56c870, #4ECDC4);
+  color: #fff; font-size: clamp(20px,5.5vw,30px); font-weight: 900;
+  padding: 10px 26px; border-radius: 50px;
+  pointer-events: none; z-index: 100;
+  animation: sortToastPop 0.75s ease forwards;
 }
-.shake { animation: shake .4s ease; }
-
-/* ── Wrong flash ── */
-@keyframes wrongFlash {
-  0%,100% { background: linear-gradient(180deg, #fff8f0 0%, #fdeee0 100%); }
-  40%     { background: #ffe0e0; }
+@keyframes sortToastPop {
+  0%   { transform: translateX(-50%) scale(0);    opacity: 0; }
+  30%  { transform: translateX(-50%) scale(1.15); opacity: 1; }
+  65%  { transform: translateX(-50%) scale(1);    opacity: 1; }
+  100% { transform: translateX(-50%) scale(.85) translateY(-32px); opacity: 0; }
 }
-.wrong-flash { animation: wrongFlash .5s ease; }
+
 </style>
 </head>
 <body>
@@ -218,6 +222,14 @@ html, body {
     <button class="opt-btn"          data-val="av"  onclick="pickOpt(this,'catSet')">Animals &amp; Vehicles</button>
     <button class="opt-btn"          data-val="afv" onclick="pickOpt(this,'catSet')">Animals, Food &amp; Vehicles</button>
     <button class="opt-btn"          data-val="bs"  onclick="pickOpt(this,'catSet')">Big &amp; Small</button>
+  </div>
+
+  <div class="splash-label">Items</div>
+  <div class="opt-row" id="count-opts">
+    <button class="opt-btn" data-val="6"  onclick="pickOpt(this,'count')">6</button>
+    <button class="opt-btn selected" data-val="12" onclick="pickOpt(this,'count')">12</button>
+    <button class="opt-btn" data-val="18" onclick="pickOpt(this,'count')">18</button>
+    <button class="opt-btn" data-val="24" onclick="pickOpt(this,'count')">24</button>
   </div>
 
   <button class="btn-play" onclick="startGame()">PLAY</button>
@@ -262,7 +274,7 @@ html, body {
 <script>
 const $ = id => document.getElementById(id);
 
-const S = { catSet: 'af' };
+const S = { catSet: 'af', count: '12' };
 
 // Category definitions
 const CATS = {
@@ -280,6 +292,28 @@ const SETS = {
   bs:  ['big','small'],
 };
 
+// Custom sets fetched from /api/custom-sets, keyed by id
+const CUSTOM_SETS = {};
+const CUSTOM_COLORS = [
+  'linear-gradient(135deg,#FF6B6B,#e05252)',
+  'linear-gradient(135deg,#4ECDC4,#2ea89f)',
+  'linear-gradient(135deg,#C3A6FF,#9b6fcc)',
+  'linear-gradient(135deg,#FFE66D,#f0c830)',
+];
+
+fetch('/api/custom-sets').then(r => r.json()).then(data => {
+  const row = $('set-opts');
+  (data.sets || []).forEach(set => {
+    CUSTOM_SETS[set.id] = set;
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn';
+    btn.dataset.val = 'custom:' + set.id;
+    btn.textContent = set.label;
+    btn.onclick = () => pickOpt(btn, 'catSet');
+    row.appendChild(btn);
+  });
+}).catch(() => {});
+
 const G = {
   items: [],    // [{emoji, cat}]
   idx: 0,
@@ -288,6 +322,7 @@ const G = {
   firstTry: 0,
   binCats: [],
   binEls: [],
+  catInfo: CATS,
   totalItems: 12,
   dragging: false,
   dragStartX: 0, dragStartY: 0,
@@ -314,8 +349,15 @@ function playTone(freq, type, dur, vol = 0.18, endFreq = null) {
     osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
   } catch {}
 }
+const SORT_TOASTS = ['🌟 Sorted!','⭐ Nice!','🎉 Correct!','✨ Yes!','💫 Right bin!','🥳 Perfect!'];
+function showSortToast() {
+  const el = document.createElement('div');
+  el.className = 'sort-toast';
+  el.textContent = SORT_TOASTS[Math.floor(Math.random() * SORT_TOASTS.length)];
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 800);
+}
 function playCorrect() { [523,659,784].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.15,0.22),i*80)); }
-function playWrong()   { playTone(160,'square',0.18,0.18); }
 function playCelebrate() { [523,587,659,698,784,880,988,1046].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.2,0.24),i*75)); }
 
 // ── Helpers ──
@@ -339,16 +381,29 @@ function shuffle(arr) {
 
 // ── Start ──
 function startGame() {
-  const cats = SETS[S.catSet];
+  let cats, catInfo;
+  if (S.catSet.startsWith('custom:')) {
+    const set = CUSTOM_SETS[S.catSet.slice(7)];
+    cats = set.bins.map(b => b.key);
+    catInfo = {};
+    set.bins.forEach((b, i) => {
+      catInfo[b.key] = { label: b.label, icon: b.icon, color: CUSTOM_COLORS[i % CUSTOM_COLORS.length], items: b.images, isImage: true };
+    });
+  } else {
+    cats = SETS[S.catSet];
+    catInfo = CATS;
+  }
   G.binCats = cats;
+  G.catInfo = catInfo;
   G.idx = 0; G.score = 0; G.streak = 0; G.firstTry = 0;
+  G.totalItems = parseInt(S.count);
 
   // Build item list: equal spread across categories
   const perCat = Math.ceil(G.totalItems / cats.length);
   let items = [];
   cats.forEach(cat => {
-    const emojis = shuffle([...CATS[cat].items]).slice(0, perCat);
-    emojis.forEach(emoji => items.push({ emoji, cat }));
+    const vals = shuffle([...catInfo[cat].items]).slice(0, perCat);
+    vals.forEach(emoji => items.push({ emoji, cat }));
   });
   G.items = shuffle(items).slice(0, G.totalItems);
 
@@ -362,7 +417,7 @@ function buildBins() {
   area.innerHTML = '';
   G.binEls = [];
   G.binCats.forEach((cat, i) => {
-    const info = CATS[cat];
+    const info = G.catInfo[cat];
     const bin = document.createElement('div');
     bin.className = 'bin';
     bin.style.background = info.color;
@@ -381,13 +436,17 @@ function showItem() {
   if (G.idx >= G.items.length) { showWin(); return; }
   const item = G.items[G.idx];
   const el = $('current-item');
-  el.textContent = item.emoji;
+  if (G.catInfo[item.cat].isImage) {
+    el.innerHTML = `<img src="${item.emoji}" class="item-img" draggable="false">`;
+  } else {
+    el.textContent = item.emoji;
+  }
   el.style.transform = '';
   el.classList.remove('fly-out','dragging');
   el.classList.add('item-enter');
   setTimeout(() => el.classList.remove('item-enter'), 400);
 
-  $('item-label').textContent = CATS[item.cat].label; // hidden until answered; for accessibility
+  $('item-label').textContent = G.catInfo[item.cat].label; // hidden until answered; for accessibility
   $('item-label').style.opacity = '0';
 
   $('item-num-val').textContent = `${G.idx+1} / ${G.totalItems}`;
@@ -492,6 +551,7 @@ function sortInto(cat, binEl) {
     const el = $('current-item');
     el.classList.add('fly-out');
     playCorrect();
+    showSortToast();
 
     setTimeout(() => {
       G.idx++;
@@ -499,20 +559,13 @@ function sortInto(cat, binEl) {
       showItem();
     }, 320);
   } else {
-    // Wrong
+    // Wrong — no sound/animation, just reset position so they can try again
     firstTryThis = false;
     G.streak = 0;
     $('streak-val').textContent = '🔥0';
-    playWrong();
 
     const el = $('current-item');
     el.style.transform = '';
-    el.classList.add('shake');
-    $('stage').classList.add('wrong-flash');
-    setTimeout(() => {
-      el.classList.remove('shake');
-      $('stage').classList.remove('wrong-flash');
-    }, 500);
   }
 }
 

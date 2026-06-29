@@ -113,7 +113,7 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  padding: 10px 20px 6px;
+  padding: 10px 20px 4px;
   width: 100%;
 }
 .letter-badge {
@@ -156,6 +156,21 @@ html, body {
   text-align: center;
 }
 
+/* Writing tip strip (shows when guide is on) */
+.guide-tip {
+  width: 100%;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal);
+  min-height: 20px;
+  padding: 0 16px 2px;
+  opacity: 0;
+  transition: opacity .25s;
+  line-height: 1.3;
+}
+.guide-tip.show { opacity: 1; }
+
 /* Drawing area */
 .canvas-wrap {
   flex: 1;
@@ -164,7 +179,7 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 16px 0;
+  padding: 6px 16px 0;
 }
 #draw-canvas {
   width: 100%;
@@ -203,30 +218,43 @@ html, body {
 /* Button row */
 .btn-row {
   display: flex;
-  gap: 12px;
-  padding: 10px 16px 16px;
+  gap: 10px;
+  padding: 8px 16px 14px;
   width: 100%;
 }
-.btn-clear, .btn-check {
-  flex: 1;
+.btn-help, .btn-clear, .btn-check {
   border: none;
   border-radius: 16px;
   font-family: 'Nunito', sans-serif;
-  font-size: 20px;
   font-weight: 800;
-  min-height: 60px;
+  min-height: 56px;
   cursor: pointer;
-  transition: transform .1s, box-shadow .1s;
-  letter-spacing: .5px;
+  transition: transform .1s, box-shadow .1s, background .2s;
+  letter-spacing: .4px;
+}
+.btn-help {
+  flex: 0.75;
+  background: #EAF9F8;
+  color: var(--teal);
+  border: 2px solid var(--teal);
+  font-size: 18px;
+}
+.btn-help.on {
+  background: var(--teal);
+  color: #fff;
 }
 .btn-clear {
+  flex: 1;
   background: #F0F0F0;
   color: #888;
+  font-size: 19px;
   box-shadow: 0 4px 0 #DDD;
 }
 .btn-check {
+  flex: 1.3;
   background: linear-gradient(135deg, var(--coral), #FF8E53);
   color: #fff;
+  font-size: 19px;
   box-shadow: 0 4px 0 #c94a6a;
 }
 .btn-check:disabled {
@@ -235,7 +263,7 @@ html, body {
   box-shadow: 0 4px 0 #CCC;
   cursor: default;
 }
-.btn-clear:active:not(:disabled), .btn-check:active:not(:disabled) {
+.btn-help:active, .btn-clear:active:not(:disabled), .btn-check:active:not(:disabled) {
   transform: translateY(3px);
   box-shadow: 0 1px 0 rgba(0,0,0,.1);
 }
@@ -351,11 +379,14 @@ html, body {
   <div class="hint-strip">
     <div class="letter-badge" id="letter-badge">A</div>
     <div class="word-hint">
-      <img class="word-img" id="word-img" src="" alt="" onerror="this.style.display='none';document.getElementById('word-emoji').style.display='flex'">
+      <img class="word-img" id="word-img" src="" alt=""
+           onerror="this.style.display='none';document.getElementById('word-emoji').style.display='flex'">
       <div class="word-img-placeholder" id="word-emoji" style="display:none">🔤</div>
       <div class="word-label" id="word-label">apple</div>
     </div>
   </div>
+
+  <div class="guide-tip" id="guide-tip"></div>
 
   <div class="canvas-wrap">
     <canvas id="draw-canvas"></canvas>
@@ -363,6 +394,7 @@ html, body {
   </div>
 
   <div class="btn-row">
+    <button class="btn-help" id="btn-help" onclick="toggleGuide()">💡 Guide</button>
     <button class="btn-clear" onclick="clearCanvas()">🗑️ Clear</button>
     <button class="btn-check" id="btn-check" onclick="checkLetter()" disabled>✅ Check</button>
   </div>
@@ -372,7 +404,7 @@ html, body {
 <div id="win" class="screen">
   <div class="win-stars" id="win-stars">⭐⭐⭐</div>
   <div class="win-title">Amazing!</div>
-  <div class="win-subtitle" id="win-subtitle">You wrote all 26 letters!</div>
+  <div class="win-subtitle" id="win-subtitle">You drew all 5 letters!</div>
   <button class="btn-again" onclick="startGame()">Play Again!</button>
 </div>
 
@@ -386,6 +418,9 @@ const G = {
   attempts: 0,
   inputOn: true,
   hasInk: false,
+  guideOn: false,
+  strokes: [],
+  currentStroke: [],
 };
 
 const ENCOURAGEMENTS = [
@@ -397,6 +432,37 @@ const ENCOURAGEMENTS = [
   'Nice try! One more! 🎈',
 ];
 let encIdx = 0;
+
+// ── Letter writing hints ─────────────────────────────────────────────────────
+// Concise stroke-direction tips readable by a parent helping a young child
+const LETTER_HINTS = {
+  A: 'Slant down-left ↙  slant down-right ↘  then bar across —',
+  B: 'Big line down ↓  then two bumps to the right →→',
+  C: 'Start right, curve all the way around to the left ↺',
+  D: 'Line down ↓  then big curve to the right )',
+  E: 'Line down ↓  then three dashes to the right — — —',
+  F: 'Line down ↓  then two dashes right at the top — —',
+  G: 'Big curve like C, then a short shelf inside →',
+  H: 'Line down ↓  line down ↓  bar across the middle —',
+  I: 'Bar — line down ↓ bar — (like a column)',
+  J: 'Line down ↓  then hook left at the bottom ↰',
+  K: 'Line down ↓  then arm ↗ and leg ↘ from the middle',
+  L: 'Line down ↓  then foot to the right →',
+  M: 'Up ↑  peak down ↙↘  peak down again ↙↘  then up ↑',
+  N: 'Up ↑  diagonal down-right ↘  then back up ↑',
+  O: 'Big round circle ○  all the way around',
+  P: 'Line down ↓  then bump to the right at the top →',
+  Q: 'Big circle ○  then small tail at bottom-right ↘',
+  R: 'Line down ↓  bump top-right →  then leg out ↘',
+  S: 'Curve right-to-left at top, curve left-to-right at bottom',
+  T: 'Bar across the top —  then line straight down ↓',
+  U: 'Line down ↓  curve right ↷  line back up ↑',
+  V: 'Slant down-right ↘  then up-right ↗',
+  W: 'Down ↘  up ↗  down ↘  up ↗  (two V\'s side by side)',
+  X: 'Diagonal ↘  then cross it with ↗',
+  Y: 'Two diagonals meet ↘↙  then line straight down ↓',
+  Z: 'Line right →  diagonal down-left ↙  line right →',
+};
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -422,44 +488,76 @@ let lastX = 0, lastY = 0;
 
 function resizeCanvas() {
   const wrap = canvas.parentElement;
-  const w = wrap.clientWidth - 32;   // padding
-  const h = wrap.clientHeight - 40;  // feedback-msg height
+  const w = wrap.clientWidth - 32;
+  const h = wrap.clientHeight - 40;
   if (canvas.width === w && canvas.height === h) return;
-  const oldW = canvas.width, oldH = canvas.height;
-  // Save existing drawing
-  const saved = oldW > 0 ? ctx.getImageData(0, 0, oldW, oldH) : null;
   canvas.width = w;
   canvas.height = h;
   fillWhite();
-  if (saved && oldW > 0) ctx.putImageData(saved, 0, 0);
 }
 
 function fillWhite() {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (G.guideOn) _drawGuideGlyph();
+}
+
+function _drawGuideGlyph() {
+  const letter = G.letters[G.idx];
+  if (!letter) return;
+  const size = Math.min(canvas.width, canvas.height) * 0.82;
+  ctx.save();
+  ctx.globalAlpha = 0.09;
+  ctx.fillStyle = '#FF6B9D';
+  ctx.font = `900 ${size}px 'Nunito', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(letter, canvas.width / 2, canvas.height / 2);
+  ctx.restore();
 }
 
 function clearCanvas() {
-  fillWhite();
   G.hasInk = false;
+  G.strokes = [];
+  G.currentStroke = [];
   $('btn-check').disabled = true;
   hideFeedback();
+  fillWhite();
+}
+
+function toggleGuide() {
+  G.guideOn = !G.guideOn;
+  const btn = $('btn-help');
+  btn.textContent = G.guideOn ? '🙈 Hide' : '💡 Guide';
+  btn.classList.toggle('on', G.guideOn);
+
+  const tipEl = $('guide-tip');
+  const letter = G.letters[G.idx];
+  if (G.guideOn && letter) {
+    tipEl.textContent = LETTER_HINTS[letter] || '';
+    tipEl.classList.add('show');
+  } else {
+    tipEl.classList.remove('show');
+  }
+
+  // Redraw canvas to add/remove guide glyph (preserves user strokes on clear)
+  clearCanvas();
 }
 
 function getPos(e) {
   const r = canvas.getBoundingClientRect();
   const src = e.changedTouches ? e.changedTouches[0] : e;
-  return { x: src.clientX - r.left, y: src.clientY - r.top };
+  return { x: (src.clientX - r.left) * (canvas.width / r.width),
+           y: (src.clientY - r.top)  * (canvas.height / r.height) };
 }
 
 function startStroke(e) {
   if (!G.inputOn) return;
   e.preventDefault();
   drawing = true;
+  G.currentStroke = [];
   const {x, y} = getPos(e);
   lastX = x; lastY = y;
-  ctx.beginPath();
-  ctx.moveTo(x, y);
 }
 
 function moveStroke(e) {
@@ -474,6 +572,7 @@ function moveStroke(e) {
   ctx.moveTo(lastX, lastY);
   ctx.lineTo(x, y);
   ctx.stroke();
+  G.currentStroke.push([Math.round(x), Math.round(y)]);
   lastX = x; lastY = y;
   if (!G.hasInk) {
     G.hasInk = true;
@@ -481,28 +580,32 @@ function moveStroke(e) {
   }
 }
 
-function endStroke(e) {
+function endStroke() {
+  if (G.currentStroke.length) G.strokes.push([...G.currentStroke]);
+  G.currentStroke = [];
   drawing = false;
 }
 
-canvas.addEventListener('pointerdown',  startStroke, {passive: false});
-canvas.addEventListener('pointermove',  moveStroke,  {passive: false});
-canvas.addEventListener('pointerup',    endStroke,   {passive: false});
-canvas.addEventListener('pointercancel',endStroke,   {passive: false});
+canvas.addEventListener('pointerdown',   startStroke, {passive: false});
+canvas.addEventListener('pointermove',   moveStroke,  {passive: false});
+canvas.addEventListener('pointerup',     endStroke,   {passive: false});
+canvas.addEventListener('pointercancel', endStroke,   {passive: false});
 
 // ── Game flow ────────────────────────────────────────────────────────────────
 async function startGame() {
   showLoading('Shuffling letters…');
   try {
-    // Build shuffled A–Z list
-    const res = await fetch('/api/letter-words?letter=A');
-    const data = await res.json();
-    // Use all letters A-Z, shuffled
     const all = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-    G.letters = shuffle(all);
+    G.letters = shuffle(all).slice(0, 5);
     G.idx = 0;
     G.total = G.letters.length;
     G.stars = 0;
+    G.guideOn = false;
+    G.strokes = [];
+    G.currentStroke = [];
+    $('btn-help').textContent = '💡 Guide';
+    $('btn-help').classList.remove('on');
+    $('guide-tip').classList.remove('show');
     showScreen('game');
     await startRound();
   } finally {
@@ -514,17 +617,26 @@ async function startRound() {
   G.attempts = 0;
   G.hasInk = false;
   G.inputOn = true;
-  clearCanvas();
   hideFeedback();
 
   const letter = G.letters[G.idx];
 
-  // Update progress
   $('prog-fill').style.width = (G.idx / G.total * 100) + '%';
   $('prog-label').textContent = `Letter ${G.idx + 1} of ${G.total}`;
   $('letter-badge').textContent = letter;
 
-  // Show loading indicator for image while keeping game visible
+  // Update guide tip text for the new letter
+  if (G.guideOn) {
+    const tipEl = $('guide-tip');
+    tipEl.textContent = LETTER_HINTS[letter] || '';
+    tipEl.classList.add('show');
+  }
+
+  // Clear canvas (draws guide glyph if guide is on)
+  resizeCanvas();
+  clearCanvas();
+
+  // Fetch word + image in background
   const wordImg = $('word-img');
   const wordEmoji = $('word-emoji');
   wordImg.style.display = 'none';
@@ -532,7 +644,6 @@ async function startRound() {
   wordEmoji.textContent = '⏳';
   $('word-label').textContent = '…';
 
-  // Fetch word + image in background
   try {
     const res = await fetch(`/api/letter-words?letter=${letter}`);
     const {word, image} = await res.json();
@@ -549,33 +660,37 @@ async function startRound() {
     wordEmoji.textContent = '🖊️';
     $('word-label').textContent = letter + '…';
   }
-
-  // Size canvas now that screen is visible
-  resizeCanvas();
 }
 
 async function checkLetter() {
   if (!G.inputOn || !G.hasInk) return;
   G.inputOn = false;
   $('btn-check').disabled = true;
+  showLoading('Checking…');
 
   const b64 = canvas.toDataURL('image/png');
+  const target = G.letters[G.idx];
   let result;
   try {
     const res = await fetch('/api/recognize-letter', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({image: b64}),
+      body: JSON.stringify({
+        image: b64,
+        target,
+        stroke_count: G.strokes.length,
+      }),
     });
     result = await res.json();
   } catch {
+    hideLoading();
     G.inputOn = true;
     $('btn-check').disabled = false;
     return;
   }
+  hideLoading();
 
-  const target = G.letters[G.idx];
-  const accepted = isAccepted(target, result);
+  const accepted = result.accepted === true;
 
   if (accepted) {
     const firstTry = G.attempts === 0;
@@ -593,13 +708,6 @@ async function checkLetter() {
   }
 }
 
-function isAccepted(target, data) {
-  if (!data || data.error) return false;
-  if (data.letter === target) return true;
-  // Also accept if target appears in top-3 with confidence > 0.20
-  return (data.top3 || []).some(x => x.letter === target && x.prob > 0.20);
-}
-
 function nextRound() {
   G.idx++;
   if (G.idx >= G.total) {
@@ -614,6 +722,7 @@ function showWin() {
   $('win-stars').textContent = '⭐'.repeat(Math.max(1, starCount));
   $('win-subtitle').textContent = `You drew all ${G.total} letters!`;
   showScreen('win');
+  playChime(true);
   bigConfetti();
 }
 
@@ -637,8 +746,7 @@ function celebrate(big) {
 }
 
 function bigConfetti() {
-  const count = 60;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < 60; i++) {
     setTimeout(() => spawnParticle(), i * 18);
   }
 }
@@ -686,7 +794,7 @@ function playChime(big) {
   try {
     const ac = getAudio();
     const notes = big
-      ? [523.25, 659.25, 783.99, 1046.50]  // C5 E5 G5 C6
+      ? [523.25, 659.25, 783.99, 1046.50]
       : [523.25, 659.25, 783.99];
     notes.forEach((freq, i) => {
       setTimeout(() => {
@@ -713,9 +821,8 @@ function shuffle(arr) {
   return a;
 }
 
-// Resize canvas when window resizes (orientation change)
 window.addEventListener('resize', () => {
-  if (document.getElementById('game').classList.contains('active')) resizeCanvas();
+  if ($('game').classList.contains('active')) resizeCanvas();
 });
 </script>
 </body>

@@ -59,6 +59,38 @@ canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edge
     <label>Crabs take lives:</label>
     <button class="toggle-btn" id="crabLivesToggle">NO</button>
   </div>
+  <div class="splash-row">
+    <label>Respawn delay:</label>
+    <div class="lives-ctrl">
+      <button id="respawnDown">-</button>
+      <span id="respawnDisplay">2s</span>
+      <button id="respawnUp">+</button>
+    </div>
+  </div>
+  <div class="splash-row">
+    <label>Air supply:</label>
+    <div class="lives-ctrl">
+      <button id="breathDown">-</button>
+      <span id="breathDisplay">20s</span>
+      <button id="breathUp">+</button>
+    </div>
+  </div>
+  <div class="splash-row">
+    <label>Fish hold time:</label>
+    <div class="lives-ctrl">
+      <button id="fishDown">-</button>
+      <span id="fishDisplay">5s</span>
+      <button id="fishUp">+</button>
+    </div>
+  </div>
+  <div class="splash-row">
+    <label>Worm shot rate:</label>
+    <div class="lives-ctrl">
+      <button id="wormDown">-</button>
+      <span id="wormDisplay">5s</span>
+      <button id="wormUp">+</button>
+    </div>
+  </div>
   <button id="startBtn">START GAME</button>
   <div style="color:#555;font-size:13px;text-align:center;margin-top:8px;">
     ←→ / AD: Move &nbsp;|&nbsp; ↑ / W: Jump &nbsp;|&nbsp; Space / Z: Throw shell or shoot bubble &nbsp;|&nbsp; ↓ / S: Duck<br>
@@ -129,6 +161,12 @@ function sfxHurt()    { playTone(150, 'sawtooth', 0.3, 0.2, 400); }
 function sfxStar()   {
   [523,659,784,1047].forEach((f,i) => setTimeout(()=>playTone(f,'sine',0.25,0.15), i*100));
 }
+function sfxFishGrab()  { playTone(140,'sawtooth',0.3,0.22,380); }
+function sfxFishDie()   { playTone(320,'sawtooth',0.18,0.14,140); playTone(200,'sine',0.12,0.1); }
+function sfxSilkShoot() { playTone(580,'sine',0.14,0.1,280); }
+function sfxSilkHit()   { playTone(240,'square',0.25,0.2); playTone(190,'sine',0.18,0.15); }
+function sfxSilkFree()  { playTone(820,'sine',0.18,0.15,420); playTone(580,'sine',0.12,0.12,300); }
+function sfxWormDie()   { playTone(160,'sawtooth',0.2,0.16); playTone(90,'square',0.14,0.1); }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TILE = 32;
@@ -158,15 +196,24 @@ resize();
 window.addEventListener('resize', resize);
 
 // ─── Game state ───────────────────────────────────────────────────────────────
-let cfg = { lives: 3, crabLives: true };
+let cfg = {
+  lives: 3,
+  crabLives: false,
+  respawnDelay:    120,  // frames (no-lives mode pause before reappearing)
+  breathTime:     1200,  // frames (20 s water air supply)
+  fishHoldTime:    300,  // frames (5 s fish drag)
+  wormCooldownMin: 300,  // frames (min time between silk shots)
+  wormCooldownRng: 240,  // frames (random extra on top)
+};
 let state = {};
 
 function initState() {
   state = {
     score: 0,
     lives: cfg.lives,
-    phase: 'game',     // 'game' | 'dead' | 'win'
+    phase: 'game',     // 'game' | 'respawning' | 'dead' | 'win'
     deadTimer: 0,
+    respawnX: 0, respawnY: 0,
     cameraX: 0,
     levelWidth: LEVEL_LENGTH * TILE,
     player: null,
@@ -175,6 +222,9 @@ function initState() {
     crabs: [],
     mantisShrimps: [],
     bats: [],
+    fish: [],
+    silkWorms: [],
+    silkBalls: [],
     gems: [],
     shells: [],
     bubbles: [],
@@ -215,6 +265,9 @@ function generateLevel() {
   state.gems = [];
   state.shells = [];
   state.bubbles = [];
+  state.fish = [];
+  state.silkWorms = [];
+  state.silkBalls = [];
 
   const LW = state.levelWidth;
   const TW = Math.ceil(LW / TILE);
@@ -249,18 +302,28 @@ function generateLevel() {
   // Underground caves
   let cx = 400;
   while (cx < LW - 800) {
+    cx = Math.round(cx / TILE) * TILE; // keep cave position tile-aligned so hole filters match real tiles
     const caveLen = 15 + Math.floor(Math.random() * 20);
     const caveType = Math.random() < 0.4 ? 'water' : Math.random() < 0.5 ? 'lava' : 'normal';
     const caveRow = SURFACE_FLOOR + 2;
     const caveH = 5;
     const entryCol = Math.floor(cx / TILE);
 
-    state.caves.push({
+    const caveObj = {
       x: cx, y: caveRow * TILE, w: caveLen * TILE, h: caveH * TILE,
-      type: caveType, entryX: cx + TILE, entryY: caveRow * TILE
-    });
+      type: caveType, entryX: cx + TILE, entryY: caveRow * TILE, shaftCols: []
+    };
+    state.caves.push(caveObj);
 
-    // Floor hole (entry to cave) — remove all floor/dirt at the two entry columns
+    // Remove ALL dirt tiles inside the cave interior (rows 13-15 overlap cave y-range but
+    // are never cleared except at the entry columns, leaving solid bricks inside the cave).
+    state.platforms = state.platforms.filter(p =>
+      !(p.type === 'dirt' &&
+        p.x >= cx && p.x < cx + caveLen * TILE &&
+        p.y >= caveRow * TILE && p.y < (caveRow + caveH) * TILE)
+    );
+
+    // Floor hole (entry to cave) — remove floor tiles at the two entry columns
     for (let fi = 0; fi < 2; fi++) {
       const holeX = cx + fi * TILE;
       state.platforms = state.platforms.filter(p =>
@@ -280,28 +343,61 @@ function generateLevel() {
         state.platforms.push({ x: cx + col2*TILE, y: (caveRow-1)*TILE, w: TILE, h: TILE, type: 'cave_ceil' });
       }
       state.platforms.push({ x: cx + col2*TILE, y: (caveRow+caveH)*TILE, w: TILE, h: TILE, type: 'cave_floor' });
-      if (caveType === 'lava') {
-        state.platforms.push({ x: cx + col2*TILE, y: (caveRow+caveH-1)*TILE, w: TILE, h: TILE, type: 'lava' });
+    }
+
+    // Lava pools in lava caves: clusters of 2-3 tiles separated by walkable gaps
+    if (caveType === 'lava') {
+      let lx = 2;
+      while (lx < caveLen - 1) {
+        const poolLen = 2 + Math.floor(Math.random() * 2); // 2 or 3 tiles wide
+        for (let lp = 0; lp < poolLen && lx + lp < caveLen - 1; lp++) {
+          state.platforms.push({ x: cx + (lx+lp)*TILE, y: (caveRow+caveH-1)*TILE, w: TILE, h: TILE, type: 'lava' });
+        }
+        lx += poolLen + 2 + Math.floor(Math.random() * 2); // 2-3 tile walkable gap
       }
     }
 
-    // Exit hole: remove floor/dirt/cave_ceil at the two exit columns
-    const exitCol = entryCol + caveLen - 2;
-    state.platforms = state.platforms.filter(p =>
-      !(p.x >= exitCol*TILE && p.x < (exitCol+2)*TILE &&
-        (p.type === 'floor' || p.type === 'dirt' || p.type === 'cave_ceil'))
-    );
-    // One-way ledge midway up the exit shaft so player can exit in two jumps
-    if (caveType !== 'lava') {
+    // Exit shafts: periodic ceiling/floor/dirt gaps (every ~9 tiles) plus one at the
+    // very end, so the player is never forced to cross the whole cave (or swim the
+    // whole water cave) to find the only way out. Since the camera only scrolls
+    // forward, each shaft must be reachable without backtracking.
+    const skylightCols = [entryCol];
+    for (let sc = 5; sc < caveLen - 2; sc += 9) skylightCols.push(entryCol + sc);
+    skylightCols.push(entryCol + caveLen - 2);
+    caveObj.shaftCols = skylightCols;
+    for (const shaftCol of skylightCols.slice(1)) {
+      state.platforms = state.platforms.filter(p =>
+        !(p.x >= shaftCol*TILE && p.x < (shaftCol+2)*TILE &&
+          (p.type === 'floor' || p.type === 'dirt' || p.type === 'cave_ceil'))
+      );
+      // One-way ledge midway up the shaft so player can climb out in two jumps
       const ledgeY = Math.floor(((SURFACE_FLOOR * TILE) + (caveRow + caveH) * TILE) / 2 / TILE) * TILE;
-      state.platforms.push({ x: exitCol * TILE,       y: ledgeY, w: TILE, h: TILE, type: 'ledge' });
-      state.platforms.push({ x: (exitCol + 1) * TILE, y: ledgeY, w: TILE, h: TILE, type: 'ledge' });
+      state.platforms.push({ x: shaftCol * TILE,       y: ledgeY, w: TILE, h: TILE, type: 'ledge' });
+      state.platforms.push({ x: (shaftCol + 1) * TILE, y: ledgeY, w: TILE, h: TILE, type: 'ledge' });
     }
 
-    // Gems in cave
+    // Gems in cave (lava caves have gems on walkable floor between pools)
     for (let g = 0; g < caveLen - 2; g += 3) {
-      if (caveType !== 'lava') {
-        state.gems.push({ x: cx + (g+1)*TILE + 8, y: (caveRow+2)*TILE, collected: false, colorSeed: Math.floor(Math.random() * GEM_PALETTE.length) });
+      state.gems.push({ x: cx + (g+1)*TILE + 8, y: (caveRow+2)*TILE, collected: false, colorSeed: Math.floor(Math.random() * GEM_PALETTE.length) });
+    }
+
+    // Fish patrol water caves
+    if (caveType === 'water') {
+      const fishCount = Math.max(1, Math.floor(caveLen / 7));
+      for (let fi = 0; fi < fishCount; fi++) {
+        const fx = cx + (2 + fi * 6) * TILE;
+        const fy = caveRow * TILE + (caveH * TILE) / 2;
+        state.fish.push(createFish(fx, fy, cx, cx + caveLen * TILE));
+      }
+    }
+
+    // Silk worms patrol normal (dry) caves
+    if (caveType === 'normal') {
+      const wormCount = 1;
+      for (let wi = 0; wi < wormCount; wi++) {
+        const wx = cx + (3 + wi * 5) * TILE;
+        const wy = (caveRow + caveH) * TILE - TILE; // gravity settles them on cave floor
+        state.silkWorms.push(createSilkWorm(wx, wy, cx + TILE, cx + (caveLen - 1) * TILE));
       }
     }
 
@@ -366,6 +462,21 @@ function createBat(x, baseY) {
   };
 }
 
+function createFish(x, y, minX, maxX) {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  return { x, y, baseY: y, w: 28, h: 16, vx: 1.6 * dir, vy: 0,
+           alive: true, facingRight: dir > 0, grabbing: false,
+           grabCooldown: 0, minX, maxX, time: Math.random() * Math.PI * 2 };
+}
+
+function createSilkWorm(x, y, minX, maxX) {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  return { x, y, w: 24, h: 16, vx: 0.8 * dir, vy: 0,
+           alive: true, onGround: false, facingRight: dir > 0,
+           shootTimer: cfg.wormCooldownMin + Math.floor(Math.random() * cfg.wormCooldownRng),
+           minX, maxX };
+}
+
 function spawnPlayer() {
   state.player = {
     x: 80, y: (SURFACE_FLOOR - 2) * TILE,
@@ -383,6 +494,11 @@ function spawnPlayer() {
     spawnX: 80, spawnY: (SURFACE_FLOOR - 2) * TILE,
     gemColor: null, gemColorTimer: 0,
     groundPound: 0,
+    breathTimer: cfg.breathTime,   // drains only in water
+    silkBound: 0,        // frames remaining stuck in silk web
+    grabbed: false,      // being dragged by a fish
+    grabbedBy: null,
+    grabTimer: 0,
   };
 }
 
@@ -439,19 +555,92 @@ function updatePlayer(dt) {
   for (const cave of state.caves) {
     if (rectOverlap(pl.x, pl.y, pl.w, pl.h, cave.x, cave.y, cave.w, cave.h)) {
       if (cave.type === 'water') pl.inWater = true;
-      if (cave.type === 'lava') pl.inLava = true;
+      // Lava: only lethal when touching an actual lava tile, not the whole cave box
+    }
+    // Extend water physics up through each escape shaft to the surface, so a
+    // swimming player doesn't get yanked back down by normal gravity the instant
+    // they rise above the cave's roof while still inside the narrow shaft.
+    // Extend water physics up through escape shafts, but only while the player
+    // is actually inside the shaft (feet below the surface floor). This prevents
+    // swim gravity from kicking in while walking on the surface above the cave.
+    if (cave.type === 'water' && cave.shaftCols && pl.y + pl.h > SURFACE_FLOOR * TILE) {
+      const shaftTop = SURFACE_FLOOR * TILE;
+      const shaftBottom = cave.y + cave.h;
+      for (const col of cave.shaftCols) {
+        const shaftX = col * TILE;
+        if (rectOverlap(pl.x, pl.y, pl.w, pl.h, shaftX, shaftTop, TILE * 2, shaftBottom - shaftTop)) {
+          pl.inWater = true;
+          break;
+        }
+      }
     }
   }
 
-  // Lava damage
+  // Lava damage — only when touching an actual lava tile (not just in cave bounding box)
+  for (const p of state.platforms) {
+    if (p.type === 'lava' && overlap(pl, p)) { pl.inLava = true; break; }
+  }
   if (pl.inLava && pl.invincible <= 0) {
     loseLife(true);
     return;
   }
 
+  // Breath timer — 20 s of air; resets instantly when surfaced
+  if (pl.inWater) {
+    pl.breathTimer--;
+    if (pl.breathTimer <= 0) {
+      pl.breathTimer = cfg.breathTime;
+      loseLife(false);
+      return;
+    }
+  } else {
+    pl.breathTimer = cfg.breathTime;
+  }
+
   if (pl.invincible > 0) pl.invincible--;
   if (pl.gemColorTimer > 0) pl.gemColorTimer--;
   if (pl.groundPound > 0) pl.groundPound--;
+
+  // Grabbed by fish — player is dragged leftward for grabTimer frames
+  if (pl.grabbed) {
+    pl.grabTimer--;
+    if (pl.grabTimer <= 0) {
+      pl.grabbed = false;
+      if (pl.grabbedBy) {
+        pl.grabbedBy.grabbing = false;
+        pl.grabbedBy.grabCooldown = 220; // fish won't re-grab for ~3.5 s
+        pl.grabbedBy.vx = -Math.abs(pl.grabbedBy.vx); // swim away left
+        pl.grabbedBy = null;
+      }
+      pl.invincible = Math.max(pl.invincible, 90); // brief grace period
+    } else {
+      pl.vx = -1.5;
+      pl.vy += GRAVITY * 0.3;
+      pl.vy = Math.max(-3, Math.min(pl.vy, 3));
+      resolveEntityVsWorld(pl, solids);
+      if (pl.x < state.cameraX) { pl.x = state.cameraX; pl.vx = 0; }
+      pl.wasOnGround = pl.onGround;
+      return;
+    }
+  }
+
+  // Silk bound — frozen on ground; press ↓ to pound free
+  if (pl.silkBound > 0) {
+    pl.silkBound--;
+    if ((justPressed['ArrowDown'] || justPressed['KeyS']) && pl.onGround) {
+      pl.silkBound = 0;
+      sfxSilkFree();
+      spawnParticles(pl.x + pl.w/2, pl.y, '#f0f0f0', 8);
+    } else {
+      pl.vx = 0;
+      pl.vy += GRAVITY;
+      if (pl.vy > 18) pl.vy = 18;
+      resolveEntityVsWorld(pl, solids);
+      if (pl.x < state.cameraX) { pl.x = state.cameraX; pl.vx = 0; }
+      pl.wasOnGround = pl.onGround;
+      return;
+    }
+  }
 
   // Input
   const left   = keys['ArrowLeft']  || keys['KeyA'];
@@ -692,6 +881,11 @@ function triggerGroundPound(pl, plat) {
     const dx = (bat.x + bat.w/2) - cx, dy = (bat.y + bat.h/2) - cy;
     if (dx*dx + dy*dy < radius*radius) killBat(bat, bat.x + bat.w/2, bat.y);
   }
+  for (const worm of state.silkWorms) {
+    if (!worm.alive) continue;
+    const dx = (worm.x + worm.w/2) - cx, dy = (worm.y + worm.h/2) - cy;
+    if (dx*dx + dy*dy < radius*radius) killSilkWorm(worm, worm.x + worm.w/2, worm.y);
+  }
 }
 
 function updatePlatformStuns() {
@@ -722,6 +916,11 @@ function blockShockwave(cx, cy, impactVy) {
     if (!bat.alive) continue;
     const dx = (bat.x + bat.w/2) - cx, dy = (bat.y + bat.h/2) - cy;
     if (dx*dx + dy*dy < radius*radius) killBat(bat, bat.x + bat.w/2, bat.y);
+  }
+  for (const worm of state.silkWorms) {
+    if (!worm.alive) continue;
+    const dx = (worm.x + worm.w/2) - cx, dy = (worm.y + worm.h/2) - cy;
+    if (dx*dx + dy*dy < radius*radius) killSilkWorm(worm, worm.x + worm.w/2, worm.y);
   }
 }
 
@@ -788,12 +987,17 @@ function updateCrabs() {
     const pl = state.player;
     // Kill zone covers crab body + claws (claws extend ~16px above crab.y, ~19px sideways)
     const killBox = { x: crab.x - 19, y: crab.y - 16, w: crab.w + 38, h: crab.h + 16 };
-    // Stomp: player is airborne, overlaps kill zone, and feet are not below crab bottom
-    const stomping = !pl.onGround && overlap(pl, killBox) && pl.y + pl.h <= crab.y + crab.h;
+    // Stomp: player is falling onto the crab, overlaps kill zone, feet not below crab bottom
+    const stomping   = !pl.onGround && pl.vy >= 2  && overlap(pl, killBox) && pl.y + pl.h < crab.y + crab.h;
+    // Upward punch: player is rising fast into the crab from below
+    const punchingUp = !pl.onGround && pl.vy < -4 && overlap(pl, killBox);
     if (pl.invincible <= 0) {
       if (stomping) {
         killCrab(crab, pl.x + pl.w/2, crab.y);
         pl.vy = JUMP_FORCE * 0.6;
+      } else if (punchingUp) {
+        killCrab(crab, pl.x + pl.w/2, crab.y);
+        pl.vy = 4;
       } else if (overlap(pl, crab)) {
         hitPlayer(pl, pl.x < crab.x ? -1 : 1);
       }
@@ -801,6 +1005,9 @@ function updateCrabs() {
       if (stomping) {
         killCrab(crab, pl.x + pl.w/2, crab.y);
         pl.vy = JUMP_FORCE * 0.6;
+      } else if (punchingUp) {
+        killCrab(crab, pl.x + pl.w/2, crab.y);
+        pl.vy = 4;
       }
       if (overlap(pl, crab)) { tryDropShell(pl); pl.gemColor = null; pl.gemColorTimer = 0; }
     }
@@ -889,7 +1096,7 @@ function updateMantisShrimps() {
 
     // Player vs mantis (same stomp logic as crabs)
     const killBox = { x: ms.x - 14, y: ms.y - 12, w: ms.w + 28, h: ms.h + 12 };
-    const stomping = !pl.onGround && overlap(pl, killBox) && pl.y + pl.h <= ms.y + ms.h;
+    const stomping = !pl.onGround && pl.vy > 0 && overlap(pl, killBox) && pl.y + pl.h < ms.y + ms.h;
     if (pl.invincible <= 0) {
       if (stomping) {
         killMantis(ms, pl.x + pl.w/2, ms.y);
@@ -966,6 +1173,20 @@ function updateBubbles() {
         }
       }
     }
+    if (!consumed) {
+      for (const fish of state.fish) {
+        if (fish.alive && fish.x + fish.w >= scLeft && fish.x <= scRight && overlap(b, fish)) {
+          killFish(fish, b.x+b.w/2, fish.y); consumed = true; break;
+        }
+      }
+    }
+    if (!consumed) {
+      for (const worm of state.silkWorms) {
+        if (worm.alive && worm.x + worm.w >= scLeft && worm.x <= scRight && overlap(b, worm)) {
+          killSilkWorm(worm, b.x+b.w/2, worm.y); consumed = true; break;
+        }
+      }
+    }
     if (consumed) { state.bubbles.splice(i, 1); }
   }
 }
@@ -1033,6 +1254,175 @@ function killBat(bat, px, py) {
   spawnParticles(px, py, '#4020a0', 5);
 }
 
+function updateFish() {
+  const pl = state.player;
+  for (const fish of state.fish) {
+    if (!fish.alive) continue;
+
+    fish.time += 0.04;
+    if (fish.grabCooldown > 0) fish.grabCooldown--;
+
+    // Oscillate vertically around baseY (fixed, never drifts into walls)
+    fish.y = fish.baseY + Math.sin(fish.time) * 20;
+    fish.x += fish.vx;
+
+    // Bounce at cave bounds
+    if (fish.x < fish.minX) { fish.x = fish.minX; fish.vx =  Math.abs(fish.vx); fish.facingRight = true; }
+    if (fish.x + fish.w > fish.maxX) { fish.x = fish.maxX - fish.w; fish.vx = -Math.abs(fish.vx); fish.facingRight = false; }
+
+    // Keep grabbing state consistent with player
+    if (fish.grabbing && (!pl.grabbed || pl.grabbedBy !== fish)) fish.grabbing = false;
+
+    // Grab player if close, in water, and off cooldown
+    if (!pl.grabbed && pl.inWater && !fish.grabbing && pl.invincible <= 0 && fish.grabCooldown <= 0) {
+      const dx = (fish.x + fish.w/2) - (pl.x + pl.w/2);
+      const dy = (fish.y + fish.h/2) - (pl.y + pl.h/2);
+      if (dx*dx + dy*dy < 56*56) {
+        pl.grabbed   = true;
+        pl.grabbedBy = fish;
+        pl.grabTimer = cfg.fishHoldTime;
+        fish.grabbing = true;
+        sfxFishGrab();
+        spawnParticles(pl.x + pl.w/2, pl.y + pl.h/2, COL.fish1, 6);
+      }
+    }
+
+    // Lock fish position to grabbed player (mouth clamped at player's side)
+    if (fish.grabbing) {
+      fish.x = pl.x - fish.w - 2;
+      fish.y = pl.y + pl.h/2 - fish.h/2;
+      fish.baseY = fish.y; // sync baseY so fish resumes from here after release
+    }
+
+    // Shell kills fish
+    for (const sh of state.shells) {
+      if (sh.thrown && overlap(sh, fish)) {
+        killFish(fish, sh.x + sh.w/2, fish.y);
+        sh.thrown = false; sh.vx = 0;
+      }
+    }
+  }
+}
+
+function killFish(fish, px, py) {
+  fish.alive = false;
+  const pl = state.player;
+  if (fish.grabbing && pl.grabbedBy === fish) {
+    pl.grabbed = false; pl.grabbedBy = null; pl.grabTimer = 0;
+  }
+  fish.grabbing = false;
+  state.score += 300;
+  sfxFishDie();
+  spawnParticles(px, py, COL.fish1, 8);
+  spawnParticles(px, py, '#ffffff', 4);
+}
+
+function updateSilkWorms() {
+  const solids = getSolidPlatforms();
+  const pl = state.player;
+  for (const worm of state.silkWorms) {
+    if (!worm.alive) continue;
+
+    worm.vy += GRAVITY;
+    if (worm.vy > 18) worm.vy = 18;
+
+    worm.x += worm.vx;
+    for (const p of solids) {
+      if (overlap(worm, p)) {
+        if (worm.vx > 0) { worm.x = p.x - worm.w; worm.vx *= -1; worm.facingRight = false; }
+        else             { worm.x = p.x + p.w;     worm.vx *= -1; worm.facingRight = true; }
+      }
+    }
+    if (worm.x <= worm.minX) { worm.x = worm.minX; worm.vx =  Math.abs(worm.vx); worm.facingRight = true; }
+    if (worm.x + worm.w >= worm.maxX) { worm.x = worm.maxX - worm.w; worm.vx = -Math.abs(worm.vx); worm.facingRight = false; }
+
+    worm.y += worm.vy;
+    worm.onGround = false;
+    for (const p of solids) {
+      if (overlap(worm, p)) {
+        if (worm.vy > 0) { worm.y = p.y - worm.h; worm.vy = 0; worm.onGround = true; }
+        else             { worm.y = p.y + p.h;     worm.vy = 0; }
+      }
+    }
+
+    // Shoot silk ball toward player when on ground
+    worm.shootTimer--;
+    if (worm.shootTimer <= 0 && worm.onGround) {
+      worm.shootTimer = cfg.wormCooldownMin + Math.floor(Math.random() * cfg.wormCooldownRng);
+      const toRight = pl.x > worm.x;
+      worm.facingRight = toRight;
+      const bvx = toRight ? 5.5 : -5.5;
+      const bx  = toRight ? worm.x + worm.w + 2 : worm.x - 16;
+      state.silkBalls.push({ x: bx, y: worm.y + 2, w: 14, h: 12, vx: bvx, vy: 0, life: 690 });
+      sfxSilkShoot();
+    }
+
+    // Player vs silk worm: stomp kills, touch hurts
+    const killBox = { x: worm.x - 4, y: worm.y - 8, w: worm.w + 8, h: worm.h + 8 };
+    const stomping = !pl.onGround && pl.vy > 0 && overlap(pl, killBox) && pl.y + pl.h < worm.y + worm.h;
+    if (pl.invincible <= 0) {
+      if (stomping) {
+        killSilkWorm(worm, pl.x + pl.w/2, worm.y);
+        pl.vy = JUMP_FORCE * 0.6;
+      } else if (overlap(pl, worm)) {
+        hitPlayer(pl, pl.x < worm.x ? -1 : 1);
+      }
+    } else {
+      if (stomping) { killSilkWorm(worm, pl.x + pl.w/2, worm.y); pl.vy = JUMP_FORCE * 0.6; }
+      if (overlap(pl, worm)) { tryDropShell(pl); pl.gemColor = null; pl.gemColorTimer = 0; }
+    }
+
+    // Shell kills silk worm
+    for (const sh of state.shells) {
+      if (sh.thrown && overlap(sh, worm)) {
+        killSilkWorm(worm, sh.x + sh.w/2, worm.y);
+        sh.thrown = false; sh.vx = 0;
+      }
+    }
+  }
+}
+
+function updateSilkBalls() {
+  const pl = state.player;
+  const solids = getSolidPlatforms();
+  for (let i = state.silkBalls.length - 1; i >= 0; i--) {
+    const ball = state.silkBalls[i];
+    ball.life--;
+    ball.x += ball.vx;
+    // No gravity — silk balls fly flat across the cave
+
+    if (ball.life <= 0 || ball.x < state.cameraX - 100 || ball.x > state.cameraX + W + 100) {
+      state.silkBalls.splice(i, 1); continue;
+    }
+
+    // Dissolve on solid wall
+    let hitWall = false;
+    for (const p of solids) {
+      if (rectOverlap(ball.x, ball.y, ball.w, ball.h, p.x, p.y, p.w, p.h)) { hitWall = true; break; }
+    }
+    if (hitWall) { state.silkBalls.splice(i, 1); continue; }
+
+    // Hit player — ducking dodges it; otherwise binds them
+    if (pl.silkBound <= 0 && overlap(pl, ball)) {
+      state.silkBalls.splice(i, 1);
+      if (!pl.ducking) {
+        pl.silkBound = 200; // ~3.3 s; press ↓ on ground to break free
+        sfxSilkHit();
+        spawnParticles(pl.x + pl.w/2, pl.y + pl.h/2, '#f0f0f0', 10);
+        spawnParticles(pl.x + pl.w/2, pl.y + pl.h/2, '#cccccc', 5);
+      }
+    }
+  }
+}
+
+function killSilkWorm(worm, px, py) {
+  worm.alive = false;
+  state.score += 250;
+  sfxWormDie();
+  spawnParticles(px, py, COL.worm1, 8);
+  spawnParticles(px, py, '#ffffff', 4);
+}
+
 function updateParticles() {
   for (let i = state.particles.length - 1; i >= 0; i--) {
     const p = state.particles[i];
@@ -1060,6 +1450,17 @@ function spawnParticles(x, y, color, count) {
   }
 }
 
+// Finds the nearest surface floor tile at or after x, so repositioning the
+// player never drops them back over the same hole they just fell through
+// (which caused a fall-damage/reposition feedback loop at cave/lava entrances).
+function nearestSafeSurfaceX(x) {
+  let best = null;
+  for (const p of state.platforms) {
+    if (p.type === 'floor' && p.x >= x && (best === null || p.x < best)) best = p.x;
+  }
+  return best !== null ? best : x;
+}
+
 function loseLife(isLava) {
   sfxHurt();
   const pl = state.player;
@@ -1067,13 +1468,21 @@ function loseLife(isLava) {
   spawnParticles(pl.x + 12, pl.y + 16, '#f44', 12);
 
   if (!cfg.crabLives) {
-    // Invincible mode: no life loss, no camera reset — just drop item and
-    // place the player back on the surface at the current scroll position.
     tryDropShell(pl);
-    pl.x = Math.max(state.cameraX + pl.w + 4, pl.x);
-    pl.y = (SURFACE_FLOOR - 1) * TILE;
-    pl.vx = 0; pl.vy = 0;
-    pl.ducking = false; pl.h = 32;
+    pl.breathTimer = cfg.breathTime; pl.silkBound = 0;
+    if (pl.grabbed && pl.grabbedBy) pl.grabbedBy.grabbing = false;
+    pl.grabbed = false; pl.grabbedBy = null; pl.grabTimer = 0;
+    const rx = nearestSafeSurfaceX(Math.max(state.cameraX + pl.w + 4, pl.x));
+    const ry = (SURFACE_FLOOR - 1) * TILE;
+    if (cfg.respawnDelay > 0) {
+      state.phase = 'respawning';
+      state.deadTimer = cfg.respawnDelay;
+      state.respawnX = rx; state.respawnY = ry;
+      pl.vx = 0; pl.vy = 0; pl.ducking = false; pl.h = 32;
+    } else {
+      pl.x = rx; pl.y = ry;
+      pl.vx = 0; pl.vy = 0; pl.ducking = false; pl.h = 32;
+    }
     return;
   }
 
@@ -1087,6 +1496,9 @@ function loseLife(isLava) {
     pl.carrying = null;
     pl.ducking = false;
     pl.h = 32;
+    pl.breathTimer = cfg.breathTime; pl.silkBound = 0;
+    if (pl.grabbed && pl.grabbedBy) pl.grabbedBy.grabbing = false;
+    pl.grabbed = false; pl.grabbedBy = null; pl.grabTimer = 0;
     state.cameraX = Math.max(0, pl.x - W/3);
   }
 }
@@ -1165,6 +1577,13 @@ const COL = {
   particle: '#fff',
   bgMtn1:   '#304060',
   bgMtn2:   '#203050',
+  fish1:     '#20c8a0',
+  fish2:     '#0da880',
+  fishBelly: '#b0ffe0',
+  worm1:     '#c8e840',
+  worm2:     '#a0c030',
+  worm3:     '#e8ff60',
+  silk:      '#f0f0f0',
 };
 
 function drawBackground() {
@@ -1307,7 +1726,14 @@ function drawCaves() {
         ctx.fillRect(sx + wi, cave.y, 8, wh);
       }
     } else if (cave.type === 'lava') {
-      ctx.fillStyle = '#1a0800';
+      ctx.fillStyle = '#2e0400';
+      ctx.fillRect(sx, cave.y, cave.w, cave.h);
+      // Orange glow rising from the lava floor
+      const lavaGrad = ctx.createLinearGradient(0, cave.y, 0, cave.y + cave.h);
+      lavaGrad.addColorStop(0,   'rgba(200, 40, 0, 0)');
+      lavaGrad.addColorStop(0.5, 'rgba(220, 60, 0, 0.18)');
+      lavaGrad.addColorStop(1,   'rgba(255, 100, 0, 0.45)');
+      ctx.fillStyle = lavaGrad;
       ctx.fillRect(sx, cave.y, cave.w, cave.h);
     } else {
       ctx.fillStyle = '#160e06';
@@ -1796,6 +2222,190 @@ function drawPlayer() {
   }
 
   ctx.restore();
+
+  // Silk-bound web overlay (world space)
+  if (pl.silkBound > 0) {
+    const flash = Math.floor(Date.now() / 120) % 2 === 0;
+    ctx.save();
+    ctx.globalAlpha = flash ? 0.85 : 0.5;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    const ox = pl.x, oy = pl.y, pw = pl.w, ph = pl.h;
+    ctx.beginPath();
+    ctx.moveTo(ox,      oy);      ctx.lineTo(ox + pw, oy + ph);
+    ctx.moveTo(ox + pw, oy);      ctx.lineTo(ox,      oy + ph);
+    ctx.moveTo(ox + pw/2, oy);    ctx.lineTo(ox + pw/2, oy + ph);
+    ctx.moveTo(ox, oy + ph/2);    ctx.lineTo(ox + pw, oy + ph/2);
+    ctx.stroke();
+    ctx.globalAlpha = flash ? 0.22 : 0.10;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(ox, oy, pw, ph);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+}
+
+function drawFish() {
+  const cx = state.cameraX;
+  for (const fish of state.fish) {
+    if (!fish.alive) continue;
+    if (fish.x + fish.w < cx || fish.x > cx + W) continue;
+
+    ctx.save();
+    ctx.translate(fish.x + fish.w/2, fish.y + fish.h/2);
+    if (!fish.facingRight) ctx.scale(-1, 1);
+
+    // Tail fin
+    ctx.fillStyle = COL.fish2;
+    ctx.beginPath();
+    ctx.moveTo(-14, 0);
+    ctx.lineTo(-22, -8);
+    ctx.lineTo(-22,  8);
+    ctx.closePath();
+    ctx.fill();
+
+    // Body
+    ctx.fillStyle = COL.fish1;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 13, 7, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Belly stripe
+    ctx.fillStyle = COL.fishBelly;
+    ctx.beginPath();
+    ctx.ellipse(1, 2, 9, 4, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Dorsal fin
+    ctx.fillStyle = COL.fish2;
+    ctx.beginPath();
+    ctx.moveTo(-3, -7);
+    ctx.lineTo( 3, -13);
+    ctx.lineTo( 8, -7);
+    ctx.closePath();
+    ctx.fill();
+
+    // Eye
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(5, -4, 6, 6);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(6, -3, 4, 4);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(6, -3, 2, 2);
+
+    // Open mouth when grabbing
+    if (fish.grabbing) {
+      ctx.fillStyle = '#ff4040';
+      ctx.fillRect(10, -2, 6, 5);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(10, -2, 6, 2);
+      ctx.fillRect(10,  1, 6, 2);
+    }
+
+    ctx.restore();
+  }
+}
+
+function drawSilkWorms() {
+  const cx = state.cameraX;
+  for (const worm of state.silkWorms) {
+    if (!worm.alive) continue;
+    if (worm.x + worm.w < cx || worm.x > cx + W) continue;
+
+    ctx.save();
+    ctx.translate(worm.x + worm.w/2, worm.y + worm.h);
+    if (!worm.facingRight) ctx.scale(-1, 1);
+
+    const t = Date.now() / 120;
+
+    // Legs
+    ctx.fillStyle = COL.worm2;
+    for (let i = 0; i < 3; i++) {
+      const legX = -9 + i * 8;
+      const legLen = 4 + Math.sin(t + i * 0.9) * 2;
+      ctx.fillRect(legX - 1, -3, 2, legLen);
+    }
+
+    // Body segments
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i % 2 === 0 ? COL.worm1 : COL.worm2;
+      const segX = -10 + i * 8;
+      const bob = Math.sin(t + i * 1.1) * 1.5;
+      ctx.beginPath();
+      ctx.ellipse(segX, -9 + bob, 6, 7, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = COL.worm3;
+      ctx.beginPath();
+      ctx.ellipse(segX - 1, -11 + bob, 3, 3, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Head
+    ctx.fillStyle = COL.worm3;
+    ctx.beginPath();
+    ctx.ellipse(12, -11, 7, 7, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = COL.worm1;
+    ctx.beginPath();
+    ctx.ellipse(12, -12, 5, 5, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Antennae
+    ctx.strokeStyle = COL.worm2;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo( 9, -17); ctx.lineTo( 6, -24);
+    ctx.moveTo(14, -17); ctx.lineTo(17, -24);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc( 6, -24, 2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(17, -24, 2, 0, Math.PI*2); ctx.fill();
+
+    // Eyes
+    ctx.fillStyle = '#000';
+    ctx.fillRect( 8, -15, 3, 3);
+    ctx.fillRect(13, -15, 3, 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect( 8, -15, 1, 1);
+    ctx.fillRect(13, -15, 1, 1);
+
+    ctx.restore();
+  }
+}
+
+function drawSilkBalls() {
+  const cx = state.cameraX;
+  for (const ball of state.silkBalls) {
+    if (ball.x + ball.w < cx || ball.x > cx + W) continue;
+    const bx = ball.x + ball.w/2;
+    const by = ball.y + ball.h/2;
+    const alpha = Math.min(1, ball.life / 40);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Fluffy white blob
+    ctx.fillStyle = COL.silk;
+    ctx.beginPath();
+    ctx.ellipse(bx, by, ball.w/2, ball.h/2, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(bx - 3, by - 2, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bx + 3, by - 2, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bx,     by + 2, 4, 0, Math.PI*2); ctx.fill();
+
+    // Strand cross
+    ctx.strokeStyle = '#cccccc';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(ball.x, by); ctx.lineTo(ball.x + ball.w, by);
+    ctx.moveTo(bx, ball.y); ctx.lineTo(bx, ball.y + ball.h);
+    ctx.stroke();
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 }
 
 function drawStar() {
@@ -1889,6 +2499,9 @@ function gameLoop(ts) {
     updateCrabs();
     updateMantisShrimps();
     updateBats();
+    updateFish();
+    updateSilkWorms();
+    updateSilkBalls();
     updateShells();
     updateBubbles();
     updateShockwaves();
@@ -1896,6 +2509,16 @@ function gameLoop(ts) {
     updateParticles();
     updateCamera();
     updateHUD();
+    clearJust();
+  } else if (state.phase === 'respawning') {
+    state.deadTimer--;
+    if (state.deadTimer <= 0) {
+      const pl = state.player;
+      pl.x = state.respawnX; pl.y = state.respawnY;
+      pl.invincible = 90;
+      state.phase = 'game';
+    }
+    updateParticles();
     clearJust();
   }
 
@@ -1912,6 +2535,9 @@ function gameLoop(ts) {
   drawCrabs();
   drawMantisShrimps();
   drawBats();
+  drawFish();
+  drawSilkWorms();
+  drawSilkBalls();
   drawBubbles();
   drawStar();
   drawPlayer();
@@ -1919,12 +2545,205 @@ function gameLoop(ts) {
   drawParticles();
   ctx.restore();
 
+  // Respawn overlay (no-lives mode)
+  if (state.phase === 'respawning') {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('RESPAWNING...', W/2, H/2);
+    ctx.textAlign = 'left';
+  }
+
+  // Breath meter — screen space, drawn after world transform is popped
+  if ((state.phase === 'game' || state.phase === 'respawning') && state.player && state.player.inWater) {
+    const pl = state.player;
+    const totalBubbles = 10;
+    const bw = totalBubbles * 24 + 8;
+    const bx = (W - bw) / 2;
+    const by = H - 38;
+    const framesPerBubble = cfg.breathTime / totalBubbles;
+    const bubblesLeft = Math.ceil(pl.breathTimer / framesPerBubble);
+    const warn = bubblesLeft <= 3;
+
+    ctx.fillStyle = 'rgba(0,20,60,0.75)';
+    ctx.fillRect(bx - 28, by - 4, bw + 36, 28);
+
+    ctx.fillStyle = 'rgba(140,210,255,0.9)';
+    ctx.font = '11px monospace';
+    ctx.fillText('AIR', bx - 24, by + 14);
+
+    for (let i = 0; i < totalBubbles; i++) {
+      const full = i < bubblesLeft;
+      if (full) {
+        const warnFlash = warn && Math.floor(Date.now() / 200) % 2 === 0;
+        ctx.fillStyle = warnFlash ? '#ff6060' : 'rgba(80,190,255,0.95)';
+      } else {
+        ctx.fillStyle = 'rgba(25,45,85,0.55)';
+      }
+      ctx.beginPath();
+      ctx.arc(bx + i * 24 + 10, by + 10, 9, 0, Math.PI*2);
+      ctx.fill();
+      if (full) {
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.beginPath();
+        ctx.arc(bx + i * 24 + 7, by + 7, 4, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+  }
+
+  drawTouchHints();
+
   animId = requestAnimationFrame(gameLoop);
+}
+
+// ─── Touch controls ───────────────────────────────────────────────────────────
+// The canvas is divided into 5 zones by its two diagonals:
+//   a small fire circle at center, and four triangles (top=jump, bottom=duck,
+//   left=move left, right=move right) for the rest of the screen.
+let touchHintsVisible = false;
+const touchMap = new Map(); // touch.identifier → key string
+
+function canvasTouchXY(t) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (t.clientX - rect.left) * (W / rect.width),
+    y: (t.clientY - rect.top)  * (H / rect.height),
+  };
+}
+
+function getTouchZone(cx, cy) {
+  const dx = cx - W / 2, dy = cy - H / 2;
+  if (dx * dx + dy * dy < 52 * 52) return 'Space';
+  const nx = cx / W, ny = cy / H;
+  const d1 = ny - nx, d2 = ny - (1 - nx);
+  if (d1 < 0 && d2 < 0) return 'ArrowUp';
+  if (d1 > 0 && d2 > 0) return 'ArrowDown';
+  if (d1 > 0 && d2 < 0) return 'ArrowLeft';
+  return 'ArrowRight';
+}
+
+function touchPress(id, key) {
+  keys[key] = true;
+  justPressed[key] = true;
+  touchMap.set(id, key);
+}
+
+function touchRelease(id) {
+  const key = touchMap.get(id);
+  if (!key) return;
+  touchMap.delete(id);
+  for (const k of touchMap.values()) if (k === key) return; // another touch holds it
+  delete keys[key];
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  touchHintsVisible = true;
+  for (const t of e.changedTouches) {
+    const { x, y } = canvasTouchXY(t);
+    touchPress(t.identifier, getTouchZone(x, y));
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const { x, y } = canvasTouchXY(t);
+    const newKey = getTouchZone(x, y);
+    const oldKey = touchMap.get(t.identifier);
+    if (newKey !== oldKey) {
+      touchRelease(t.identifier);
+      touchPress(t.identifier, newKey);
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) touchRelease(t.identifier);
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', e => {
+  for (const t of e.changedTouches) touchRelease(t.identifier);
+});
+
+function drawTouchHints() {
+  if (!touchHintsVisible) return;
+  const cx = W / 2, cy = H / 2;
+  const activeKeys = new Set(touchMap.values());
+
+  ctx.save();
+
+  // Draw the 4 triangles
+  const zones = [
+    { key: 'ArrowUp',    pts: [[0,0],[W,0],[cx,cy]],         label: '▲', lx: cx,   ly: cy*0.38 },
+    { key: 'ArrowDown',  pts: [[0,H],[W,H],[cx,cy]],         label: '▼', lx: cx,   ly: H - cy*0.3 },
+    { key: 'ArrowLeft',  pts: [[0,0],[0,H],[cx,cy]],         label: '◀', lx: cx*0.28, ly: cy },
+    { key: 'ArrowRight', pts: [[W,0],[W,H],[cx,cy]],         label: '▶', lx: W - cx*0.28, ly: cy },
+  ];
+  for (const z of zones) {
+    const active = activeKeys.has(z.key);
+    ctx.beginPath();
+    ctx.moveTo(z.pts[0][0], z.pts[0][1]);
+    ctx.lineTo(z.pts[1][0], z.pts[1][1]);
+    ctx.lineTo(z.pts[2][0], z.pts[2][1]);
+    ctx.closePath();
+    ctx.fillStyle = active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)';
+    ctx.fill();
+    ctx.strokeStyle = active ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)';
+    ctx.font = `bold ${active ? 28 : 22}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(z.label, z.lx, z.ly);
+  }
+
+  // Center fire circle
+  const fireActive = activeKeys.has('Space');
+  ctx.beginPath();
+  ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+  ctx.fillStyle = fireActive ? 'rgba(255,180,0,0.35)' : 'rgba(255,255,255,0.08)';
+  ctx.fill();
+  ctx.strokeStyle = fireActive ? 'rgba(255,200,60,0.8)' : 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = fireActive ? 'rgba(255,220,0,1)' : 'rgba(255,255,255,0.45)';
+  ctx.font = `bold ${fireActive ? 22 : 17}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('FIRE', cx, cy);
+
+  ctx.restore();
 }
 
 // ─── Splash screen controls ───────────────────────────────────────────────────
 let splashLives = 3;
 let splashCrabLives = false;
+// Values in human units; converted to frames on startGame
+let splashRespawn = 2;   // seconds (0–4)
+let splashBreath  = 20;  // seconds (5–60)
+let splashFish    = 5;   // seconds (1–10)
+let splashWorm    = 5;   // seconds between shots (2–12)
+
+function mkAdj(getVal, setVal, displayId, min, max, step, fmt) {
+  document.getElementById(displayId.replace('Display','Down')).addEventListener('click', () => {
+    const v = Math.max(min, getVal() - step); setVal(v);
+    document.getElementById(displayId).textContent = fmt(v);
+  });
+  document.getElementById(displayId.replace('Display','Up')).addEventListener('click', () => {
+    const v = Math.min(max, getVal() + step); setVal(v);
+    document.getElementById(displayId).textContent = fmt(v);
+  });
+}
+mkAdj(() => splashRespawn, v => splashRespawn = v, 'respawnDisplay', 0, 4, 1, v => v + 's');
+mkAdj(() => splashBreath,  v => splashBreath  = v, 'breathDisplay',  5, 60, 5, v => v + 's');
+mkAdj(() => splashFish,    v => splashFish    = v, 'fishDisplay',    1, 10, 1, v => v + 's');
+mkAdj(() => splashWorm,    v => splashWorm    = v, 'wormDisplay',    2, 12, 1, v => v + 's');
 
 document.getElementById('livesDown').addEventListener('click', () => {
   if (splashLives > 1) { splashLives--; document.getElementById('livesDisplay').textContent = splashLives; }
@@ -1941,6 +2760,11 @@ document.getElementById('crabLivesToggle').addEventListener('click', function() 
 function startGame() {
   cfg.lives = splashLives;
   cfg.crabLives = splashCrabLives;
+  cfg.respawnDelay    = splashRespawn * 60;
+  cfg.breathTime      = splashBreath  * 60;
+  cfg.fishHoldTime    = splashFish    * 60;
+  cfg.wormCooldownMin = splashWorm    * 60;
+  cfg.wormCooldownRng = Math.max(60, splashWorm * 30);
   document.getElementById('splash').style.display = 'none';
   document.getElementById('gameOver').style.display = 'none';
   document.getElementById('winScreen').style.display = 'none';

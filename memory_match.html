@@ -206,6 +206,23 @@ html, body {
   100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
 }
 
+/* ── Match toast ── */
+.match-toast {
+  position: fixed; top: 42%; left: 50%;
+  transform: translateX(-50%) scale(0);
+  background: linear-gradient(135deg, #FF6B9D, #FF8E53);
+  color: #fff; font-size: clamp(20px,5.5vw,30px); font-weight: 900;
+  padding: 10px 26px; border-radius: 50px;
+  pointer-events: none; z-index: 100;
+  animation: toastPop 0.85s ease forwards;
+}
+@keyframes toastPop {
+  0%   { transform: translateX(-50%) scale(0);    opacity: 0; }
+  30%  { transform: translateX(-50%) scale(1.15); opacity: 1; }
+  65%  { transform: translateX(-50%) scale(1);    opacity: 1; }
+  100% { transform: translateX(-50%) scale(.85) translateY(-36px); opacity: 0; }
+}
+
 /* ── Shake ── */
 @keyframes shake {
   0%,100% { transform: translateX(0); }
@@ -243,6 +260,12 @@ html, body {
     <button class="opt-btn"          data-val="food"     onclick="pickOpt(this,'theme')">Food 🍎</button>
     <button class="opt-btn"          data-val="vehicles" onclick="pickOpt(this,'theme')">Vehicles 🚗</button>
     <button class="opt-btn"          data-val="mix"      onclick="pickOpt(this,'theme')">Mix 🎲</button>
+  </div>
+
+  <div class="splash-label">Read Aloud</div>
+  <div class="opt-row" id="readaloud-opts">
+    <button class="opt-btn selected" data-val="on"  onclick="pickOpt(this,'readAloud')">On 🔊</button>
+    <button class="opt-btn"          data-val="off" onclick="pickOpt(this,'readAloud')">Off 🔇</button>
   </div>
 
   <button class="btn-play" onclick="startGame()">PLAY</button>
@@ -298,7 +321,7 @@ html, body {
 const $ = id => document.getElementById(id);
 
 // ── Settings ──
-const S = { mode: '1', diff: 'easy', theme: 'animals' };
+const S = { mode: '1', diff: 'easy', theme: 'animals', readAloud: 'on' };
 
 const THEMES = {
   animals:  ['🐶','🐱','🐸','🐷','🦊','🐻','🐨','🦁','🐔','🦋'],
@@ -344,6 +367,14 @@ function playTone(freq, type, dur, vol = 0.18, endFreq = null) {
   } catch {}
 }
 function playFlip() { playTone(500, 'sine', 0.08, 0.12, 350); }
+const MATCH_TOASTS = ['🌟 Match!','⭐ Nice!','🎉 Found it!','✨ Yes!','💫 Pair!','🥳 Great!'];
+function showMatchToast() {
+  const el = document.createElement('div');
+  el.className = 'match-toast';
+  el.textContent = MATCH_TOASTS[Math.floor(Math.random() * MATCH_TOASTS.length)];
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
 function playMatch() {
   [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.18, 0.22), i * 90));
 }
@@ -351,6 +382,12 @@ function playMiss() { playTone(180, 'square', 0.15, 0.15); }
 function playCelebrate() {
   const melody = [523, 587, 659, 698, 784, 880, 988, 1046];
   melody.forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.22, 0.25), i * 80));
+}
+
+// ── Read aloud (pre-recorded clips) ──
+function playClip(id) {
+  if (S.readAloud === 'off') return;
+  try { new Audio(`/audio/${id}.mp3`).play().catch(() => {}); } catch {}
 }
 
 // ── Helpers ──
@@ -417,6 +454,7 @@ function startGame() {
     $('turn-banner').style.display = 'flex';
     $('solo-bar').style.display    = 'none';
     updateTurnBanner();
+    playClip('player1_turn');
   } else {
     $('turn-banner').style.display = 'none';
     $('solo-bar').style.display    = 'flex';
@@ -452,6 +490,7 @@ function flipCard(i) {
         }
         updateSoloBar();
         playMatch();
+        showMatchToast();
         G.flipped = [];
         G.locked = false;
         if (G.matchedPairs === G.totalPairs) setTimeout(showWin, 400);
@@ -470,6 +509,7 @@ function flipCard(i) {
           if (S.mode === '2') {
             G.turn = 1 - G.turn;
             updateTurnBanner();
+            playClip(G.turn === 0 ? 'player1_turn' : 'player2_turn');
           }
         }, 500);
       }, 700);

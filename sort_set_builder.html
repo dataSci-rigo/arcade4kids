@@ -264,6 +264,7 @@ const $ = id => document.getElementById(id);
 // ── Counting Items ────────────────────────────────────────────────────────────
 let ciImages = [];
 let ciPicked  = new Set();
+let ciEditingId = null;
 
 function setCiStatus(msg, cls) {
   const s = $('ci-status'); s.textContent = msg; s.className = cls || '';
@@ -317,6 +318,10 @@ async function ciSave() {
   $('ci-save-btn').disabled = true;
   setCiStatus('Saving & caching images…', '');
   try {
+    if (ciEditingId) {
+      await fetch(`/api/item-sets/${ciEditingId}`, { method: 'DELETE' });
+      ciEditingId = null;
+    }
     const res  = await fetch('/api/item-sets', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ label, images: Array.from(ciPicked) }),
@@ -326,6 +331,7 @@ async function ciSave() {
     setCiStatus(`Saved "${data.label}"! Now available in Counting Garden & Math Garden.`, 'ok');
     $('ci-label').value = ''; $('ci-search').value = '';
     ciImages = []; ciPicked = new Set();
+    $('ci-save-btn').textContent = 'Save Item Set';
     renderCiThumbs(); checkCiReady();
     loadCiSavedSets();
   } catch { setCiStatus('Could not reach server.', 'err'); $('ci-save-btn').disabled = false; }
@@ -356,16 +362,33 @@ async function loadCiSavedSets() {
       const nameDiv = document.createElement('div');
       nameDiv.innerHTML = `<div style="font-weight:900;font-size:15px">${set.label}</div><div style="font-size:12px;color:#999;font-weight:700">${set.images.length} images</div>`;
       info.appendChild(thumbRow); info.appendChild(nameDiv);
+      const btnWrap = document.createElement('div');
+      btnWrap.style.cssText = 'display:flex;gap:8px;flex-shrink:0';
+      const edit = document.createElement('button');
+      edit.className = 'action btn-primary';
+      edit.style.cssText = 'font-size:13px;padding:8px 14px';
+      edit.textContent = 'Edit';
+      edit.onclick = () => {
+        ciEditingId = set.id;
+        $('ci-label').value = set.label;
+        ciImages = [...set.images];
+        ciPicked = new Set(set.images);
+        renderCiThumbs(); checkCiReady();
+        $('ci-save-btn').textContent = 'Update Item Set';
+        setCiStatus('Editing — update images then click Update.', '');
+        $('ci-label').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
       const del = document.createElement('button');
       del.className = 'action btn-secondary';
-      del.style.cssText = 'font-size:13px;padding:8px 14px;flex-shrink:0';
+      del.style.cssText = 'font-size:13px;padding:8px 14px';
       del.textContent = 'Delete';
       del.onclick = async () => {
         if (!confirm(`Delete "${set.label}"?`)) return;
         await fetch(`/api/item-sets/${set.id}`, { method: 'DELETE' });
         loadCiSavedSets();
       };
-      row.appendChild(info); row.appendChild(del);
+      btnWrap.appendChild(edit); btnWrap.appendChild(del);
+      row.appendChild(info); row.appendChild(btnWrap);
       wrap.appendChild(row);
     });
   } catch {}
@@ -376,6 +399,7 @@ loadCiSavedSets();
 // ── Sort Sets ─────────────────────────────────────────────────────────────────
 let binCount = 0;
 const binData = {}; // id -> { images: [...], picked: Set }
+let sortEditingId = null;
 
 async function loadSavedSets() {
   try {
@@ -392,17 +416,54 @@ async function loadSavedSets() {
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#f5f0ff;border-radius:14px;padding:12px 16px;';
       const info = document.createElement('div');
       info.innerHTML = `<div style="font-weight:900;font-size:16px">${set.label}</div><div style="font-size:12px;color:#999;font-weight:700">${set.bins.map(b=>b.icon+' '+b.label).join(' vs ')}</div>`;
+      const btnWrap = document.createElement('div');
+      btnWrap.style.cssText = 'display:flex;gap:8px;flex-shrink:0';
+      const edit = document.createElement('button');
+      edit.className = 'action btn-primary';
+      edit.style.cssText = 'font-size:13px;padding:8px 14px';
+      edit.textContent = 'Edit';
+      edit.onclick = () => {
+        sortEditingId = set.id;
+        $('set-label').value = set.label;
+        $('bins').innerHTML = '';
+        Object.keys(binData).forEach(k => delete binData[k]);
+        binCount = 0;
+        set.bins.forEach(b => {
+          const id = binCount++;
+          binData[id] = { images: [...b.images], picked: new Set(b.images) };
+          const card = document.createElement('div');
+          card.className = 'bin-card'; card.id = `bin-${id}`;
+          card.innerHTML = `
+            <div class="bin-row">
+              <input type="text" class="icon-input" placeholder="🦋" maxlength="4" id="icon-${id}" value="${b.icon || ''}">
+              <input type="text" placeholder="Category name" id="label-${id}" value="${b.label || ''}">
+              <button class="bin-remove" onclick="removeBin(${id})">&times;</button>
+            </div>
+            <div class="bin-hint">Optional: search term, if different from name</div>
+            <input type="text" placeholder="Search term (optional)" id="query-${id}" style="margin-top:6px">
+            <div class="thumbs" id="thumbs-${id}"></div>
+          `;
+          $('bins').appendChild(card);
+          renderThumbs(id);
+        });
+        updateAddButton();
+        checkReadyToSave();
+        $('save-btn').textContent = 'Update Set';
+        setStatus('Editing — adjust images then click Update.', '');
+        $('set-label').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
       const del = document.createElement('button');
       del.className = 'action btn-secondary';
-      del.style.cssText = 'font-size:13px;padding:8px 16px;';
+      del.style.cssText = 'font-size:13px;padding:8px 14px';
       del.textContent = 'Delete';
       del.onclick = async () => {
         if (!confirm(`Delete "${set.label}"?`)) return;
         await fetch(`/api/custom-sets/${set.id}`, { method: 'DELETE' });
         loadSavedSets();
       };
+      btnWrap.appendChild(edit); btnWrap.appendChild(del);
       row.appendChild(info);
-      row.appendChild(del);
+      row.appendChild(btnWrap);
       wrap.appendChild(row);
     });
   } catch {}
@@ -525,6 +586,10 @@ async function saveSet() {
   setStatus('Saving...', '');
   $('save-btn').disabled = true;
   try {
+    if (sortEditingId) {
+      await fetch(`/api/custom-sets/${sortEditingId}`, { method: 'DELETE' });
+      sortEditingId = null;
+    }
     const res = await fetch('/api/custom-sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -533,6 +598,7 @@ async function saveSet() {
     const data = await res.json();
     if (!res.ok) { setStatus(data.error || 'Could not save.', 'err'); $('save-btn').disabled = false; return; }
     setStatus(`Saved "${data.label}"! Open Sort It Out to play it.`, 'ok');
+    $('save-btn').textContent = 'Save Set';
     loadSavedSets();
   } catch (e) {
     setStatus('Could not reach the server.', 'err');
@@ -546,6 +612,7 @@ loadSavedSets();
 
 // ── Spelling Word Sets ────────────────────────────────────────────────────────
 const spWords = [];
+let spEditingId = null;
 
 function addSpWord() {
   const inp = $('sp-word-input');
@@ -595,6 +662,10 @@ async function saveSpSet() {
   $('sp-save-btn').disabled = true;
   setSpStatus('Saving...', '');
   try {
+    if (spEditingId) {
+      await fetch(`/api/spelling-sets/${spEditingId}`, { method: 'DELETE' });
+      spEditingId = null;
+    }
     const res = await fetch('/api/spelling-sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -605,6 +676,7 @@ async function saveSpSet() {
     setSpStatus(`Saved "${data.label}"! Open Spelling Adventure to play it.`, 'ok');
     $('sp-label').value = '';
     spWords.length = 0;
+    $('sp-save-btn').textContent = 'Save Word Set';
     renderSpTags();
     loadSpSavedSets();
   } catch {
@@ -628,17 +700,34 @@ async function loadSpSavedSets() {
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#f5f0ff;border-radius:14px;padding:12px 16px;gap:12px';
       const info = document.createElement('div');
       info.innerHTML = `<div style="font-weight:900;font-size:16px">${set.label}</div><div style="font-size:12px;color:#999;font-weight:700;margin-top:3px">${set.words.join(', ')}</div>`;
+      const btnWrap = document.createElement('div');
+      btnWrap.style.cssText = 'display:flex;gap:8px;flex-shrink:0';
+      const edit = document.createElement('button');
+      edit.className = 'action btn-primary';
+      edit.style.cssText = 'font-size:13px;padding:8px 14px';
+      edit.textContent = 'Edit';
+      edit.onclick = () => {
+        spEditingId = set.id;
+        $('sp-label').value = set.label;
+        spWords.length = 0;
+        set.words.forEach(w => spWords.push(w));
+        renderSpTags(); checkSpReady();
+        $('sp-save-btn').textContent = 'Update Word Set';
+        setSpStatus('Editing — adjust words then click Update.', '');
+        $('sp-label').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
       const del = document.createElement('button');
       del.className = 'action btn-secondary';
-      del.style.cssText = 'font-size:13px;padding:8px 16px;flex-shrink:0';
+      del.style.cssText = 'font-size:13px;padding:8px 14px;flex-shrink:0';
       del.textContent = 'Delete';
       del.onclick = async () => {
         if (!confirm(`Delete "${set.label}"?`)) return;
         await fetch(`/api/spelling-sets/${set.id}`, { method: 'DELETE' });
         loadSpSavedSets();
       };
+      btnWrap.appendChild(edit); btnWrap.appendChild(del);
       row.appendChild(info);
-      row.appendChild(del);
+      row.appendChild(btnWrap);
       wrap.appendChild(row);
     });
   } catch {}
@@ -648,6 +737,7 @@ loadSpSavedSets();
 
 // ── Vocab Builder Word Sets ───────────────────────────────────────────────────
 const vbWords = [];
+let vbEditingId = null;
 
 function addVbWord() {
   const word   = $('vb-word').value.trim();
@@ -732,6 +822,10 @@ async function saveVbSet() {
   $('vb-save-btn').disabled = true;
   setVbStatus('Saving...', '');
   try {
+    if (vbEditingId) {
+      await fetch(`/api/vocab/custom-sets/${vbEditingId}`, { method: 'DELETE' });
+      vbEditingId = null;
+    }
     const res = await fetch('/api/vocab/custom-sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -742,6 +836,7 @@ async function saveVbSet() {
     setVbStatus(`Saved "${data.label}"! Open Vocab Builder to play it.`, 'ok');
     $('vb-label').value = '';
     vbWords.length = 0;
+    $('vb-save-btn').textContent = 'Save Vocab Set';
     renderVbWords();
     loadVbSavedSets();
   } catch {
@@ -765,17 +860,34 @@ async function loadVbSavedSets() {
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#f5f0ff;border-radius:14px;padding:12px 16px;gap:12px';
       const info = document.createElement('div');
       info.innerHTML = `<div style="font-weight:900;font-size:16px">${set.label}</div><div style="font-size:12px;color:#999;font-weight:700;margin-top:3px">${set.words.map(w=>w.word).join(', ')}</div>`;
+      const btnWrap = document.createElement('div');
+      btnWrap.style.cssText = 'display:flex;gap:8px;flex-shrink:0';
+      const edit = document.createElement('button');
+      edit.className = 'action btn-primary';
+      edit.style.cssText = 'font-size:13px;padding:8px 14px';
+      edit.textContent = 'Edit';
+      edit.onclick = () => {
+        vbEditingId = set.id;
+        $('vb-label').value = set.label;
+        vbWords.length = 0;
+        set.words.forEach(w => vbWords.push(w));
+        renderVbWords(); checkVbReady();
+        $('vb-save-btn').textContent = 'Update Vocab Set';
+        setVbStatus('Editing — adjust words then click Update.', '');
+        $('vb-label').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
       const del = document.createElement('button');
       del.className = 'action btn-secondary';
-      del.style.cssText = 'font-size:13px;padding:8px 16px;flex-shrink:0';
+      del.style.cssText = 'font-size:13px;padding:8px 14px;flex-shrink:0';
       del.textContent = 'Delete';
       del.onclick = async () => {
         if (!confirm(`Delete "${set.label}"?`)) return;
         await fetch(`/api/vocab/custom-sets/${set.id}`, { method: 'DELETE' });
         loadVbSavedSets();
       };
+      btnWrap.appendChild(edit); btnWrap.appendChild(del);
       row.appendChild(info);
-      row.appendChild(del);
+      row.appendChild(btnWrap);
       wrap.appendChild(row);
     });
   } catch {}
@@ -785,6 +897,7 @@ loadVbSavedSets();
 
 // ── Sound Speller Word Sets ───────────────────────────────────────────────────
 const ssWords = [];
+let ssEditingId = null;
 
 function addSsWord() {
   const inp = $('ss-word-input');
@@ -834,6 +947,10 @@ async function saveSsSet() {
   $('ss-save-btn').disabled = true;
   setSsStatus('Saving...', '');
   try {
+    if (ssEditingId) {
+      await fetch(`/api/ss-word-sets/${ssEditingId}`, { method: 'DELETE' });
+      ssEditingId = null;
+    }
     const res = await fetch('/api/ss-word-sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -844,6 +961,7 @@ async function saveSsSet() {
     setSsStatus(`Saved "${data.label}"! Open Sound Speller to play it.`, 'ok');
     $('ss-label').value = '';
     ssWords.length = 0;
+    $('ss-save-btn').textContent = 'Save Word Set';
     renderSsTags();
     checkSsReady();
     loadSsSavedSets();
@@ -868,17 +986,34 @@ async function loadSsSavedSets() {
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#fff4ee;border:2px solid #ffd0b5;border-radius:14px;padding:12px 16px;gap:12px';
       const info = document.createElement('div');
       info.innerHTML = `<div style="font-weight:900;font-size:16px">${set.label}</div><div style="font-size:12px;color:#999;font-weight:700;margin-top:3px">${set.words.join(', ')}</div>`;
+      const btnWrap = document.createElement('div');
+      btnWrap.style.cssText = 'display:flex;gap:8px;flex-shrink:0';
+      const edit = document.createElement('button');
+      edit.className = 'action btn-primary';
+      edit.style.cssText = 'font-size:13px;padding:8px 14px';
+      edit.textContent = 'Edit';
+      edit.onclick = () => {
+        ssEditingId = set.id;
+        $('ss-label').value = set.label;
+        ssWords.length = 0;
+        set.words.forEach(w => ssWords.push(w));
+        renderSsTags(); checkSsReady();
+        $('ss-save-btn').textContent = 'Update Word Set';
+        setSsStatus('Editing — adjust words then click Update.', '');
+        $('ss-label').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
       const del = document.createElement('button');
       del.className = 'action btn-secondary';
-      del.style.cssText = 'font-size:13px;padding:8px 16px;flex-shrink:0';
+      del.style.cssText = 'font-size:13px;padding:8px 14px;flex-shrink:0';
       del.textContent = 'Delete';
       del.onclick = async () => {
         if (!confirm(`Delete "${set.label}"?`)) return;
         await fetch(`/api/ss-word-sets/${set.id}`, { method: 'DELETE' });
         loadSsSavedSets();
       };
+      btnWrap.appendChild(edit); btnWrap.appendChild(del);
       row.appendChild(info);
-      row.appendChild(del);
+      row.appendChild(btnWrap);
       wrap.appendChild(row);
     });
   } catch {}

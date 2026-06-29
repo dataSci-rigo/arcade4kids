@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pip the Bear</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --coral:  #FF6B6B;
+  --teal:   #4ECDC4;
+  --yellow: #FFE66D;
+  --mint:   #A8E6CF;
+  --green:  #56c870;
+  --purple: #C3A6FF;
+  --bg:     #FFF9F0;
+  --ink:    #2D2D3A;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; width: 100%;
+  overflow: hidden;
+  font-family: 'Nunito', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* ── Screens ──────────────────────────────────── */
+.screen { display: none; position: fixed; inset: 0; flex-direction: column; align-items: center; }
+.screen.active { display: flex; }
+
+/* ── Back button ──────────────────────────────── */
+.back-btn {
+  position: fixed; top: 12px; left: 12px;
+  background: rgba(255,255,255,0.85);
+  border: none; border-radius: 50px;
+  padding: 8px 16px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 18px; font-weight: 700; color: var(--ink);
+  cursor: pointer; z-index: 100;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+  transition: transform .1s, box-shadow .1s;
+}
+.back-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.15); }
+
+/* ═══════════════════════════════════════════════
+   SPLASH
+═══════════════════════════════════════════════ */
+#splash {
+  background: linear-gradient(180deg, #2a3f5f 0%, #5e4b8e 100%);
+  justify-content: center;
+  padding: 20px;
+  gap: 18px;
+}
+.splash-deco  { font-size: 28px; letter-spacing: 8px; }
+.splash-title {
+  font-size: clamp(2.4rem, 9vw, 4.8rem);
+  font-weight: 900; color: #fff; text-align: center; line-height: 1;
+  text-shadow: 0 4px 0 rgba(0,0,0,0.2);
+}
+.splash-sub {
+  font-size: clamp(1rem, 3.5vw, 1.35rem);
+  color: #c8c0f0; font-weight: 700; text-align: center;
+}
+.splash-art { width: clamp(160px, 42vw, 260px); }
+.start-btn {
+  background: var(--yellow); border: none; border-radius: 50px;
+  padding: 18px 48px;
+  font-family: 'Nunito', sans-serif;
+  font-size: clamp(1.1rem, 3.8vw, 1.5rem); font-weight: 900; color: var(--ink);
+  cursor: pointer; box-shadow: 0 6px 0 #c8a800;
+  transition: transform .1s, box-shadow .1s;
+}
+.start-btn:active { transform: translateY(3px); box-shadow: 0 3px 0 #c8a800; }
+
+/* ═══════════════════════════════════════════════
+   BOOK
+═══════════════════════════════════════════════ */
+#book {
+  background: var(--bg);
+  overflow-y: auto;
+  justify-content: flex-start;
+  padding: 58px 14px 24px;
+  gap: 12px;
+  width: 100%;
+}
+#book-inner {
+  display: flex; flex-direction: column; gap: 12px;
+  width: 100%; max-width: 820px;
+  margin: 0 auto;
+}
+.page-indicator {
+  text-align: center; font-size: 13px; font-weight: 800;
+  color: #aaa; letter-spacing: 1.5px; text-transform: uppercase;
+}
+
+/* Comic strip */
+.comic-strip {
+  display: grid;
+  grid-template-columns: 1fr 30px 1fr;
+  align-items: center;
+}
+.panel {
+  background: #FDF6E3;
+  border-radius: 14px;
+  border: 3px solid var(--ink);
+  overflow: hidden; position: relative;
+  aspect-ratio: 300 / 220;
+}
+.panel svg { width: 100%; height: 100%; display: block; }
+.panel-num {
+  position: absolute; top: 7px; left: 9px;
+  background: rgba(0,0,0,0.55); color: #fff;
+  font-size: 11px; font-weight: 800;
+  padding: 2px 8px; border-radius: 10px;
+}
+.strip-arrow {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; color: #ccc;
+}
+
+/* Lower row */
+.lower-row {
+  display: grid;
+  grid-template-columns: 1fr 210px;
+  gap: 12px;
+}
+.story-panel, .math-panel {
+  background: #fff; border-radius: 20px;
+  padding: 16px; display: flex; flex-direction: column;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+}
+.story-text {
+  font-size: clamp(1rem, 2.6vw, 1.25rem);
+  line-height: 1.65; font-weight: 700; color: var(--ink);
+  flex: 1; margin-bottom: 14px;
+}
+.read-btn {
+  background: var(--teal); border: none; border-radius: 50px;
+  padding: 10px 20px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px; font-weight: 800; color: #fff;
+  cursor: pointer; align-self: flex-start;
+  box-shadow: 0 4px 0 #2eada4;
+  transition: transform .1s, box-shadow .1s;
+}
+.read-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #2eada4; }
+.math-label {
+  font-size: 11px; font-weight: 800; color: #bbb;
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+}
+.math-question {
+  font-size: clamp(1.5rem, 4.5vw, 2rem);
+  font-weight: 900; text-align: center; color: var(--ink);
+  margin-bottom: 12px;
+}
+
+/* Number grid */
+.num-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px;
+}
+.num-btn {
+  aspect-ratio: 1; border: none; border-radius: 12px;
+  font-family: 'Nunito', sans-serif;
+  font-size: clamp(1.1rem, 3vw, 1.5rem); font-weight: 900;
+  color: var(--ink); background: #f2f2f2;
+  cursor: pointer; box-shadow: 0 4px 0 #d0d0d0;
+  transition: transform .1s, box-shadow .1s;
+}
+.num-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #d0d0d0; }
+.num-btn.correct {
+  background: var(--green) !important; color: #fff;
+  box-shadow: 0 4px 0 #3d9950 !important;
+}
+.num-btn.wrong {
+  background: var(--coral) !important; color: #fff;
+  box-shadow: 0 4px 0 #cc3333 !important;
+  animation: shake .35s;
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.book-feedback {
+  margin-top: 8px; text-align: center;
+  font-size: 13px; font-weight: 800; min-height: 18px;
+  color: var(--coral);
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  #book { padding: 54px 10px 20px; }
+  .lower-row { grid-template-columns: 1fr; }
+  .comic-strip { grid-template-columns: 1fr 22px 1fr; }
+  .panel { border-radius: 10px; border-width: 2px; }
+  .num-grid { gap: 6px; }
+}
+
+/* ═══════════════════════════════════════════════
+   WIN
+═══════════════════════════════════════════════ */
+#win {
+  background: linear-gradient(180deg, #5e4b8e 0%, #2a3f5f 100%);
+  justify-content: center; align-items: center;
+  padding: 30px 20px; gap: 14px; overflow: hidden;
+}
+.win-title {
+  font-size: clamp(1.8rem, 7vw, 3.2rem);
+  font-weight: 900; color: #fff; text-align: center;
+  text-shadow: 0 4px 0 rgba(0,0,0,0.25);
+}
+.win-stars { font-size: clamp(2.2rem, 7vw, 3.5rem); letter-spacing: 10px; }
+.win-msg {
+  font-size: clamp(0.95rem, 3vw, 1.25rem);
+  color: #ccc0f0; font-weight: 700; text-align: center; max-width: 360px;
+}
+.win-stats {
+  font-size: clamp(0.8rem, 2.2vw, 0.95rem);
+  color: rgba(255,255,255,0.5); font-weight: 700; text-align: center;
+}
+.win-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.win-btn {
+  border: none; border-radius: 50px; padding: 15px 30px;
+  font-family: 'Nunito', sans-serif;
+  font-size: clamp(0.95rem, 2.8vw, 1.15rem); font-weight: 900;
+  cursor: pointer; box-shadow: 0 6px 0 rgba(0,0,0,0.2);
+  transition: transform .1s, box-shadow .1s;
+}
+.win-btn:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+.win-btn.primary { background: var(--yellow); color: var(--ink); }
+.win-btn.secondary { background: rgba(255,255,255,0.18); color: #fff; }
+
+/* Confetti */
+.confetti {
+  position: fixed; width: 11px; height: 11px; border-radius: 3px;
+  top: -20px; pointer-events: none; z-index: 200;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+/* Toast */
+.toast {
+  position: fixed; top: 38%; left: 50%;
+  transform: translateX(-50%) scale(0);
+  background: var(--green); color: #fff; border-radius: 50px;
+  padding: 14px 32px;
+  font-family: 'Nunito', sans-serif;
+  font-size: clamp(1.15rem, 4vw, 1.5rem); font-weight: 900;
+  z-index: 300; pointer-events: none; white-space: nowrap;
+  animation: toastPop .95s ease forwards;
+}
+@keyframes toastPop {
+  0%   { transform: translateX(-50%) scale(0); opacity: 0; }
+  20%  { transform: translateX(-50%) scale(1.12); opacity: 1; }
+  40%  { transform: translateX(-50%) scale(1); }
+  70%  { transform: translateX(-50%) translateY(0); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(-44px); opacity: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ SPLASH ═══ -->
+<div class="screen active" id="splash">
+  <p class="splash-deco">⭐ 📖 ⭐</p>
+  <h1 class="splash-title">Pip the Bear</h1>
+  <p class="splash-sub">A reading adventure · 7 pages</p>
+  <svg class="splash-art" viewBox="0 0 260 210" xmlns="http://www.w3.org/2000/svg">
+    <rect width="260" height="210" fill="#2a3f5f"/>
+    <circle cx="215" cy="38" r="17" fill="#FAEEDA"/>
+    <circle cx="38" cy="28" r="1.4" fill="#fff"/><circle cx="85" cy="20" r="1.4" fill="#fff"/>
+    <circle cx="140" cy="33" r="1.4" fill="#fff"/><circle cx="32" cy="62" r="1.4" fill="#fff"/>
+    <circle cx="185" cy="72" r="1.4" fill="#fff"/><circle cx="110" cy="60" r="1.4" fill="#fff"/>
+    <rect y="170" width="260" height="40" fill="#1F4A0E"/>
+    <ellipse cx="130" cy="86" rx="75" ry="46" fill="#1F4A0E"/>
+    <rect x="122" y="100" width="16" height="76" fill="#5A3A1F"/>
+    <rect x="127" y="126" width="20" height="22" rx="3" fill="#FAC775"/>
+    <circle cx="137" cy="143" r="9" fill="#8B5A2B"/>
+    <circle cx="130" cy="137" r="3.2" fill="#8B5A2B"/>
+    <circle cx="144" cy="137" r="3.2" fill="#8B5A2B"/>
+    <circle cx="133" cy="142" r="1.3" fill="#3a1f0a"/>
+    <circle cx="141" cy="142" r="1.3" fill="#3a1f0a"/>
+    <path d="M134 148 Q137 150 140 148" stroke="#3a1f0a" stroke-width="1.1" fill="none"/>
+    <text x="152" y="126" fill="#fff" font-size="14" font-family="sans-serif" font-weight="600">Z</text>
+    <text x="165" y="116" fill="#fff" font-size="10" font-family="sans-serif">z</text>
+    <text x="174" y="108" fill="#fff" font-size="7" font-family="sans-serif">z</text>
+  </svg>
+  <button class="start-btn" id="start-btn">📖 Start Reading!</button>
+</div>
+
+<!-- ═══════════════════════════════════════ BOOK ════ -->
+<div class="screen" id="book">
+  <button class="back-btn" onclick="showScreen('splash')">←</button>
+  <div id="book-inner">
+    <div class="page-indicator" id="page-indicator">Page 1 of 7</div>
+    <div class="comic-strip">
+      <div class="panel" id="panel-1"><span class="panel-num">1</span></div>
+      <div class="strip-arrow">→</div>
+      <div class="panel" id="panel-2"><span class="panel-num">2</span></div>
+    </div>
+    <div class="lower-row">
+      <div class="story-panel">
+        <p class="story-text" id="story-text"></p>
+        <button class="read-btn" id="read-btn">🔊 Read Aloud</button>
+      </div>
+      <div class="math-panel">
+        <div class="math-label">Answer to turn the page</div>
+        <div class="math-question" id="math-question"></div>
+        <div class="num-grid" id="num-grid"></div>
+        <div class="book-feedback" id="book-feedback"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ WIN ═════ -->
+<div class="screen" id="win">
+  <div class="win-title">🎉 The End! 🎉</div>
+  <div class="win-stars" id="win-stars"></div>
+  <p class="win-msg" id="win-msg"></p>
+  <p class="win-stats" id="win-stats"></p>
+  <div class="win-btns">
+    <button class="win-btn primary" id="again-btn">📖 Read Again</button>
+    <button class="win-btn secondary" onclick="window.location='/'">🏠 Back to Hub</button>
+  </div>
+</div>
+
+<script>
+// ── SVG character helpers ──────────────────────────────────────────────────────
+function bearFace(cx, cy, r) {
+  const er = r * 0.35;
+  return `<circle cx="${cx-r*.55}" cy="${cy-r*.55}" r="${er}" fill="#8B5A2B"/>
+<circle cx="${cx+r*.55}" cy="${cy-r*.55}" r="${er}" fill="#8B5A2B"/>
+<circle cx="${cx-r*.55}" cy="${cy-r*.55}" r="${er*.45}" fill="#D6A875"/>
+<circle cx="${cx+r*.55}" cy="${cy-r*.55}" r="${er*.45}" fill="#D6A875"/>
+<circle cx="${cx}" cy="${cy}" r="${r}" fill="#8B5A2B"/>
+<circle cx="${cx-r*.32}" cy="${cy-r*.1}" r="${r*.09}" fill="#000"/>
+<circle cx="${cx+r*.32}" cy="${cy-r*.1}" r="${r*.09}" fill="#000"/>
+<ellipse cx="${cx}" cy="${cy+r*.2}" rx="${r*.16}" ry="${r*.12}" fill="#3a1f0a"/>`;
+}
+function bearSmile(cx, cy, r) {
+  return `<path d="M ${cx-r*.22} ${cy+r*.35} Q ${cx} ${cy+r*.55} ${cx+r*.22} ${cy+r*.35}" stroke="#3a1f0a" stroke-width="1.5" fill="none"/>`;
+}
+function bearHat(cx, cy, r) {
+  return `<ellipse cx="${cx}" cy="${cy-r*.9}" rx="${r*1.15}" ry="${r*.18}" fill="#A02020"/>
+<path d="M ${cx-r*.95} ${cy-r*.9} Q ${cx} ${cy-r*1.7} ${cx+r*.95} ${cy-r*.9} Z" fill="#D43030"/>`;
+}
+function bunnyFace(cx, cy, r) {
+  return `<ellipse cx="${cx-r*.4}" cy="${cy-r*1.0}" rx="${r*.22}" ry="${r*.75}" fill="#fff"/>
+<ellipse cx="${cx+r*.4}" cy="${cy-r*1.0}" rx="${r*.22}" ry="${r*.75}" fill="#fff"/>
+<ellipse cx="${cx-r*.4}" cy="${cy-r*.85}" rx="${r*.1}" ry="${r*.55}" fill="#F4C0D1"/>
+<ellipse cx="${cx+r*.4}" cy="${cy-r*.85}" rx="${r*.1}" ry="${r*.55}" fill="#F4C0D1"/>
+<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff"/>
+<circle cx="${cx-r*.3}" cy="${cy-r*.1}" r="${r*.09}" fill="#000"/>
+<circle cx="${cx+r*.3}" cy="${cy-r*.1}" r="${r*.09}" fill="#000"/>
+<ellipse cx="${cx}" cy="${cy+r*.2}" rx="${r*.12}" ry="${r*.09}" fill="#F4C0D1"/>
+<path d="M ${cx-r*.18} ${cy+r*.35} Q ${cx} ${cy+r*.5} ${cx+r*.18} ${cy+r*.35}" stroke="#000" stroke-width="1" fill="none"/>`;
+}
+
+// ── Pages ──────────────────────────────────────────────────────────────────────
+const PAGES = [
+  {
+    text: "Pip the bear was fast asleep in his cozy tree. The stars were shining bright.",
+    math: "1 + 1 = ?", answer: 2,
+    p1: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#2a3f5f"/><circle cx="250" cy="40" r="18" fill="#FAEEDA"/><circle cx="50" cy="35" r="1.5" fill="#fff"/><circle cx="100" cy="25" r="1.5" fill="#fff"/><circle cx="170" cy="40" r="1.5" fill="#fff"/><circle cx="40" cy="70" r="1.5" fill="#fff"/><rect y="180" width="300" height="40" fill="#1F4A0E"/><rect x="60" y="120" width="180" height="65" rx="4" fill="#5A3A1F"/><rect x="60" y="115" width="180" height="14" rx="3" fill="#3a2510"/><rect x="80" y="135" width="140" height="40" rx="4" fill="#D8A8C8"/>${bearFace(110,155,14)}${bearSmile(110,155,14)}<text x="150" y="142" fill="#fff" font-size="16" font-family="sans-serif" font-weight="500">Z</text><text x="165" y="130" fill="#fff" font-size="12" font-family="sans-serif">z</text><text x="175" y="120" fill="#fff" font-size="9" font-family="sans-serif">z</text></svg>`,
+    p2: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#FFB870"/><circle cx="240" cy="60" r="22" fill="#FFD93D"/><rect y="180" width="300" height="40" fill="#7BC93C"/><rect x="60" y="60" width="180" height="125" fill="#5A3A1F"/><rect x="80" y="80" width="140" height="100" rx="6" fill="#A8D8F0"/>${bearFace(150,130,26)}<path d="M 138 165 Q 150 175 162 165" stroke="#3a1f0a" stroke-width="2" fill="none"/></svg>`
+  },
+  {
+    text: "When morning came, Pip put on his red hat and waved hello to the bright sun.",
+    math: "2 + 1 = ?", answer: 3,
+    p1: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#B5E5A0"/><rect y="170" width="300" height="50" fill="#7BC93C"/>${bearFace(150,130,32)}${bearSmile(150,130,32)}<ellipse cx="190" cy="80" rx="34" ry="4" fill="#A02020"/><path d="M 158 80 Q 190 35 222 80 Z" fill="#D43030"/><ellipse cx="115" cy="155" rx="10" ry="20" fill="#8B5A2B" transform="rotate(-35 115 155)"/><circle cx="98" cy="135" r="9" fill="#8B5A2B"/></svg>`,
+    p2: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#A8D8F0"/><circle cx="240" cy="55" r="28" fill="#FFD93D"/><g stroke="#FFD93D" stroke-width="3" stroke-linecap="round"><line x1="240" y1="12" x2="240" y2="22"/><line x1="240" y1="88" x2="240" y2="98"/><line x1="195" y1="55" x2="205" y2="55"/><line x1="275" y1="55" x2="285" y2="55"/><line x1="208" y1="22" x2="215" y2="29"/><line x1="265" y1="29" x2="272" y2="22"/></g><rect y="175" width="300" height="45" fill="#7BC93C"/><ellipse cx="130" cy="170" rx="32" ry="38" fill="#8B5A2B"/>${bearFace(130,130,26)}${bearSmile(130,130,26)}${bearHat(130,130,26)}<ellipse cx="178" cy="135" rx="10" ry="20" fill="#8B5A2B" transform="rotate(-50 178 135)"/><circle cx="195" cy="108" r="10" fill="#8B5A2B"/></svg>`
+  },
+  {
+    text: "Pip walked into the cool green forest, where the trees were tall and shady.",
+    math: "2 + 2 = ?", answer: 4,
+    p1: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#B5E5A0"/><rect y="180" width="300" height="40" fill="#7BC93C"/><ellipse cx="30" cy="100" rx="30" ry="60" fill="#1F4A0E"/><ellipse cx="270" cy="80" rx="35" ry="70" fill="#1F4A0E"/><rect x="25" y="140" width="10" height="40" fill="#5A3A1F"/><rect x="265" y="140" width="10" height="40" fill="#5A3A1F"/><ellipse cx="150" cy="175" rx="30" ry="35" fill="#8B5A2B"/>${bearFace(150,130,24)}${bearSmile(150,130,24)}${bearHat(150,130,24)}<ellipse cx="125" cy="178" rx="8" ry="14" fill="#5A3A1F"/><ellipse cx="175" cy="178" rx="8" ry="14" fill="#5A3A1F"/></svg>`,
+    p2: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#B5E5A0"/><rect y="180" width="300" height="40" fill="#7BC93C"/><ellipse cx="20" cy="100" rx="25" ry="60" fill="#1F4A0E"/><ellipse cx="280" cy="100" rx="25" ry="60" fill="#1F4A0E"/><ellipse cx="100" cy="180" rx="28" ry="32" fill="#8B5A2B"/>${bearFace(100,135,22)}${bearSmile(100,135,22)}${bearHat(100,135,22)}<ellipse cx="200" cy="180" rx="22" ry="28" fill="#fff"/>${bunnyFace(200,142,18)}<path d="M 125 145 L 175 140" stroke="#FFE066" stroke-width="2" stroke-dasharray="3,3" fill="none" opacity="0.7"/></svg>`
+  },
+  {
+    text: "There he met a friendly bunny named Bo. They walked to a meadow full of flowers.",
+    math: "3 + 2 = ?", answer: 5,
+    p1: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#A8D8F0"/><circle cx="250" cy="40" r="20" fill="#FFD93D"/><rect y="160" width="300" height="60" fill="#7BC93C"/><path d="M 0 170 Q 150 155 300 170 L 300 220 L 0 220 Z" fill="#6BB82C"/><ellipse cx="115" cy="175" rx="26" ry="30" fill="#8B5A2B"/>${bearFace(115,135,20)}${bearSmile(115,135,20)}${bearHat(115,135,20)}<ellipse cx="185" cy="178" rx="20" ry="25" fill="#fff"/>${bunnyFace(185,145,16)}</svg>`,
+    p2: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#A8D8F0"/><circle cx="255" cy="38" r="20" fill="#FFD93D"/><rect y="155" width="300" height="65" fill="#7BC93C"/><g><circle cx="40" cy="190" r="7" fill="#FFD93D"/><circle cx="40" cy="190" r="3" fill="#FF8C00"/><line x1="40" y1="197" x2="40" y2="218" stroke="#1F4A0E" stroke-width="2"/></g><g><circle cx="90" cy="200" r="7" fill="#FF6B9D"/><circle cx="90" cy="200" r="3" fill="#fff"/><line x1="90" y1="207" x2="90" y2="220" stroke="#1F4A0E" stroke-width="2"/></g><g><circle cx="240" cy="195" r="7" fill="#FFD93D"/><circle cx="240" cy="195" r="3" fill="#FF8C00"/><line x1="240" y1="202" x2="240" y2="220" stroke="#1F4A0E" stroke-width="2"/></g><g><circle cx="280" cy="205" r="7" fill="#FF6B9D"/><circle cx="280" cy="205" r="3" fill="#fff"/><line x1="280" y1="212" x2="280" y2="225" stroke="#1F4A0E" stroke-width="2"/></g><ellipse cx="130" cy="175" rx="24" ry="28" fill="#8B5A2B"/>${bearFace(130,138,18)}${bearSmile(130,138,18)}${bearHat(130,138,18)}<ellipse cx="195" cy="178" rx="18" ry="22" fill="#fff"/>${bunnyFace(195,148,14)}</svg>`
+  },
+  {
+    text: "By the sparkling pond, three little ducks were splashing. Quack, quack, quack!",
+    math: "4 + 2 = ?", answer: 6,
+    p1: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#A8D8F0"/><circle cx="260" cy="40" r="18" fill="#FFD93D"/><rect y="140" width="300" height="80" fill="#7BC93C"/><ellipse cx="150" cy="180" rx="130" ry="30" fill="#5DA8DD"/><ellipse cx="150" cy="178" rx="120" ry="22" fill="#7AC3E5"/><g><ellipse cx="100" cy="180" rx="14" ry="9" fill="#FAEEDA"/><circle cx="89" cy="172" r="7" fill="#FAEEDA"/><polygon points="82,172 78,173 82,174" fill="#FFA500"/><circle cx="88" cy="171" r="1" fill="#000"/></g><g><ellipse cx="160" cy="184" rx="14" ry="9" fill="#FAEEDA"/><circle cx="171" cy="176" r="7" fill="#FAEEDA"/><polygon points="178,176 182,177 178,178" fill="#FFA500"/><circle cx="172" cy="175" r="1" fill="#000"/></g><g><ellipse cx="220" cy="179" rx="14" ry="9" fill="#FAEEDA"/><circle cx="209" cy="171" r="7" fill="#FAEEDA"/><polygon points="202,171 198,172 202,173" fill="#FFA500"/><circle cx="208" cy="170" r="1" fill="#000"/></g></svg>`,
+    p2: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#5DA8DD"/><rect y="0" width="300" height="60" fill="#A8D8F0"/><path d="M 0 60 Q 150 50 300 60" stroke="#7AC3E5" stroke-width="2" fill="none"/><ellipse cx="150" cy="140" rx="32" ry="20" fill="#FAEEDA"/><circle cx="125" cy="118" r="16" fill="#FAEEDA"/><polygon points="108,118 100,120 108,123" fill="#FFA500"/><circle cx="123" cy="115" r="2" fill="#000"/><path d="M 153 130 Q 165 115 175 125" stroke="#FAEEDA" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M 50 175 Q 65 170 80 175 Q 95 180 110 175" stroke="#fff" stroke-width="2" fill="none"/><path d="M 180 185 Q 195 180 210 185 Q 225 190 240 185" stroke="#fff" stroke-width="2" fill="none"/><circle cx="82" cy="160" r="4" fill="#fff" opacity="0.6"/><circle cx="210" cy="170" r="4" fill="#fff" opacity="0.6"/><text x="162" y="90" fill="#fff" font-size="16" font-weight="700" font-family="sans-serif">quack!</text></svg>`
+  },
+  {
+    text: "Pip and Bo had a picnic. They shared honey sandwiches under a big shady tree.",
+    math: "3 + 4 = ?", answer: 7,
+    p1: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#B5E5A0"/><rect y="140" width="300" height="80" fill="#7BC93C"/><rect x="145" y="20" width="10" height="120" fill="#5A3A1F"/><ellipse cx="150" cy="30" rx="70" ry="25" fill="#1F4A0E"/><ellipse cx="120" cy="22" rx="35" ry="18" fill="#27500A"/><ellipse cx="180" cy="25" rx="35" ry="18" fill="#27500A"/><polygon points="50,180 250,180 265,210 35,210" fill="#D43030"/><line x1="80" y1="180" x2="65" y2="210" stroke="#fff" stroke-width="1.5"/><line x1="125" y1="180" x2="115" y2="210" stroke="#fff" stroke-width="1.5"/><line x1="175" y1="180" x2="185" y2="210" stroke="#fff" stroke-width="1.5"/><line x1="220" y1="180" x2="235" y2="210" stroke="#fff" stroke-width="1.5"/><line x1="45" y1="195" x2="260" y2="195" stroke="#fff" stroke-width="1.5"/><polygon points="115,175 150,158 185,175 185,185 115,185" fill="#FAC775"/><rect x="115" y="178" width="70" height="6" fill="#FAEEDA"/><polygon points="120,180 180,180 175,170 125,170" fill="#FFA500" opacity="0.7"/></svg>`,
+    p2: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#B5E5A0"/><rect y="140" width="300" height="80" fill="#7BC93C"/><polygon points="20,180 280,180 290,215 10,215" fill="#D43030"/><line x1="40" y1="195" x2="270" y2="195" stroke="#fff" stroke-width="1.5"/><line x1="80" y1="180" x2="65" y2="215" stroke="#fff" stroke-width="1.5"/><line x1="220" y1="180" x2="235" y2="215" stroke="#fff" stroke-width="1.5"/><ellipse cx="90" cy="165" rx="22" ry="26" fill="#8B5A2B"/>${bearFace(90,132,18)}${bearHat(90,132,18)}<path d="M 80 142 Q 90 152 100 142" stroke="#3a1f0a" stroke-width="1.5" fill="none"/><polygon points="105,150 130,138 135,148 110,160" fill="#FAC775"/><rect x="106" y="149" width="28" height="3" fill="#FAEEDA"/><ellipse cx="225" cy="170" rx="20" ry="24" fill="#fff"/>${bunnyFace(225,140,16)}<polygon points="195,150 175,138 170,148 190,160" fill="#FAC775"/><rect x="171" y="148" width="26" height="3" fill="#FAEEDA"/></svg>`
+  },
+  {
+    text: "When the moon came out, Pip went home and snuggled into bed. Sweet dreams, Pip!",
+    math: "4 + 4 = ?", answer: 8,
+    p1: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#5e4b8e"/><circle cx="245" cy="45" r="22" fill="#FAEEDA"/><circle cx="240" cy="40" r="4" fill="#E5D6B8" opacity="0.6"/><circle cx="252" cy="50" r="3" fill="#E5D6B8" opacity="0.6"/><circle cx="50" cy="35" r="1.5" fill="#fff"/><circle cx="100" cy="25" r="1.5" fill="#fff"/><circle cx="170" cy="40" r="1.5" fill="#fff"/><circle cx="40" cy="75" r="1.5" fill="#fff"/><rect y="180" width="300" height="40" fill="#1F4A0E"/><ellipse cx="240" cy="90" rx="60" ry="40" fill="#1F4A0E"/><rect x="225" y="100" width="30" height="80" fill="#5A3A1F"/><rect x="232" y="125" width="16" height="18" rx="2" fill="#FAC775"/><ellipse cx="100" cy="170" rx="22" ry="26" fill="#8B5A2B"/>${bearFace(100,138,18)}${bearHat(100,138,18)}<ellipse cx="85" cy="190" rx="6" ry="10" fill="#5A3A1F"/><ellipse cx="115" cy="190" rx="6" ry="10" fill="#5A3A1F"/></svg>`,
+    p2: `<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#2a3f5f"/><circle cx="250" cy="40" r="18" fill="#FAEEDA"/><circle cx="50" cy="35" r="1.5" fill="#fff"/><circle cx="100" cy="25" r="1.5" fill="#fff"/><circle cx="170" cy="40" r="1.5" fill="#fff"/><circle cx="40" cy="70" r="1.5" fill="#fff"/><rect y="180" width="300" height="40" fill="#1F4A0E"/><rect x="60" y="120" width="180" height="65" rx="4" fill="#5A3A1F"/><rect x="60" y="115" width="180" height="14" rx="3" fill="#3a2510"/><rect x="80" y="135" width="140" height="40" rx="4" fill="#D8A8C8"/>${bearFace(110,155,14)}<path d="M 104 161 Q 110 164 116 161" stroke="#3a1f0a" stroke-width="1.2" fill="none"/><text x="150" y="142" fill="#fff" font-size="16" font-family="sans-serif" font-weight="500">Z</text><text x="165" y="130" fill="#fff" font-size="12" font-family="sans-serif">z</text><text x="175" y="120" fill="#fff" font-size="9" font-family="sans-serif">z</text></svg>`
+  }
+];
+
+// ── Audio ──────────────────────────────────────────────────────────────────────
+let _ac;
+function getAC() {
+  if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)();
+  return _ac;
+}
+function playTone(freq, type, dur, vol = 0.18) {
+  try {
+    const ac = getAC();
+    const osc = ac.createOscillator(), gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.start(); osc.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+function playCorrect()  { [523,659,784,1046].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',.18),i*90)); }
+function playWrong()    { playTone(200,'square',.25,.2); }
+function playCelebrate(){ [523,587,659,698,784,880,988,1046].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',.18),i*75)); }
+
+// ── Speech ─────────────────────────────────────────────────────────────────────
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.85; u.pitch = 1.15; u.volume = 1;
+    window.speechSynthesis.speak(u);
+  } catch(e) {}
+}
+
+// ── Screens ────────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let G = {};
+
+function startBook() {
+  G = { page: 0, firstTry: 0, wrongThisRound: false, locked: false };
+  showScreen('book');
+  renderPage();
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+const PRAISE = ['Amazing! 🌟', 'Great job! ⭐', 'You got it! 🎉', 'Excellent! 🌻', 'Super! 🥳'];
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 960);
+}
+
+// ── Number grid ────────────────────────────────────────────────────────────────
+function buildNumGrid(answer) {
+  const grid = document.getElementById('num-grid');
+  grid.innerHTML = '';
+  for (let n = 1; n <= 9; n++) {
+    const btn = document.createElement('button');
+    btn.className = 'num-btn';
+    btn.textContent = n;
+    btn.addEventListener('click', () => handleAnswer(n, answer));
+    grid.appendChild(btn);
+  }
+}
+
+function handleAnswer(n, answer) {
+  if (G.locked) return;
+  const btns = document.querySelectorAll('.num-btn');
+  const btn = btns[n - 1];
+
+  if (n === answer) {
+    G.locked = true;
+    if (!G.wrongThisRound) G.firstTry++;
+    btn.classList.add('correct');
+    playCorrect();
+    showToast(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
+    document.getElementById('book-feedback').textContent = '';
+    setTimeout(() => {
+      if (G.page < PAGES.length - 1) {
+        G.page++;
+        G.wrongThisRound = false;
+        renderPage();
+      } else {
+        showWin();
+      }
+    }, 1050);
+  } else {
+    G.wrongThisRound = true;
+    btn.classList.add('wrong');
+    playWrong();
+    document.getElementById('book-feedback').textContent = 'Try again! 🤔';
+    setTimeout(() => btn.classList.remove('wrong'), 420);
+  }
+}
+
+// ── Render page ────────────────────────────────────────────────────────────────
+function renderPage() {
+  const p = PAGES[G.page];
+  G.locked = false;
+
+  document.getElementById('page-indicator').textContent =
+    `Page ${G.page + 1} of ${PAGES.length}`;
+  document.getElementById('panel-1').innerHTML = '<span class="panel-num">1</span>' + p.p1;
+  document.getElementById('panel-2').innerHTML = '<span class="panel-num">2</span>' + p.p2;
+  document.getElementById('story-text').textContent = p.text;
+  document.getElementById('math-question').textContent = p.math;
+  document.getElementById('book-feedback').textContent = '';
+  buildNumGrid(p.answer);
+  document.getElementById('book').scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Win screen ─────────────────────────────────────────────────────────────────
+const CONFETTI_COLORS = ['#FF6B6B','#4ECDC4','#FFE66D','#A8E6CF','#C3A6FF','#FF6B9D'];
+function spawnConfetti() {
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const c = document.createElement('div');
+      c.className = 'confetti';
+      c.style.left = Math.random() * 100 + 'vw';
+      c.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+      c.style.animationDuration = (2.5 + Math.random() * 2) + 's';
+      const sz = 8 + Math.random() * 8 + 'px';
+      c.style.width = sz; c.style.height = sz;
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 5000);
+    }, i * 60);
+  }
+}
+
+const WIN_MSGS = {
+  3: ['Perfect! You answered everything right away! 🏆', 'Incredible! A perfect reading score! 🎉'],
+  2: ['Great work! Pip the bear is so proud of you! 🐻', 'Well done! You read the whole story! 📖'],
+  1: ['You finished the story! Keep practising! 🌟', 'Good try! Read it again to get even better! 💪'],
+};
+
+function showWin() {
+  showScreen('win');
+  playCelebrate();
+  spawnConfetti();
+
+  const pct = G.firstTry / PAGES.length;
+  const stars = pct >= 0.9 ? '⭐⭐⭐' : pct >= 0.6 ? '⭐⭐' : '⭐';
+  const sc = (stars.match(/⭐/g) || []).length;
+  document.getElementById('win-stars').textContent = stars;
+  const pool = WIN_MSGS[sc] || WIN_MSGS[1];
+  document.getElementById('win-msg').textContent = pool[Math.floor(Math.random() * pool.length)];
+  document.getElementById('win-stats').textContent =
+    `${G.firstTry} of ${PAGES.length} pages answered first try`;
+
+  speak('The end! Great job reading and counting with Pip the bear!');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', startBook);
+document.getElementById('read-btn').addEventListener('click', () => speak(PAGES[G.page].text));
+document.getElementById('again-btn').addEventListener('click', startBook);
+</script>
+</body>
+</html>
