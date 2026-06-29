@@ -2,3 +2,10 @@ __pycache__
 pversions
 .env
 models/*.pt
+audio/*.mp3
+*.json
+*.db
+*.jpg
+*.png
+.claude
+models
