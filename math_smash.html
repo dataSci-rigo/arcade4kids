@@ -474,39 +474,43 @@
     /* ── MOBILE LAYOUT (≤700px) ───────────────────────── */
     @media (max-width: 700px) {
       #game { flex-direction: column; }
-      #scene-area { height: 50vh; flex: none; }
+
+      /* 38 vh for the scene — character is still visible; math panel gets the rest */
+      #scene-area { height: 38vh; flex: none; }
 
       #math-panel {
         flex: 1; width: 100%; min-width: unset;
         border-left: none; border-top: 3px solid rgba(255,255,255,.1);
         transform: translateY(110%);
-        padding: 10px 12px; gap: 7px;
+        padding: 8px 10px; gap: 5px;
         justify-content: space-between;
       }
       #math-panel.show { transform: translateY(0); }
 
-      #equation   { font-size: clamp(1.7rem, 7vw, 2.4rem); }
-      #answer-box { min-height: 50px; font-size: 1.9rem; padding: 8px; }
+      #equation   { font-size: clamp(1.4rem, 6vw, 2rem); }
+      #answer-box { min-height: 44px; font-size: 1.7rem; padding: 6px 8px; }
 
-      .nb         { border-radius: 10px; font-size: 1.2rem; aspect-ratio: 1; }
-      .nb.nb-zero { aspect-ratio: unset; height: 100%; }
+      /* Fixed-height numpad buttons — aspect-ratio:1 made them ~116 px tall each */
+      #numpad     { gap: 6px; }
+      .nb         { border-radius: 10px; font-size: 1.2rem; aspect-ratio: unset; height: 48px; }
+      .nb.nb-zero { aspect-ratio: unset; height: 48px; }
 
-      #smash-btn  { padding: 10px; font-size: 1.15rem; }
+      #smash-btn  { padding: 9px; font-size: 1.1rem; }
       #help-btn   { font-size: .76rem; padding: 5px 12px; }
 
       #char-circle {
-        width: clamp(70px, 14vw, 100px);
-        height: clamp(70px, 14vw, 100px);
+        width: clamp(60px, 12vw, 90px);
+        height: clamp(60px, 12vw, 90px);
       }
-      #char-emoji { font-size: clamp(44px, 10vw, 68px); }
+      #char-emoji { font-size: clamp(38px, 9vw, 58px); }
 
-      /* On mobile, fix the bubble to viewport top so it's never behind the panel */
+      /* Bubble: fixed at top, cleared below the round badge (top:12px) */
       #speech-bubble {
         position: fixed;
-        top: 8px; left: 50%;
+        top: 52px; left: 50%;
         transform: translateX(-50%) scale(.85) translateY(-6px);
         max-width: 88vw;
-        font-size: clamp(.72rem, 2.8vw, .9rem);
+        font-size: clamp(.75rem, 3vw, .95rem);
         z-index: 60;
       }
       #speech-bubble.show {
@@ -514,6 +518,30 @@
       }
 
       #round-badge { font-size: .85rem; padding: 5px 12px; }
+    }
+
+    /* Very small phones */
+    @media (max-width: 380px) {
+      #scene-area { height: 32vh; }
+      .nb         { height: 42px; font-size: 1.1rem; }
+      .nb.nb-zero { height: 42px; }
+      #math-panel { gap: 4px; padding: 6px 8px; }
+      #answer-box { min-height: 40px; font-size: 1.5rem; }
+    }
+
+    /* Tap-to-advance hint on the speech bubble during story phases */
+    #speech-bubble.tappable::after {
+      content: 'Tap ▶';
+      display: block;
+      font-size: .62rem;
+      opacity: .55;
+      margin-top: 5px;
+      letter-spacing: .04em;
+      animation: tapHint 1.4s ease-in-out infinite;
+    }
+    @keyframes tapHint {
+      0%,100% { opacity: .3; }
+      50%      { opacity: .85; }
     }
 
     /* ── COUNTING ITEMS DISPLAY ──────────────────────── */
@@ -670,7 +698,7 @@
    DATA
 ═══════════════════════════════════════════════════════ */
 
-const IMG = w => `https://images.unsplash.com/photo-${w}?w=1200&q=80&fit=crop`;
+const IMG = w => { const ids=['1583212292454-1fe6229603b7','1419242902214-272b3f66ee7a','1441974231531-c6227db76b6e','1533154683836-84ea7a0bc310','1500382017468-9049fed747ef','1559827260-dc66d52bef19','1478860409698-8707f313ee8b','1509316785289-025f5b846b35','1502134249126-9f3755a50d78','1518531933037-91b2f5f229cc','1474487548417-781cb71495f3','1539768942893-daf53e448371','1507525428034-b723cf961d3e','1506905925346-21bda4d32df4','1507003211169-0a1dd7228f2d','1573455494060-c5595004fb6c','1521587760476-6c12a4b040da','1505142468610-359e7d316be0','1519074069444-1ba4fff66d16','1480714378408-67cf0d13bc1b']; const i=ids.indexOf(w); return i>=0?`/img-cache/math_smash/scene_${i}.jpg`:`https://images.unsplash.com/photo-${w}?w=1200&q=80&fit=crop`; };
 
 const SCENES = [
   { name:"Underwater Reef",
@@ -1504,6 +1532,7 @@ function showBubble(txt, useSpeechApi = false) {
   // Instant on desktop; word-by-word typewriter on mobile
   const words = txt.split(' ');
   let i = 0;
+  b.classList.remove('tappable');
   if (isMobile) {
     function typeWord() {
       if (i < words.length) {
@@ -1511,6 +1540,7 @@ function showBubble(txt, useSpeechApi = false) {
         _typeTimer = setTimeout(typeWord, 180);
       } else {
         _typeTimer = null;
+        if (storyStep < 3) b.classList.add('tappable');
       }
     }
     typeWord();
@@ -1539,7 +1569,8 @@ function showBubble(txt, useSpeechApi = false) {
 function hideBubble() {
   if (_typeTimer) { clearTimeout(_typeTimer); _typeTimer = null; }
   if (window.speechSynthesis) window.speechSynthesis.cancel();
-  document.getElementById('speech-bubble').classList.remove('show');
+  const b = document.getElementById('speech-bubble');
+  b.classList.remove('show', 'tappable');
 }
 
 function skipBubble() {
@@ -1555,12 +1586,15 @@ function skipBubble() {
 function tapBubble() {
   // During question phase, tapping the bubble just completes typewriter or hides it
   if (storyStep >= 3) { skipBubble(); return; }
+  const b = document.getElementById('speech-bubble');
   if (_typeTimer) {
     // Typewriter still running — complete it first; next tap will advance
     clearTimeout(_typeTimer); _typeTimer = null;
-    document.getElementById('speech-bubble').textContent = _bubbleFullText;
+    b.textContent = _bubbleFullText;
+    b.classList.add('tappable');
   } else {
     // Text fully shown — advance to next dialog box
+    b.classList.remove('tappable');
     advanceStory();
   }
 }

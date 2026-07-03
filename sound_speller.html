@@ -368,74 +368,25 @@ function say(text){
   a.play().catch(()=>{});
 }
 
-/* ── Web Audio phoneme synth ── */
-let AC=null;
-const ac=()=>{ try{ AC=AC||new(window.AudioContext||window.webkitAudioContext)(); if(AC.state==="suspended")AC.resume(); }catch(e){} return AC; };
-const noiseBuf=(c,dur)=>{ const n=Math.max(1,Math.floor(c.sampleRate*dur)),b=c.createBuffer(1,n,c.sampleRate),d=b.getChannelData(0); for(let i=0;i<n;i++)d[i]=Math.random()*2-1; return b; };
-function vowel(F,dur){ const c=ac(); if(!c)return; const t0=c.currentTime;
-  const glot=c.createOscillator(); glot.type="sawtooth"; glot.frequency.setValueAtTime(145,t0); glot.frequency.linearRampToValueAtTime(120,t0+dur);
-  const out=c.createGain(); out.connect(c.destination);
-  out.gain.setValueAtTime(0,t0); out.gain.linearRampToValueAtTime(0.22,t0+0.03); out.gain.setValueAtTime(0.20,t0+dur-0.05); out.gain.linearRampToValueAtTime(0,t0+dur);
-  const A=F[0],B=F[1]||F[0],gains=[1.0,0.55,0.32];
-  for(let i=0;i<A.length;i++){ const f=c.createBiquadFilter(); f.type="bandpass"; f.Q.value=11;
-    f.frequency.setValueAtTime(A[i],t0); f.frequency.linearRampToValueAtTime(B[i],t0+dur);
-    const g=c.createGain(); g.gain.value=gains[i]||0.3; glot.connect(f); f.connect(g); g.connect(out); }
-  glot.start(t0); glot.stop(t0+dur+0.02); }
-function fric(freq,Q,dur,peak,voiced){ const c=ac(); if(!c)return; const t0=c.currentTime;
-  const src=c.createBufferSource(); src.buffer=noiseBuf(c,dur+0.05);
-  const bp=c.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=freq; bp.Q.value=Q;
-  const g=c.createGain(); g.connect(c.destination);
-  g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(peak,t0+0.03); g.gain.setValueAtTime(peak*0.8,t0+dur-0.05); g.gain.linearRampToValueAtTime(0,t0+dur);
-  src.connect(bp); bp.connect(g); src.start(t0); src.stop(t0+dur+0.02);
-  if(voiced){ const o=c.createOscillator(); o.type="sawtooth"; o.frequency.value=120; const og=c.createGain();
-    og.gain.setValueAtTime(0.06,t0); og.gain.linearRampToValueAtTime(0,t0+dur); o.connect(og); og.connect(c.destination); o.start(t0); o.stop(t0+dur+0.02); } }
-function stopC(burst,Q,voiced){ const c=ac(); if(!c)return; const t0=c.currentTime;
-  const src=c.createBufferSource(); src.buffer=noiseBuf(c,0.05);
-  const bp=c.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=burst; bp.Q.value=Q;
-  const g=c.createGain(); g.connect(c.destination);
-  g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.5,t0+0.006); g.gain.exponentialRampToValueAtTime(0.001,t0+0.07);
-  src.connect(bp); bp.connect(g); src.start(t0); src.stop(t0+0.09);
-  if(voiced){ const o=c.createOscillator(); o.type="sawtooth"; o.frequency.value=100; const og=c.createGain();
-    og.gain.setValueAtTime(0.07,t0); og.gain.exponentialRampToValueAtTime(0.001,t0+0.1); o.connect(og); og.connect(c.destination); o.start(t0); o.stop(t0+0.11); }
-  const rel=c.createOscillator(); rel.type="sawtooth"; rel.frequency.value=140;
-  const rf=c.createBiquadFilter(); rf.type="bandpass"; rf.frequency.value=620; rf.Q.value=8;
-  const rg=c.createGain(); rg.gain.setValueAtTime(0,t0+0.02); rg.gain.linearRampToValueAtTime(0.05,t0+0.05); rg.gain.linearRampToValueAtTime(0,t0+0.14);
-  rel.connect(rf); rf.connect(rg); rg.connect(c.destination); rel.start(t0+0.02); rel.stop(t0+0.16); }
-function nasal(F,dur){ const c=ac(); if(!c)return; const t0=c.currentTime;
-  const o=c.createOscillator(); o.type="sawtooth"; o.frequency.value=130;
-  const lp=c.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=2200;
-  const out=c.createGain(); out.connect(c.destination);
-  out.gain.setValueAtTime(0,t0); out.gain.linearRampToValueAtTime(0.16,t0+0.04); out.gain.setValueAtTime(0.14,t0+dur-0.05); out.gain.linearRampToValueAtTime(0,t0+dur);
-  const f1=c.createBiquadFilter(); f1.type="bandpass"; f1.frequency.value=F[0]; f1.Q.value=9;
-  const f2=c.createBiquadFilter(); f2.type="bandpass"; f2.frequency.value=F[1]; f2.Q.value=9;
-  o.connect(f1); f1.connect(out); o.connect(f2); f2.connect(lp); lp.connect(out);
-  o.start(t0); o.stop(t0+dur+0.02); }
-const PHON={
- a:()=>vowel([[660,1700]],.40), e:()=>vowel([[530,1840]],.40), i:()=>vowel([[390,1990]],.38),
- o:()=>vowel([[570,840]],.40), u:()=>vowel([[640,1190]],.40),
- AI:()=>vowel([[530,1840],[390,2100]],.5), EE:()=>vowel([[270,2300]],.45),
- IE:()=>vowel([[700,1150],[400,2000]],.55), OA:()=>vowel([[480,900],[350,800]],.5),
- UE:()=>vowel([[300,870]],.5), OO:()=>vowel([[440,1020]],.4),
- AR:()=>vowel([[700,1150,1600]],.5), OR:()=>vowel([[500,800,1700]],.5), ER:()=>vowel([[490,1350,1600]],.5),
- OW:()=>vowel([[700,1150],[440,1020]],.55), OY:()=>vowel([[500,800],[390,2000]],.55),
- s:()=>fric(6500,6,.32,0.22,false), z:()=>fric(5500,5,.30,0.18,true), SH:()=>fric(2800,4,.34,0.30,false),
- f:()=>fric(2000,1.2,.30,0.16,false), v:()=>fric(1500,1.2,.28,0.12,true),
- TH:()=>fric(7000,2,.30,0.12,false), DH:()=>fric(3000,2,.28,0.10,true), h:()=>fric(1200,0.7,.22,0.12,false),
- WH:()=>fric(1000,0.7,.24,0.12,false),
- p:()=>stopC(1200,3,false), b:()=>stopC(800,3,true), t:()=>stopC(3500,4,false),
- d:()=>stopC(2200,4,true), k:()=>stopC(1800,3,false), g:()=>stopC(1300,3,true), c:()=>stopC(1800,3,false),
- m:()=>nasal([250,1000],.34), n:()=>nasal([250,1700],.34), NG:()=>nasal([250,2200],.34),
- l:()=>vowel([[360,1300,2700]],.34), r:()=>vowel([[490,1350,1600]],.34),
- w:()=>vowel([[330,900],[500,1200]],.30), y:()=>vowel([[290,2200],[400,1800]],.30),
- j:()=>{ stopC(2000,4,true); setTimeout(()=>fric(2800,4,.20,0.18,true),60); },
- CH:()=>{ stopC(3500,4,false); setTimeout(()=>fric(2800,4,.20,0.22,false),50); },
- x:()=>{ stopC(1800,3,false); setTimeout(()=>fric(6500,6,.22,0.2,false),60); },
- qu:()=>{ stopC(1800,3,false); setTimeout(()=>vowel([[330,900],[500,1200]],.24),60); }
-};
-const playPhon = ph => { const fn=PHON[ph]; if(fn){ try{fn();}catch(e){} } };
+/* ── Phoneme MP3 playback ── */
+function playPhon(ph){
+  try{ new Audio(`/audio/phonemes/${ph}.mp3`).play().catch(()=>{}); }catch{}
+}
+
+let _soundGen=0;
 function soundOut(g){
-  let t=0;
-  g.forEach(u=>{ setTimeout(()=>playPhon(u[1]),t); t += (u[1].length>1||"AEIOU".includes(u[1][0]?u[1][0].toUpperCase():"") ? 520 : 360); });
+  const gen=++_soundGen;
+  let i=0;
+  function next(){
+    if(i>=g.length||_soundGen!==gen) return;
+    const ph=g[i++][1];
+    try{
+      const a=new Audio(`/audio/phonemes/${ph}.mp3`);
+      a.onended=next; a.onerror=next;
+      a.play().catch(next);
+    }catch{ next(); }
+  }
+  next();
 }
 
 /* ═══ SETTINGS & STATE ═════════════════════════════════════════════════════ */

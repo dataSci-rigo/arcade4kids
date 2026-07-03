@@ -540,6 +540,18 @@ def serve_img_cache(filename):
     return send_from_directory(IMG_CACHE_DIR, filename)
 
 
+@app.route('/img-cache/<game>/<filename>')
+def serve_game_img_cache(game, filename):
+    if not re.fullmatch(r'[a-zA-Z0-9_-]+', game):
+        abort(404)
+    if not re.fullmatch(r'[a-zA-Z0-9_-]+\.(jpg|png|gif|webp)', filename):
+        abort(404)
+    game_dir = os.path.join(IMG_CACHE_DIR, game)
+    if not os.path.isfile(os.path.join(game_dir, filename)):
+        abort(404)
+    return send_from_directory(game_dir, filename)
+
+
 _tts_cache = {}  # (word, lang) → cached mp3 bytes
 
 @app.route('/api/tts')
@@ -677,6 +689,19 @@ def create_spelling_set():
     if len(clean) < 2:
         return jsonify({'error': 'need at least 2 valid words'}), 400
 
+    # Optional per-word picked image URLs: { "WORD": url_or_list }
+    word_images_raw = data.get('word_images') or {}
+    if not isinstance(word_images_raw, dict):
+        word_images_raw = {}
+    word_images = {}
+    for k, v in word_images_raw.items():
+        if isinstance(v, list):
+            urls = [u for u in v if isinstance(u, str) and u]
+            if urls:
+                word_images[k] = urls
+        elif isinstance(v, str) and v:
+            word_images[k] = [v]
+
     sets = _load_spelling_sets()
     base_id = _slugify(label)
     existing_ids = {s['id'] for s in sets}
@@ -686,6 +711,8 @@ def create_spelling_set():
         set_id = f"{base_id}_{i}"
         i += 1
     new_set = {'id': set_id, 'label': label, 'words': clean}
+    if word_images:
+        new_set['word_images'] = word_images
     sets.append(new_set)
     _save_spelling_sets(sets)
     return jsonify(new_set), 201
@@ -1005,7 +1032,23 @@ def create_vocab_custom_set():
             return jsonify({'error': f'word entry missing word or search'}), 400
         if len(easy) < 2 or len(hard) < 2:
             return jsonify({'error': f'"{word}" needs 2 easy and 2 hard distractors'}), 400
-        clean.append({'word': word, 'search': search, 'easy': easy[:2], 'hard': hard[:2]})
+        images_raw = w.get('images') if isinstance(w.get('images'), dict) else None
+        images = None
+        if images_raw:
+            norm = {}
+            for slot, v in images_raw.items():
+                if isinstance(v, list):
+                    urls = [u for u in v if isinstance(u, str) and u]
+                    if urls:
+                        norm[slot] = urls
+                elif isinstance(v, str) and v:
+                    norm[slot] = [v]
+            if norm:
+                images = norm
+        entry = {'word': word, 'search': search, 'easy': easy[:2], 'hard': hard[:2]}
+        if images:
+            entry['images'] = images
+        clean.append(entry)
 
     con = _vocab_conn()
     base_id = _slugify(label)
@@ -1053,17 +1096,27 @@ def vocab_custom_set_round():
     words = json.loads(row[0])
     selected = random.sample(words, min(5, len(words)))
 
-    # Build pseudo-rows matching the format _build_rounds expects
-    pseudo_rows = []
-    for w in selected:
-        pseudo_rows.append((
-            None, None,
-            w['word'], w['search'],
-            json.dumps(w['easy']),
-            json.dumps(w['hard'])
-        ))
+    def _get_imgs(search, picked):
+        if picked:
+            lst = picked if isinstance(picked, list) else [picked]
+            result = [_cache_image(u) for u in lst if isinstance(u, str) and u]
+            return [c for c in result if c]
+        return [_cache_image(u) for u in _vocab_get_images(search, n=3) if u]
 
-    rounds = _build_rounds(pseudo_rows, mode)
+    rounds = []
+    for w in selected:
+        imgs = w.get('images') or {}
+        mode_distractors = w['easy'] if mode == 'easy' else w['hard']
+        d_keys = ['e1', 'e2'] if mode == 'easy' else ['h1', 'h2']
+
+        target_imgs = _get_imgs(w['search'], imgs.get('target'))
+        choices = [{'word': w['word'], 'display_word': w['word'], 'images': target_imgs, 'correct': True}]
+        for d, dkey in zip(mode_distractors[:2], d_keys):
+            d_imgs = _get_imgs(d['s'], imgs.get(dkey))
+            choices.append({'word': d['w'], 'display_word': d['w'], 'images': d_imgs, 'correct': False})
+        random.shuffle(choices)
+        rounds.append({'word': w['word'], 'display_word': w['word'], 'choices': choices})
+
     return jsonify({'mode': mode, 'rounds': rounds})
 
 

@@ -63,6 +63,13 @@ input[type=text]:focus { outline: none; border-color: var(--teal); }
 }
 .thumb.picked + .thumb-check, .thumb-wrap.picked .thumb-check { display: flex; }
 .bin-hint { font-size: 12px; color: #aaa; font-weight: 700; margin-top: 8px; }
+.word-picker-row { background:#f8f8ff; border:2px solid #e0d8ff; border-radius:14px; padding:12px 14px; }
+.word-picker-label { font-size:13px; font-weight:800; color:#6a1fb8; margin-bottom:8px; }
+.word-picker-thumbs { display:flex; flex-wrap:wrap; gap:7px; min-height:40px; }
+.word-picker-thumbs .thumb-wrap.picked { border-radius:12px; outline:3px solid var(--teal); }
+.thumb-loading { width:64px; height:64px; border-radius:10px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:11px; color:#aaa; font-weight:700; }
+.vb-img-row { background:#f8f8ff; border:2px solid #e8d8ff; border-radius:12px; padding:10px 12px; }
+.vb-img-row-label { font-size:12px; font-weight:800; color:#9B59B6; margin-bottom:7px; text-transform:uppercase; letter-spacing:.8px; }
 
 .btn-row { display: flex; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
 button.action {
@@ -165,7 +172,13 @@ button.action:disabled { opacity: .45; cursor: default; }
   <div id="sp-tags" style="display:flex;flex-wrap:wrap;gap:8px;min-height:36px;margin-bottom:4px"></div>
   <div style="font-size:12px;color:#aaa;font-weight:700;margin-bottom:4px">Need at least 2 words. Words are saved in UPPERCASE.</div>
 
+  <div id="sp-img-section" style="display:none;margin-top:14px">
+    <div class="field-label">Word Images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:12px">— tap a thumbnail to choose the image that shows during gameplay</span></div>
+    <div id="sp-word-pickers" style="display:flex;flex-direction:column;gap:14px;margin-top:6px"></div>
+  </div>
+
   <div class="btn-row">
+    <button class="action btn-primary" id="sp-img-btn" onclick="fetchSpImages()" style="display:none">🖼 Find Images</button>
     <button class="action btn-save" id="sp-save-btn" onclick="saveSpSet()" disabled>Save Word Set</button>
   </div>
   <div id="sp-status" style="margin-top:12px;font-weight:800;min-height:22px"></div>
@@ -217,7 +230,11 @@ button.action:disabled { opacity: .45; cursor: default; }
         <input type="text" id="vb-hard2-s" placeholder="search (e.g. comet space)" style="margin-top:6px">
       </div>
     </div>
-    <button class="action btn-primary" onclick="addVbWord()" style="width:100%">+ Add Word</button>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="action btn-primary" id="vb-preview-btn" onclick="previewVbImages()" style="flex:1;background:linear-gradient(90deg,#9B59B6,#6366f1)">🖼 Preview Images</button>
+      <button class="action btn-primary" onclick="addVbWord()" style="flex:1">+ Add Word</button>
+    </div>
+    <div id="vb-img-preview" style="display:none;margin-top:12px;display:none;flex-direction:column;gap:10px"></div>
     <div id="vb-word-err" style="color:#FF6B6B;font-size:13px;font-weight:700;margin-top:6px;min-height:18px"></div>
   </div>
 
@@ -613,6 +630,7 @@ loadSavedSets();
 // ── Spelling Word Sets ────────────────────────────────────────────────────────
 const spWords = [];
 let spEditingId = null;
+const spWordImages = {}; // word → Set of picked URLs
 
 function addSpWord() {
   const inp = $('sp-word-input');
@@ -622,6 +640,7 @@ function addSpWord() {
   if (!w || !/^[A-Z][A-Z'\- ]*$/.test(w)) return;
   if (spWords.includes(w)) return;
   spWords.push(w);
+  if (!(w in spWordImages)) spWordImages[w] = new Set();
   renderSpTags();
   checkSpReady();
 }
@@ -629,8 +648,24 @@ function addSpWord() {
 function removeSpWord(w) {
   const i = spWords.indexOf(w);
   if (i >= 0) spWords.splice(i, 1);
+  delete spWordImages[w];
   renderSpTags();
   checkSpReady();
+  renderSpImagePickers();
+}
+
+function editSpWord(w) {
+  const i = spWords.indexOf(w);
+  if (i >= 0) spWords.splice(i, 1);
+  delete spWordImages[w];
+  if (window._spImgCandidates) delete window._spImgCandidates[w];
+  renderSpTags();
+  checkSpReady();
+  renderSpImagePickers();
+  const inp = $('sp-word-input');
+  inp.value = w;
+  inp.focus();
+  inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function renderSpTags() {
@@ -638,14 +673,85 @@ function renderSpTags() {
   wrap.innerHTML = '';
   spWords.forEach(w => {
     const tag = document.createElement('span');
-    tag.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#f0eaff;border:2px solid #9B59B6;border-radius:20px;padding:5px 12px;font-weight:800;font-size:15px;cursor:default';
-    tag.innerHTML = `${w} <button onclick="removeSpWord('${w}')" style="background:none;border:none;color:#9B59B6;font-size:16px;font-weight:900;cursor:pointer;padding:0;line-height:1">&times;</button>`;
+    tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:#f0eaff;border:2px solid #9B59B6;border-radius:20px;padding:5px 12px;font-weight:800;font-size:15px;cursor:default';
+    tag.innerHTML = `${w}
+      <button onclick="editSpWord('${w.replace(/'/g, "\\'")}')" title="Edit" style="background:none;border:none;color:#9B59B6;font-size:13px;font-weight:900;cursor:pointer;padding:0 2px;line-height:1;opacity:.7">✎</button>
+      <button onclick="removeSpWord('${w.replace(/'/g, "\\'")}')" style="background:none;border:none;color:#9B59B6;font-size:16px;font-weight:900;cursor:pointer;padding:0;line-height:1">&times;</button>`;
     wrap.appendChild(tag);
   });
 }
 
 function checkSpReady() {
-  $('sp-save-btn').disabled = spWords.length < 2 || !$('sp-label').value.trim();
+  const hasWords = spWords.length >= 2;
+  const hasLabel = !!$('sp-label').value.trim();
+  $('sp-save-btn').disabled = !hasWords || !hasLabel;
+  $('sp-img-btn').style.display = hasWords ? '' : 'none';
+}
+
+function renderSpImagePickers() {
+  const section = $('sp-img-section');
+  const wrap = $('sp-word-pickers');
+  wrap.innerHTML = '';
+  if (spWords.length === 0) { section.style.display = 'none'; return; }
+  const anyImages = spWords.some(w => (window._spImgCandidates && window._spImgCandidates[w] && window._spImgCandidates[w].length) || (spWordImages[w] && spWordImages[w].size));
+  section.style.display = anyImages ? '' : 'none';
+  spWords.forEach(w => {
+    const candidates = (window._spImgCandidates || {})[w] || [];
+    const picked = spWordImages[w] || new Set();
+    // Show picked images even if not in candidates, plus unpicked candidates
+    const allUrls = [...new Set([...Array.from(picked), ...candidates])];
+    if (!allUrls.length) return;
+    const row = document.createElement('div');
+    row.className = 'word-picker-row';
+    const lbl = document.createElement('div');
+    lbl.className = 'word-picker-label';
+    lbl.textContent = w + (picked.size ? ` ✓ ${picked.size} picked` : ' — tap to pick');
+    row.appendChild(lbl);
+    const thumbs = document.createElement('div');
+    thumbs.className = 'word-picker-thumbs';
+    allUrls.forEach(url => {
+      const tw = document.createElement('div');
+      const isPicked = picked.has(url);
+      tw.className = 'thumb-wrap' + (isPicked ? ' picked' : '');
+      tw.innerHTML = `<img src="${url}" class="thumb ${isPicked ? 'picked' : ''}"><span class="thumb-check">✓</span>`;
+      tw.onclick = () => {
+        if (!spWordImages[w]) spWordImages[w] = new Set();
+        if (spWordImages[w].has(url)) spWordImages[w].delete(url);
+        else spWordImages[w].add(url);
+        renderSpImagePickers();
+      };
+      thumbs.appendChild(tw);
+    });
+    row.appendChild(thumbs);
+    wrap.appendChild(row);
+  });
+}
+
+async function fetchSpImages() {
+  const btn = $('sp-img-btn');
+  btn.disabled = true;
+  btn.textContent = 'Searching…';
+  window._spImgCandidates = window._spImgCandidates || {};
+  try {
+    for (const w of spWords) {
+      if ((window._spImgCandidates[w] || []).length) continue;
+      const res = await fetch('/api/images/search', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ query: w.toLowerCase() }),
+      });
+      const data = await res.json();
+      window._spImgCandidates[w] = data.images || [];
+      // Auto-pick first image if none chosen yet
+      if ((!spWordImages[w] || spWordImages[w].size === 0) && window._spImgCandidates[w].length) {
+        if (!spWordImages[w]) spWordImages[w] = new Set();
+        spWordImages[w].add(window._spImgCandidates[w][0]);
+      }
+    }
+    $('sp-img-section').style.display = '';
+    renderSpImagePickers();
+    setSpStatus('Tap images to pick any number per word. First image is pre-selected.', 'ok');
+  } catch { setSpStatus('Could not reach server.', 'err'); }
+  finally { btn.disabled = false; btn.textContent = '🖼 Find Images'; }
 }
 
 $('sp-label').addEventListener('input', checkSpReady);
@@ -661,6 +767,11 @@ async function saveSpSet() {
   if (!label || spWords.length < 2) return;
   $('sp-save-btn').disabled = true;
   setSpStatus('Saving...', '');
+  const word_images = {};
+  spWords.forEach(w => {
+    const picks = spWordImages[w];
+    if (picks && picks.size) word_images[w] = Array.from(picks);
+  });
   try {
     if (spEditingId) {
       await fetch(`/api/spelling-sets/${spEditingId}`, { method: 'DELETE' });
@@ -669,14 +780,18 @@ async function saveSpSet() {
     const res = await fetch('/api/spelling-sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, words: spWords }),
+      body: JSON.stringify({ label, words: spWords, word_images }),
     });
     const data = await res.json();
     if (!res.ok) { setSpStatus(data.error || 'Could not save.', 'err'); $('sp-save-btn').disabled = false; return; }
     setSpStatus(`Saved "${data.label}"! Open Spelling Adventure to play it.`, 'ok');
     $('sp-label').value = '';
     spWords.length = 0;
+    Object.keys(spWordImages).forEach(k => delete spWordImages[k]);
+    window._spImgCandidates = {};
     $('sp-save-btn').textContent = 'Save Word Set';
+    $('sp-img-section').style.display = 'none';
+    $('sp-img-btn').style.display = 'none';
     renderSpTags();
     loadSpSavedSets();
   } catch {
@@ -710,10 +825,28 @@ async function loadSpSavedSets() {
         spEditingId = set.id;
         $('sp-label').value = set.label;
         spWords.length = 0;
-        set.words.forEach(w => spWords.push(w));
+        Object.keys(spWordImages).forEach(k => delete spWordImages[k]);
+        window._spImgCandidates = {};
+        set.words.forEach(w => {
+          spWords.push(w);
+          const v = set.word_images && set.word_images[w];
+          if (Array.isArray(v) && v.length) {
+            spWordImages[w] = new Set(v);
+            window._spImgCandidates[w] = [...v];
+          } else if (v && typeof v === 'string') {
+            spWordImages[w] = new Set([v]);
+            window._spImgCandidates[w] = [v];
+          } else {
+            spWordImages[w] = new Set();
+          }
+        });
         renderSpTags(); checkSpReady();
+        if (Object.values(spWordImages).some(s => s.size)) {
+          $('sp-img-section').style.display = '';
+          renderSpImagePickers();
+        }
         $('sp-save-btn').textContent = 'Update Word Set';
-        setSpStatus('Editing — adjust words then click Update.', '');
+        setSpStatus('Editing — adjust words/images then click Update.', '');
         $('sp-label').scrollIntoView({ behavior: 'smooth', block: 'start' });
       };
       const del = document.createElement('button');
@@ -738,6 +871,83 @@ loadSpSavedSets();
 // ── Vocab Builder Word Sets ───────────────────────────────────────────────────
 const vbWords = [];
 let vbEditingId = null;
+const vbPendingImages = { target: new Set(), e1: new Set(), e2: new Set(), h1: new Set(), h2: new Set() };
+
+function renderVbImgRow(container, key, label, candidates, pickedSet) {
+  const row = document.createElement('div');
+  row.className = 'vb-img-row';
+  const lbl = document.createElement('div');
+  lbl.className = 'vb-img-row-label';
+  lbl.textContent = label + (pickedSet.size ? ` ✓ ${pickedSet.size}` : ' — tap to pick');
+  row.appendChild(lbl);
+  const thumbs = document.createElement('div');
+  thumbs.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+  // Always show already-picked images first, then remaining candidates
+  const allUrls = [...new Set([...Array.from(pickedSet), ...(candidates || [])])];
+  allUrls.forEach(url => {
+    const tw = document.createElement('div');
+    const isPicked = pickedSet.has(url);
+    tw.className = 'thumb-wrap' + (isPicked ? ' picked' : '');
+    tw.innerHTML = `<img src="${url}" class="thumb ${isPicked ? 'picked' : ''}" style="width:54px;height:54px"><span class="thumb-check">✓</span>`;
+    tw.onclick = () => {
+      if (vbPendingImages[key].has(url)) vbPendingImages[key].delete(url);
+      else vbPendingImages[key].add(url);
+      renderVbImagePreview();
+    };
+    thumbs.appendChild(tw);
+  });
+  if (!allUrls.length) {
+    thumbs.innerHTML = '<span style="font-size:12px;color:#bbb;font-weight:700">No images found</span>';
+  }
+  row.appendChild(thumbs);
+  container.appendChild(row);
+}
+
+async function previewVbImages() {
+  const search  = $('vb-search').value.trim();
+  const e1s     = $('vb-easy1-s').value.trim();
+  const e2s     = $('vb-easy2-s').value.trim();
+  const h1s     = $('vb-hard1-s').value.trim();
+  const h2s     = $('vb-hard2-s').value.trim();
+  if (!search) { $('vb-word-err').textContent = 'Fill in the Image Search Term first.'; return; }
+  $('vb-word-err').textContent = '';
+  const btn = $('vb-preview-btn');
+  btn.disabled = true; btn.textContent = 'Searching…';
+  window._vbImgCandidates = {};
+  const queries = { target: search, e1: e1s, e2: e2s, h1: h1s, h2: h2s };
+  for (const [key, q] of Object.entries(queries)) {
+    if (!q) continue;
+    try {
+      const res  = await fetch('/api/images/search', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ query: q }),
+      });
+      const data = await res.json();
+      window._vbImgCandidates[key] = data.images || [];
+      // Auto-pick first only if none currently picked
+      if (vbPendingImages[key].size === 0 && window._vbImgCandidates[key].length) {
+        vbPendingImages[key].add(window._vbImgCandidates[key][0]);
+      }
+    } catch {}
+  }
+  renderVbImagePreview();
+  btn.disabled = false; btn.textContent = '🖼 Preview Images';
+}
+
+function renderVbImagePreview() {
+  const wrap = $('vb-img-preview');
+  const hasCandidates = window._vbImgCandidates && Object.keys(window._vbImgCandidates).length;
+  const hasPicks = Object.values(vbPendingImages).some(s => s.size);
+  if (!hasCandidates && !hasPicks) { wrap.style.display = 'none'; return; }
+  wrap.innerHTML = '';
+  wrap.style.display = 'flex';
+  const labels = { target: 'Target Word', e1: 'Easy 1', e2: 'Easy 2', h1: 'Hard 1', h2: 'Hard 2' };
+  Object.entries(labels).forEach(([key, lbl]) => {
+    const cands = (window._vbImgCandidates || {})[key] || [];
+    if (!cands.length && !vbPendingImages[key].size) return;
+    renderVbImgRow(wrap, key, lbl, cands, vbPendingImages[key]);
+  });
+}
 
 function addVbWord() {
   const word   = $('vb-word').value.trim();
@@ -761,14 +971,26 @@ function addVbWord() {
     err.textContent = 'That word is already in the list.'; return;
   }
 
+  // Capture picked images as arrays
+  const images = {};
+  let hasAnyImage = false;
+  ['target','e1','e2','h1','h2'].forEach(k => {
+    const arr = Array.from(vbPendingImages[k]);
+    if (arr.length) { images[k] = arr; hasAnyImage = true; }
+  });
+
   vbWords.push({
     word, search,
     easy: [{w: e1w, s: e1s}, {w: e2w, s: e2s}],
     hard: [{w: h1w, s: h1s}, {w: h2w, s: h2s}],
+    images: hasAnyImage ? images : undefined,
   });
 
   ['vb-word','vb-search','vb-easy1-w','vb-easy1-s','vb-easy2-w','vb-easy2-s',
    'vb-hard1-w','vb-hard1-s','vb-hard2-w','vb-hard2-s'].forEach(id => $(id).value = '');
+  Object.keys(vbPendingImages).forEach(k => { vbPendingImages[k] = new Set(); });
+  window._vbImgCandidates = {};
+  $('vb-img-preview').style.display = 'none';
   $('vb-word').focus();
   renderVbWords();
   checkVbReady();
@@ -780,6 +1002,40 @@ function removeVbWord(idx) {
   checkVbReady();
 }
 
+function editVbWord(idx) {
+  const w = vbWords[idx];
+  $('vb-word').value   = w.word;
+  $('vb-search').value = w.search;
+  $('vb-easy1-w').value = w.easy[0]?.w || '';
+  $('vb-easy1-s').value = w.easy[0]?.s || '';
+  $('vb-easy2-w').value = w.easy[1]?.w || '';
+  $('vb-easy2-s').value = w.easy[1]?.s || '';
+  $('vb-hard1-w').value = w.hard[0]?.w || '';
+  $('vb-hard1-s').value = w.hard[0]?.s || '';
+  $('vb-hard2-w').value = w.hard[1]?.w || '';
+  $('vb-hard2-s').value = w.hard[1]?.s || '';
+
+  // Restore picked images into pending state
+  const imgs = w.images || {};
+  window._vbImgCandidates = {};
+  Object.keys(vbPendingImages).forEach(k => {
+    const v = imgs[k];
+    const arr = Array.isArray(v) ? v : (v ? [v] : []);
+    vbPendingImages[k] = new Set(arr);
+    if (arr.length) window._vbImgCandidates[k] = arr;
+  });
+  if (Object.values(vbPendingImages).some(s => s.size)) {
+    renderVbImagePreview();
+    $('vb-img-preview').style.display = 'flex';
+  }
+
+  vbWords.splice(idx, 1);
+  renderVbWords();
+  checkVbReady();
+  $('vb-word').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  $('vb-word').focus();
+}
+
 function renderVbWords() {
   const wrap = $('vb-words-list');
   wrap.innerHTML = '';
@@ -788,18 +1044,35 @@ function renderVbWords() {
     card.style.cssText = 'background:#f0eaff;border:2px solid #c77dff;border-radius:14px;padding:12px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px';
     const info = document.createElement('div');
     info.style.cssText = 'flex:1;min-width:0';
+    const firstThumb = w.images && w.images.target && (Array.isArray(w.images.target) ? w.images.target[0] : w.images.target);
+    const imgThumb = firstThumb
+      ? `<img src="${firstThumb}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:2px solid #c77dff;flex-shrink:0">`
+      : '';
+    const totalPicked = w.images ? Object.values(w.images).reduce((n, v) => n + (Array.isArray(v) ? v.length : (v ? 1 : 0)), 0) : 0;
     info.innerHTML = `
-      <div style="font-weight:900;font-size:16px;color:#6a1fb8">${w.word}</div>
-      <div style="font-size:12px;color:#999;font-weight:700;margin-top:3px">search: ${w.search}</div>
-      <div style="font-size:12px;color:#bbb;font-weight:700;margin-top:2px">easy: ${w.easy.map(d=>d.w).join(', ')} &nbsp;|&nbsp; hard: ${w.hard.map(d=>d.w).join(', ')}</div>
+      <div style="display:flex;align-items:center;gap:10px">${imgThumb}<div>
+        <div style="font-weight:900;font-size:16px;color:#6a1fb8">${w.word}</div>
+        <div style="font-size:12px;color:#999;font-weight:700;margin-top:2px">search: ${w.search}</div>
+      </div></div>
+      <div style="font-size:12px;color:#bbb;font-weight:700;margin-top:4px">easy: ${w.easy.map(d=>d.w).join(', ')} &nbsp;|&nbsp; hard: ${w.hard.map(d=>d.w).join(', ')}</div>
+      ${totalPicked > 0 ? `<div style="font-size:11px;color:#4ECDC4;font-weight:700;margin-top:2px">✓ ${totalPicked} image${totalPicked>1?'s':''} picked</div>` : ''}
     `;
+    const btnWrap = document.createElement('div');
+    btnWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;flex-shrink:0';
+    const editBtn = document.createElement('button');
+    editBtn.className = 'action btn-primary';
+    editBtn.style.cssText = 'font-size:12px;padding:6px 12px';
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = () => editVbWord(i);
     const del = document.createElement('button');
     del.className = 'action btn-secondary';
-    del.style.cssText = 'font-size:13px;padding:8px 14px;flex-shrink:0';
+    del.style.cssText = 'font-size:12px;padding:6px 12px';
     del.textContent = 'Remove';
     del.onclick = () => removeVbWord(i);
+    btnWrap.appendChild(editBtn);
+    btnWrap.appendChild(del);
     card.appendChild(info);
-    card.appendChild(del);
+    card.appendChild(btnWrap);
     wrap.appendChild(card);
   });
 }
@@ -871,9 +1144,15 @@ async function loadVbSavedSets() {
         $('vb-label').value = set.label;
         vbWords.length = 0;
         set.words.forEach(w => vbWords.push(w));
+        // Clear pending form state
+        Object.keys(vbPendingImages).forEach(k => { vbPendingImages[k] = new Set(); });
+        window._vbImgCandidates = {};
+        $('vb-img-preview').style.display = 'none';
+        ['vb-word','vb-search','vb-easy1-w','vb-easy1-s','vb-easy2-w','vb-easy2-s',
+         'vb-hard1-w','vb-hard1-s','vb-hard2-w','vb-hard2-s'].forEach(id => $(id).value = '');
         renderVbWords(); checkVbReady();
         $('vb-save-btn').textContent = 'Update Vocab Set';
-        setVbStatus('Editing — adjust words then click Update.', '');
+        setVbStatus('Editing — click Edit on a word card to modify it, then click Update.', '');
         $('vb-label').scrollIntoView({ behavior: 'smooth', block: 'start' });
       };
       const del = document.createElement('button');

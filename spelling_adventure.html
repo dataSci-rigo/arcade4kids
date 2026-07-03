@@ -509,6 +509,14 @@ async function ddgImages(query, need = 3) {
 }
 
 async function ensureImages(word, minCount = 3) {
+  // Use curator-picked images from custom set if available
+  if (selectedWordSet && selectedWordSet.word_images) {
+    const picked = selectedWordSet.word_images[word.toUpperCase()];
+    if (picked) {
+      const urls = Array.isArray(picked) ? picked : [picked];
+      if (urls.length) return urls;
+    }
+  }
   const k = word.toLowerCase();
   if (!cache[k]) cache[k] = [];
   if (cache[k].length < minCount) {
