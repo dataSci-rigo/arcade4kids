@@ -164,13 +164,15 @@ button.action:disabled { opacity: .45; cursor: default; }
   <input type="text" id="sp-label" placeholder="e.g. Animals">
 
   <div class="field-label">Words</div>
-  <div style="display:flex;gap:8px;margin-bottom:8px">
-    <input type="text" id="sp-word-input" placeholder="Type a word and press Add"
+  <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">
+    <input type="text" id="sp-word-input" placeholder="Word" style="width:120px;flex:none"
+           onkeydown="if(event.key==='Enter')addSpWord()">
+    <input type="text" id="sp-search-input" placeholder="Search term (optional — for better images)"
            style="flex:1" onkeydown="if(event.key==='Enter')addSpWord()">
     <button class="action btn-primary" onclick="addSpWord()" style="white-space:nowrap;flex-shrink:0">+ Add</button>
   </div>
   <div id="sp-tags" style="display:flex;flex-wrap:wrap;gap:8px;min-height:36px;margin-bottom:4px"></div>
-  <div style="font-size:12px;color:#aaa;font-weight:700;margin-bottom:4px">Need at least 2 words. Words are saved in UPPERCASE.</div>
+  <div style="font-size:12px;color:#aaa;font-weight:700;margin-bottom:4px">Need at least 2 words. Leave search blank to use the word itself (e.g. add "mouse animal" to avoid computer images).</div>
 
   <div id="sp-img-section" style="display:none;margin-top:14px">
     <div class="field-label">Word Images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:12px">— tap a thumbnail to choose the image that shows during gameplay</span></div>
@@ -246,7 +248,36 @@ button.action:disabled { opacity: .45; cursor: default; }
   </div>
   <div id="vb-status" style="margin-top:12px;font-weight:800;min-height:22px"></div>
 
-  <div class="field-label" style="margin-top:32px">My Saved Vocab Sets</div>
+  <!-- ── Vocab Base Word Library ── -->
+  <hr style="border:none;border-top:2px dashed #e8d8ff;margin:32px 0 20px">
+  <div style="font-size:clamp(18px,4.5vw,24px);font-weight:900;background:linear-gradient(90deg,#9B59B6,#6366f1);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:4px">Base Word Library</div>
+  <div style="font-size:13px;color:#aaa;font-weight:700;margin-bottom:14px">~300 image-definable words · approve images page by page · used by adaptive round selection in Vocab Builder</div>
+
+  <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+    <button class="action btn-primary" id="vbl-lang-en" onclick="setVblLang('en')" style="font-size:13px;padding:7px 18px">EN</button>
+    <button class="action btn-secondary" id="vbl-lang-es" onclick="setVblLang('es')" style="font-size:13px;padding:7px 18px">ES</button>
+    <span style="flex:1"></span>
+    <button class="action btn-secondary" id="vbl-prev" onclick="vblChangePage(-1)" style="font-size:13px;padding:7px 14px">◀</button>
+    <span id="vbl-page-label" style="font-weight:800;font-size:14px;color:#666;white-space:nowrap">Page 1 / 10</span>
+    <button class="action btn-secondary" id="vbl-next" onclick="vblChangePage(1)" style="font-size:13px;padding:7px 14px">▶</button>
+  </div>
+
+  <div id="vbl-word-rows" style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px"></div>
+
+  <div class="btn-row">
+    <button class="action btn-primary" onclick="vblFindImages()" id="vbl-img-btn" style="background:linear-gradient(90deg,#9B59B6,#6366f1)">🖼 Find Images</button>
+    <button class="action btn-save" onclick="vblSavePage()" id="vbl-save-btn">Save Page</button>
+  </div>
+
+  <div id="vbl-img-section" style="display:none;margin-top:14px">
+    <div class="field-label">Image Picks <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:12px">— tap images to pick (multiple OK). Game picks randomly from your selections.</span></div>
+    <div id="vbl-word-pickers" style="display:flex;flex-direction:column;gap:14px;margin-top:8px"></div>
+  </div>
+  <div id="vbl-status" style="margin-top:10px;font-weight:800;min-height:20px;font-size:14px"></div>
+
+  <hr style="border:none;border-top:2px dashed #e8d8ff;margin:28px 0 20px">
+
+  <div class="field-label" style="margin-top:0">My Saved Vocab Sets</div>
   <div id="vb-saved-list" style="display:flex;flex-direction:column;gap:10px;margin-top:6px"></div>
 
   <!-- ═══ SOUND SPELLER WORDS ═══ -->
@@ -631,15 +662,19 @@ loadSavedSets();
 const spWords = [];
 let spEditingId = null;
 const spWordImages = {}; // word → Set of picked URLs
+const spWordSearch = {}; // word → search term string
 
 function addSpWord() {
   const inp = $('sp-word-input');
+  const sinp = $('sp-search-input');
   const w = inp.value.trim().toUpperCase();
-  inp.value = '';
+  const srch = sinp.value.trim() || w.toLowerCase();
+  inp.value = ''; sinp.value = '';
   inp.focus();
   if (!w || !/^[A-Z][A-Z'\- ]*$/.test(w)) return;
   if (spWords.includes(w)) return;
   spWords.push(w);
+  spWordSearch[w] = srch;
   if (!(w in spWordImages)) spWordImages[w] = new Set();
   renderSpTags();
   checkSpReady();
@@ -649,6 +684,7 @@ function removeSpWord(w) {
   const i = spWords.indexOf(w);
   if (i >= 0) spWords.splice(i, 1);
   delete spWordImages[w];
+  delete spWordSearch[w];
   renderSpTags();
   checkSpReady();
   renderSpImagePickers();
@@ -663,7 +699,10 @@ function editSpWord(w) {
   checkSpReady();
   renderSpImagePickers();
   const inp = $('sp-word-input');
+  const sinp = $('sp-search-input');
   inp.value = w;
+  sinp.value = spWordSearch[w] && spWordSearch[w] !== w.toLowerCase() ? spWordSearch[w] : '';
+  delete spWordSearch[w];
   inp.focus();
   inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -674,7 +713,9 @@ function renderSpTags() {
   spWords.forEach(w => {
     const tag = document.createElement('span');
     tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:#f0eaff;border:2px solid #9B59B6;border-radius:20px;padding:5px 12px;font-weight:800;font-size:15px;cursor:default';
-    tag.innerHTML = `${w}
+    const srch = spWordSearch[w];
+    const showSrch = srch && srch !== w.toLowerCase();
+    tag.innerHTML = `<span>${w}${showSrch ? `<br><span style="font-size:10px;font-weight:700;color:#9B59B6;opacity:.7">${srch}</span>` : ''}</span>
       <button onclick="editSpWord('${w.replace(/'/g, "\\'")}')" title="Edit" style="background:none;border:none;color:#9B59B6;font-size:13px;font-weight:900;cursor:pointer;padding:0 2px;line-height:1;opacity:.7">✎</button>
       <button onclick="removeSpWord('${w.replace(/'/g, "\\'")}')" style="background:none;border:none;color:#9B59B6;font-size:16px;font-weight:900;cursor:pointer;padding:0;line-height:1">&times;</button>`;
     wrap.appendChild(tag);
@@ -735,9 +776,10 @@ async function fetchSpImages() {
   try {
     for (const w of spWords) {
       if ((window._spImgCandidates[w] || []).length) continue;
+      const query = spWordSearch[w] || w.toLowerCase();
       const res = await fetch('/api/images/search', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ query: w.toLowerCase() }),
+        body: JSON.stringify({ query }),
       });
       const data = await res.json();
       window._spImgCandidates[w] = data.images || [];
@@ -768,19 +810,23 @@ async function saveSpSet() {
   $('sp-save-btn').disabled = true;
   setSpStatus('Saving...', '');
   const word_images = {};
+  const word_search = {};
   spWords.forEach(w => {
     const picks = spWordImages[w];
     if (picks && picks.size) word_images[w] = Array.from(picks);
+    if (spWordSearch[w]) word_search[w] = spWordSearch[w];
   });
   try {
-    if (spEditingId) {
-      await fetch(`/api/spelling-sets/${spEditingId}`, { method: 'DELETE' });
-      spEditingId = null;
+    const setId = spEditingId || null;
+    spEditingId = null;
+    // For non-default sets: delete old entry first (then re-create under same label slug)
+    if (setId && setId !== 'default') {
+      await fetch(`/api/spelling-sets/${setId}`, { method: 'DELETE' });
     }
     const res = await fetch('/api/spelling-sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, words: spWords, word_images }),
+      body: JSON.stringify({ id: setId, label, words: spWords, word_images, word_search }),
     });
     const data = await res.json();
     if (!res.ok) { setSpStatus(data.error || 'Could not save.', 'err'); $('sp-save-btn').disabled = false; return; }
@@ -788,6 +834,7 @@ async function saveSpSet() {
     $('sp-label').value = '';
     spWords.length = 0;
     Object.keys(spWordImages).forEach(k => delete spWordImages[k]);
+    Object.keys(spWordSearch).forEach(k => delete spWordSearch[k]);
     window._spImgCandidates = {};
     $('sp-save-btn').textContent = 'Save Word Set';
     $('sp-img-section').style.display = 'none';
@@ -802,19 +849,32 @@ async function saveSpSet() {
 
 async function loadSpSavedSets() {
   try {
-    const res = await fetch('/api/spelling-sets');
+    // Fetch default set too
+    const [res, defRes] = await Promise.all([
+      fetch('/api/spelling-sets'),
+      fetch('/api/spelling-sets/default'),
+    ]);
     const data = await res.json();
+    const defData = await defRes.json();
     const wrap = $('sp-saved-list');
     wrap.innerHTML = '';
-    if (!data.sets || data.sets.length === 0) {
+
+    // Build combined list: default set first, then custom sets
+    const allSets = [];
+    if (defData && defData.words) allSets.push({ ...defData, id: 'default', _isDefault: true });
+    if (data.sets) allSets.push(...data.sets.filter(s => s.id !== 'default'));
+
+    if (allSets.length === 0) {
       wrap.innerHTML = '<span style="color:#bbb;font-weight:700;font-size:14px">No saved word sets yet.</span>';
       return;
     }
-    data.sets.forEach(set => {
+
+    allSets.forEach(set => {
+      const isDefault = set._isDefault;
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#f5f0ff;border-radius:14px;padding:12px 16px;gap:12px';
+      row.style.cssText = `display:flex;align-items:center;justify-content:space-between;background:${isDefault ? '#fff8e8' : '#f5f0ff'};border-radius:14px;padding:12px 16px;gap:12px;${isDefault ? 'border:2px solid #f6c643;' : ''}`;
       const info = document.createElement('div');
-      info.innerHTML = `<div style="font-weight:900;font-size:16px">${set.label}</div><div style="font-size:12px;color:#999;font-weight:700;margin-top:3px">${set.words.join(', ')}</div>`;
+      info.innerHTML = `<div style="font-weight:900;font-size:16px">${set.label}${isDefault ? ' <span style="font-size:11px;background:#f6c643;color:#7a5a00;border-radius:20px;padding:2px 8px;vertical-align:middle;font-weight:800">DEFAULT</span>' : ''}</div><div style="font-size:12px;color:#999;font-weight:700;margin-top:3px">${set.words.join(', ')}</div>`;
       const btnWrap = document.createElement('div');
       btnWrap.style.cssText = 'display:flex;gap:8px;flex-shrink:0';
       const edit = document.createElement('button');
@@ -822,13 +882,17 @@ async function loadSpSavedSets() {
       edit.style.cssText = 'font-size:13px;padding:8px 14px';
       edit.textContent = 'Edit';
       edit.onclick = () => {
-        spEditingId = set.id;
+        spEditingId = isDefault ? 'default' : set.id;
         $('sp-label').value = set.label;
         spWords.length = 0;
         Object.keys(spWordImages).forEach(k => delete spWordImages[k]);
+        Object.keys(spWordSearch).forEach(k => delete spWordSearch[k]);
         window._spImgCandidates = {};
         set.words.forEach(w => {
           spWords.push(w);
+          // Restore search term
+          const srch = set.word_search && set.word_search[w];
+          if (srch) spWordSearch[w] = srch;
           const v = set.word_images && set.word_images[w];
           if (Array.isArray(v) && v.length) {
             spWordImages[w] = new Set(v);
@@ -845,20 +909,24 @@ async function loadSpSavedSets() {
           $('sp-img-section').style.display = '';
           renderSpImagePickers();
         }
-        $('sp-save-btn').textContent = 'Update Word Set';
+        $('sp-save-btn').textContent = isDefault ? 'Update Default Set' : 'Update Word Set';
         setSpStatus('Editing — adjust words/images then click Update.', '');
         $('sp-label').scrollIntoView({ behavior: 'smooth', block: 'start' });
       };
-      const del = document.createElement('button');
-      del.className = 'action btn-secondary';
-      del.style.cssText = 'font-size:13px;padding:8px 14px;flex-shrink:0';
-      del.textContent = 'Delete';
-      del.onclick = async () => {
-        if (!confirm(`Delete "${set.label}"?`)) return;
-        await fetch(`/api/spelling-sets/${set.id}`, { method: 'DELETE' });
-        loadSpSavedSets();
-      };
-      btnWrap.appendChild(edit); btnWrap.appendChild(del);
+      btnWrap.appendChild(edit);
+      // Don't allow deleting the default set
+      if (!isDefault) {
+        const del = document.createElement('button');
+        del.className = 'action btn-secondary';
+        del.style.cssText = 'font-size:13px;padding:8px 14px;flex-shrink:0';
+        del.textContent = 'Delete';
+        del.onclick = async () => {
+          if (!confirm(`Delete "${set.label}"?`)) return;
+          await fetch(`/api/spelling-sets/${set.id}`, { method: 'DELETE' });
+          loadSpSavedSets();
+        };
+        btnWrap.appendChild(del);
+      }
       row.appendChild(info);
       row.appendChild(btnWrap);
       wrap.appendChild(row);
@@ -867,6 +935,202 @@ async function loadSpSavedSets() {
 }
 
 loadSpSavedSets();
+
+// ── Vocab Base Word Library ───────────────────────────────────────────────────
+let vblLang = 'en';
+let vblPage = 1;
+let vblTotalPages = 1;
+let vblPageData = []; // array of {idx, word, search, images}
+const vblPendingImages = {}; // key `${lang}_${idx}` → Set of picked URLs
+
+function setVblLang(lang) {
+  vblLang = lang;
+  vblPage = 1;
+  $('vbl-lang-en').className = lang === 'en' ? 'action btn-primary' : 'action btn-secondary';
+  $('vbl-lang-es').className = lang === 'es' ? 'action btn-primary' : 'action btn-secondary';
+  loadVblPage();
+}
+
+function vblChangePage(delta) {
+  const newPage = vblPage + delta;
+  if (newPage < 1 || newPage > vblTotalPages) return;
+  vblPage = newPage;
+  loadVblPage();
+}
+
+async function loadVblPage() {
+  setVblStatus('Loading…', '');
+  $('vbl-word-rows').innerHTML = '';
+  $('vbl-img-section').style.display = 'none';
+  try {
+    const res = await fetch(`/api/vocab/base-words?lang=${vblLang}&page=${vblPage}`);
+    const data = await res.json();
+    vblPageData = data.words || [];
+    vblTotalPages = data.total_pages || 1;
+    $('vbl-page-label').textContent = `Page ${vblPage} / ${vblTotalPages}`;
+    $('vbl-prev').disabled = vblPage <= 1;
+    $('vbl-next').disabled = vblPage >= vblTotalPages;
+    renderVblWordRows();
+    setVblStatus('', '');
+  } catch { setVblStatus('Could not load words.', 'err'); }
+}
+
+function renderVblWordRows() {
+  const wrap = $('vbl-word-rows');
+  wrap.innerHTML = '';
+  vblPageData.forEach(item => {
+    const key = `${vblLang}_${item.idx}`;
+    // Sync already-loaded picks into vblPendingImages
+    if (!vblPendingImages[key]) {
+      vblPendingImages[key] = new Set(item.images || []);
+    }
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;align-items:center';
+    const numLbl = document.createElement('span');
+    numLbl.style.cssText = 'font-size:12px;color:#bbb;font-weight:700;width:28px;text-align:right;flex-shrink:0';
+    numLbl.textContent = item.idx + 1;
+    const wordInp = document.createElement('input');
+    wordInp.type = 'text';
+    wordInp.value = item.word;
+    wordInp.style.cssText = 'width:110px;flex:none;font-family:Nunito,sans-serif;font-size:14px;font-weight:700;border:2px solid #e8d8ff;border-radius:8px;padding:5px 9px';
+    wordInp.dataset.vblIdx = item.idx;
+    wordInp.dataset.vblField = 'word';
+    const srchInp = document.createElement('input');
+    srchInp.type = 'text';
+    srchInp.value = item.search || item.word.toLowerCase();
+    srchInp.placeholder = 'Search term';
+    srchInp.style.cssText = 'flex:1;min-width:0;font-family:Nunito,sans-serif;font-size:14px;border:2px solid #e8d8ff;border-radius:8px;padding:5px 9px';
+    srchInp.dataset.vblIdx = item.idx;
+    srchInp.dataset.vblField = 'search';
+    const pickCount = vblPendingImages[key] ? vblPendingImages[key].size : 0;
+    const countBadge = document.createElement('span');
+    countBadge.id = `vbl-badge-${key}`;
+    countBadge.style.cssText = `font-size:11px;font-weight:800;color:${pickCount ? '#6366f1' : '#bbb'};flex-shrink:0;white-space:nowrap`;
+    countBadge.textContent = pickCount ? `✓${pickCount}` : '—';
+    row.appendChild(numLbl); row.appendChild(wordInp); row.appendChild(srchInp); row.appendChild(countBadge);
+    wrap.appendChild(row);
+  });
+}
+
+function _vblReadRows() {
+  // Read current input values from the DOM into vblPageData
+  vblPageData.forEach(item => {
+    const rows = $('vbl-word-rows').querySelectorAll(`[data-vbl-idx="${item.idx}"]`);
+    rows.forEach(inp => {
+      if (inp.dataset.vblField === 'word') item.word = inp.value.trim() || item.word;
+      if (inp.dataset.vblField === 'search') item.search = inp.value.trim() || item.word.toLowerCase();
+    });
+  });
+}
+
+async function vblFindImages() {
+  _vblReadRows();
+  const btn = $('vbl-img-btn');
+  btn.disabled = true; btn.textContent = 'Searching…';
+  try {
+    for (const item of vblPageData) {
+      const key = `${vblLang}_${item.idx}`;
+      const query = item.search || item.word.toLowerCase();
+      // Skip if already has candidates (re-show without refetching)
+      if (item._candidates && item._candidates.length) continue;
+      const res = await fetch('/api/images/search', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ query }),
+      });
+      const data = await res.json();
+      item._candidates = data.images || [];
+      // Auto-pick first if none chosen
+      if (!vblPendingImages[key]) vblPendingImages[key] = new Set();
+      if (vblPendingImages[key].size === 0 && item._candidates.length) {
+        vblPendingImages[key].add(item._candidates[0]);
+      }
+    }
+    $('vbl-img-section').style.display = '';
+    renderVblImagePickers();
+    setVblStatus('Tap images to pick. First image pre-selected.', 'ok');
+  } catch { setVblStatus('Could not reach server.', 'err'); }
+  finally { btn.disabled = false; btn.textContent = '🖼 Find Images'; }
+}
+
+function renderVblImagePickers() {
+  const wrap = $('vbl-word-pickers');
+  wrap.innerHTML = '';
+  vblPageData.forEach(item => {
+    const key = `${vblLang}_${item.idx}`;
+    const candidates = item._candidates || [];
+    const picked = vblPendingImages[key] || new Set();
+    const allUrls = [...new Set([...Array.from(picked), ...candidates])];
+    if (!allUrls.length) return;
+    const block = document.createElement('div');
+    block.className = 'word-picker-row';
+    const lbl = document.createElement('div');
+    lbl.className = 'word-picker-label';
+    lbl.textContent = `${item.word.toUpperCase()}${item.search && item.search !== item.word.toLowerCase() ? ` (${item.search})` : ''} — ${picked.size ? `✓ ${picked.size} picked` : 'tap to pick'}`;
+    block.appendChild(lbl);
+    const thumbs = document.createElement('div');
+    thumbs.className = 'word-picker-thumbs';
+    allUrls.forEach(url => {
+      const tw = document.createElement('div');
+      const isPicked = picked.has(url);
+      tw.className = 'thumb-wrap' + (isPicked ? ' picked' : '');
+      tw.innerHTML = `<img src="${url}" class="thumb ${isPicked ? 'picked' : ''}"><span class="thumb-check">✓</span>`;
+      tw.onclick = () => {
+        if (!vblPendingImages[key]) vblPendingImages[key] = new Set();
+        if (vblPendingImages[key].has(url)) vblPendingImages[key].delete(url);
+        else vblPendingImages[key].add(url);
+        renderVblImagePickers();
+        // Update badge
+        const badge = $(`vbl-badge-${key}`);
+        if (badge) {
+          const cnt = vblPendingImages[key].size;
+          badge.textContent = cnt ? `✓${cnt}` : '—';
+          badge.style.color = cnt ? '#6366f1' : '#bbb';
+        }
+      };
+      thumbs.appendChild(tw);
+    });
+    block.appendChild(thumbs);
+    wrap.appendChild(block);
+  });
+}
+
+async function vblSavePage() {
+  _vblReadRows();
+  const btn = $('vbl-save-btn');
+  btn.disabled = true;
+  setVblStatus('Saving…', '');
+  const words = vblPageData.map(item => {
+    const key = `${vblLang}_${item.idx}`;
+    return {
+      idx: item.idx,
+      word: item.word,
+      search: item.search || item.word.toLowerCase(),
+      images: Array.from(vblPendingImages[key] || []),
+    };
+  });
+  try {
+    const res = await fetch('/api/vocab/base-words/save-page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lang: vblLang, words }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setVblStatus(data.error || 'Could not save.', 'err'); btn.disabled = false; return; }
+    setVblStatus(`Saved page ${vblPage}!`, 'ok');
+    // Refresh to show updated data
+    await loadVblPage();
+    if ($('vbl-img-section').style.display !== 'none') renderVblImagePickers();
+  } catch { setVblStatus('Could not reach server.', 'err'); }
+  finally { btn.disabled = false; }
+}
+
+function setVblStatus(msg, cls) {
+  const s = $('vbl-status');
+  s.textContent = msg; s.className = cls || '';
+}
+
+// Load first page on init
+loadVblPage();
 
 // ── Vocab Builder Word Sets ───────────────────────────────────────────────────
 const vbWords = [];

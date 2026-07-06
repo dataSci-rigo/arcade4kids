@@ -517,10 +517,13 @@ async function ensureImages(word, minCount = 3) {
       if (urls.length) return urls;
     }
   }
+  // Use per-word search term if the set provides one
+  const searchTerm = (selectedWordSet && selectedWordSet.word_search && selectedWordSet.word_search[word.toUpperCase()])
+    || word.toLowerCase();
   const k = word.toLowerCase();
   if (!cache[k]) cache[k] = [];
   if (cache[k].length < minCount) {
-    const fetched = await ddgImages(word, minCount);
+    const fetched = await ddgImages(searchTerm, minCount);
     for (const u of fetched) if (!cache[k].includes(u)) cache[k].push(u);
     saveCache();
   }

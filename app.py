@@ -388,6 +388,17 @@ def _vocab_init():
          js([{'w':'trimarán','s':'trimaran sailboat'},{'w':'velero','s':'sailboat ocean'}])),
     ]
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS vocab_base (
+            lang TEXT NOT NULL,
+            idx INTEGER NOT NULL,
+            word TEXT NOT NULL,
+            search TEXT NOT NULL,
+            images_json TEXT NOT NULL DEFAULT '[]',
+            PRIMARY KEY (lang, idx)
+        )
+    """)
+
     # INSERT OR IGNORE so re-running doesn't duplicate or overwrite
     cur.executemany(
         "INSERT OR IGNORE INTO vocab_words (lang,level,word,search,easy_json,hard_json) VALUES (?,?,?,?,?,?)",
@@ -397,7 +408,284 @@ def _vocab_init():
     con.close()
 
 
+# 300 image-definable words per language — seeded once, editable in builder
+VOCAB_BASE_EN = [
+    # Mammals
+    ("elephant","elephant animal"),("giraffe","giraffe animal"),("zebra","zebra animal"),
+    ("lion","lion animal"),("tiger","tiger animal"),("gorilla","gorilla primate"),
+    ("chimpanzee","chimpanzee monkey"),("kangaroo","kangaroo animal"),("koala","koala animal"),
+    ("panda","giant panda"),("hippo","hippopotamus animal"),("rhinoceros","rhinoceros animal"),
+    ("camel","camel desert animal"),("llama","llama animal"),("bison","bison animal"),
+    ("moose","moose animal"),("platypus","platypus animal"),("armadillo","armadillo animal"),
+    ("hedgehog","hedgehog animal"),("sloth","sloth hanging animal"),("meerkat","meerkat animal"),
+    ("capybara","capybara animal"),("narwhal","narwhal whale"),("manatee","manatee sea cow"),
+    ("pangolin","pangolin animal"),("walrus","walrus animal"),("otter","sea otter animal"),
+    ("beaver","beaver animal"),("wolverine","wolverine animal"),("tapir","tapir animal"),
+    # Birds
+    ("penguin","penguin bird"),("flamingo","flamingo pink bird"),("peacock","peacock feathers bird"),
+    ("toucan","toucan colorful bird"),("pelican","pelican bird"),("eagle","bald eagle bird"),
+    ("owl","owl bird"),("parrot","parrot colorful bird"),("hummingbird","hummingbird flower"),
+    ("ostrich","ostrich bird"),("puffin","puffin seabird"),("kingfisher","kingfisher bird"),
+    ("woodpecker","woodpecker bird tree"),("hornbill","hornbill bird beak"),("macaw","macaw parrot"),
+    # Sea creatures
+    ("dolphin","dolphin ocean"),("whale","whale ocean"),("shark","shark ocean"),
+    ("octopus","octopus sea creature"),("jellyfish","jellyfish ocean"),("starfish","starfish ocean"),
+    ("lobster","lobster seafood"),("crab","crab seafood"),("seahorse","seahorse ocean"),
+    ("seal","seal animal coast"),("squid","squid sea creature"),("sea turtle","sea turtle ocean"),
+    ("stingray","stingray ocean"),("clam","clam shell"),("anglerfish","anglerfish deep sea"),
+    # Reptiles & insects
+    ("crocodile","crocodile reptile"),("iguana","iguana lizard"),("chameleon","chameleon lizard"),
+    ("scorpion","scorpion arachnid"),("butterfly","butterfly insect"),("dragonfly","dragonfly insect"),
+    ("praying mantis","praying mantis insect"),("caterpillar","caterpillar insect"),
+    ("firefly","firefly glowing insect"),("tarantula","tarantula spider"),
+    # Vehicles
+    ("helicopter","helicopter aircraft"),("submarine","submarine underwater"),
+    ("bulldozer","bulldozer construction"),("excavator","excavator machine"),
+    ("tractor","tractor farm vehicle"),("ambulance","ambulance emergency vehicle"),
+    ("rocket","rocket spacecraft"),("sailboat","sailboat ocean"),("gondola","gondola venice boat"),
+    ("kayak","kayak paddling"),("blimp","blimp airship"),("forklift","forklift warehouse"),
+    ("hovercraft","hovercraft vehicle"),("hot air balloon","hot air balloon sky"),
+    ("glider","glider aircraft"),("snowplow","snowplow truck"),("cable car","cable car trolley"),
+    ("canoe","canoe paddling"),("ferry","ferry boat"),("rickshaw","rickshaw vehicle"),
+    # Food
+    ("pineapple","pineapple fruit"),("watermelon","watermelon fruit"),("strawberry","strawberry fruit"),
+    ("coconut","coconut tropical"),("avocado","avocado fruit"),("broccoli","broccoli vegetable"),
+    ("cauliflower","cauliflower vegetable"),("eggplant","eggplant vegetable"),
+    ("artichoke","artichoke vegetable"),("asparagus","asparagus vegetable"),
+    ("baguette","baguette french bread"),("pretzel","pretzel snack"),("donut","donut pastry"),
+    ("croissant","croissant pastry"),("waffle","waffle breakfast"),("sushi","sushi japanese food"),
+    ("taco","taco mexican food"),("dumpling","dumpling chinese food"),
+    ("pomegranate","pomegranate fruit"),("dragon fruit","dragon fruit tropical"),
+    # Objects & tools
+    ("hourglass","hourglass sand timer"),("compass","compass navigation tool"),
+    ("telescope","telescope astronomy"),("microscope","microscope science lab"),
+    ("lantern","lantern light"),("chandelier","chandelier ceiling light"),
+    ("typewriter","typewriter machine"),("gramophone","gramophone record player"),
+    ("trophy","trophy award gold"),("globe","globe world sphere"),
+    ("abacus","abacus counting beads"),("periscope","periscope instrument"),
+    ("kaleidoscope","kaleidoscope toy"),("metronome","metronome music"),("vase","flower vase"),
+    ("sundial","sundial time"),("thermometer","thermometer temperature"),
+    ("magnifying glass","magnifying glass"),("anvil","anvil blacksmith"),
+    ("mortar and pestle","mortar and pestle kitchen"),
+    ("pulley","pulley rope machine"),("bellows","bellows fire tool"),("easel","easel painting art"),
+    ("chisel","chisel woodcarving tool"),("mallet","wooden mallet"),("wrench","wrench tool"),
+    ("trowel","trowel masonry tool"),("crowbar","crowbar tool"),("pliers","pliers tool"),
+    ("sextant","sextant navigation"),
+    # Clothing
+    ("tiara","tiara crown headwear"),("turban","turban headwear"),("sombrero","sombrero hat"),
+    ("beret","beret hat"),("kimono","kimono japanese clothing"),("sari","sari indian clothing"),
+    ("kilt","kilt scottish clothing"),("overalls","overalls farming clothing"),
+    ("top hat","top hat magician"),("cloak","cloak cape clothing"),
+    # Buildings
+    ("igloo","igloo ice house"),("pyramid","pyramid egypt"),("lighthouse","lighthouse coast"),
+    ("windmill","windmill building"),("castle","castle medieval"),("pagoda","pagoda asian temple"),
+    ("mosque","mosque dome building"),("cathedral","cathedral gothic church"),
+    ("greenhouse","greenhouse glass garden"),("treehouse","treehouse wood platform"),
+    ("barn","barn red farm building"),("silo","grain silo farm"),("aqueduct","roman aqueduct"),
+    ("gazebo","gazebo garden"),("teepee","teepee native american"),("yurt","yurt nomad home"),
+    ("log cabin","log cabin forest"),("colosseum","colosseum rome"),("sphinx","great sphinx egypt"),
+    ("drawbridge","drawbridge castle"),
+    # Nature
+    ("volcano","volcano erupting lava"),("glacier","glacier ice"),("canyon","canyon red rock"),
+    ("geyser","geyser steam water"),("stalactite","stalactite cave"),("iceberg","iceberg ocean"),
+    ("coral reef","coral reef underwater"),("mangrove","mangrove forest roots"),
+    ("fjord","fjord norway"),("oasis","oasis desert palm trees"),("lagoon","lagoon tropical water"),
+    ("mesa","mesa desert plateau"),("dune","sand dune desert"),("waterfall","waterfall nature"),
+    ("cave","cave underground"),("cliff","cliff coastal rock"),("tide pool","tide pool ocean"),
+    ("hot spring","hot spring geothermal pool"),
+    ("aurora","aurora borealis northern lights"),("delta","river delta aerial view"),
+    # Plants
+    ("cactus","cactus desert"),("orchid","orchid flower"),("lotus","lotus flower water"),
+    ("bonsai","bonsai tree"),("bamboo","bamboo plant"),
+    ("venus flytrap","venus flytrap carnivorous plant"),("sunflower","sunflower yellow"),
+    ("lavender","lavender purple field"),("tulip","tulip flower"),
+    ("magnolia","magnolia flower tree"),("toadstool","red toadstool mushroom"),
+    ("fern","fern plant green"),("seaweed","seaweed ocean plant"),
+    ("dandelion","dandelion flower"),("poppy","poppy red flower"),
+    ("mistletoe","mistletoe plant"),("pitcher plant","pitcher plant carnivorous"),
+    ("pine cone","pine cone nature"),("acorn","acorn oak nut"),("clover","clover plant green"),
+    # Musical instruments
+    ("accordion","accordion instrument"),("banjo","banjo instrument"),("cello","cello instrument"),
+    ("clarinet","clarinet instrument"),("didgeridoo","didgeridoo aboriginal instrument"),
+    ("French horn","french horn instrument"),("gong","gong percussion"),
+    ("harmonica","harmonica instrument"),("harp","harp instrument"),("lute","lute instrument"),
+    ("maracas","maracas percussion"),("oboe","oboe instrument"),("sitar","sitar indian instrument"),
+    ("tambourine","tambourine percussion"),("trombone","trombone instrument"),
+    ("tuba","tuba instrument"),("ukulele","ukulele instrument"),("xylophone","xylophone instrument"),
+    ("bagpipes","bagpipes scottish instrument"),("zither","zither instrument"),
+    # Sports
+    ("archery","archery bow arrow"),("boomerang","boomerang australia"),
+    ("curling","curling sport ice"),("fencing","fencing sword sport"),
+    ("javelin","javelin throw sport"),("lacrosse","lacrosse stick sport"),
+    ("skateboard","skateboard sport"),("surfboard","surfboard ocean wave"),
+    ("trampoline","trampoline jumping"),("discus","discus throw sport"),
+    ("luge","luge winter sport sled"),("bobsled","bobsled winter sport"),
+    ("polo","polo horse sport"),("shuffleboard","shuffleboard game"),("darts","darts board game"),
+    # Space & science
+    ("asteroid","asteroid space rock"),("comet","comet space tail"),
+    ("nebula","nebula space colorful"),("satellite","satellite orbit space"),
+    ("space station","international space station"),("black hole","black hole illustration"),
+    ("meteor","meteor shooting star"),("solar eclipse","solar eclipse"),
+    ("constellation","constellation star map"),("supernova","supernova explosion space"),
+    ("galaxy","spiral galaxy space"),("crater","meteor impact crater"),
+    ("observatory","telescope observatory dome"),("solar panel","solar panel energy"),
+    ("wind turbine","wind turbine renewable energy"),
+    # Toys, games & misc
+    ("pinwheel","pinwheel toy wind"),("kite","kite flying sky"),("yo-yo","yo-yo toy"),
+    ("marionette","marionette puppet"),("chess","chess board pieces"),
+    ("dominoes","dominoes game tiles"),("spinning top","spinning top toy"),
+    ("origami","origami paper crane"),("dreamcatcher","dreamcatcher wall hanging"),
+    ("mosaic","mosaic tile art"),("labyrinth","labyrinth maze"),
+    ("pinata","pinata colorful party"),("puppet","hand puppet toy"),
+    ("boomerang","boomerang australia"),("lego","lego colorful bricks"),
+]
+
+VOCAB_BASE_ES = [
+    # Mammals
+    ("elefante","elephant animal"),("jirafa","giraffe animal"),("cebra","zebra animal"),
+    ("león","lion animal"),("tigre","tiger animal"),("gorila","gorilla primate"),
+    ("chimpancé","chimpanzee monkey"),("canguro","kangaroo animal"),("koala","koala animal"),
+    ("panda","giant panda"),("hipopótamo","hippopotamus animal"),("rinoceronte","rhinoceros animal"),
+    ("camello","camel desert animal"),("llama","llama animal"),("bisonte","bison animal"),
+    ("alce","moose animal"),("ornitorrinco","platypus animal"),("armadillo","armadillo animal"),
+    ("erizo","hedgehog animal"),("perezoso","sloth hanging animal"),("suricata","meerkat animal"),
+    ("capibara","capybara animal"),("narval","narwhal whale"),("manatí","manatee sea cow"),
+    ("pangolín","pangolin animal"),("morsa","walrus animal"),("nutria","sea otter animal"),
+    ("castor","beaver animal"),("glotón","wolverine animal"),("tapir","tapir animal"),
+    # Birds
+    ("pingüino","penguin bird"),("flamenco","flamingo pink bird"),("pavo real","peacock feathers bird"),
+    ("tucán","toucan colorful bird"),("pelícano","pelican bird"),("águila","bald eagle bird"),
+    ("búho","owl bird"),("loro","parrot colorful bird"),("colibrí","hummingbird flower"),
+    ("avestruz","ostrich bird"),("frailecillo","puffin seabird"),("martín pescador","kingfisher bird"),
+    ("pájaro carpintero","woodpecker bird tree"),("cálao","hornbill bird beak"),("guacamayo","macaw parrot"),
+    # Sea creatures
+    ("delfín","dolphin ocean"),("ballena","whale ocean"),("tiburón","shark ocean"),
+    ("pulpo","octopus sea creature"),("medusa","jellyfish ocean"),("estrella de mar","starfish ocean"),
+    ("langosta","lobster seafood"),("cangrejo","crab seafood"),("caballito de mar","seahorse ocean"),
+    ("foca","seal animal coast"),("calamar","squid sea creature"),("tortuga marina","sea turtle ocean"),
+    ("mantarraya","stingray ocean"),("almeja","clam shell"),("pez linterna","anglerfish deep sea"),
+    # Reptiles & insects
+    ("cocodrilo","crocodile reptile"),("iguana","iguana lizard"),("camaleón","chameleon lizard"),
+    ("escorpión","scorpion arachnid"),("mariposa","butterfly insect"),("libélula","dragonfly insect"),
+    ("mantis religiosa","praying mantis insect"),("oruga","caterpillar insect"),
+    ("luciérnaga","firefly glowing insect"),("tarántula","tarantula spider"),
+    # Vehicles
+    ("helicóptero","helicopter aircraft"),("submarino","submarine underwater"),
+    ("bulldozer","bulldozer construction"),("excavadora","excavator machine"),
+    ("tractor","tractor farm vehicle"),("ambulancia","ambulance emergency vehicle"),
+    ("cohete","rocket spacecraft"),("velero","sailboat ocean"),("góndola","gondola venice boat"),
+    ("kayak","kayak paddling"),("dirigible","blimp airship"),("montacargas","forklift warehouse"),
+    ("aerodeslizador","hovercraft vehicle"),("globo aerostático","hot air balloon sky"),
+    ("planeador","glider aircraft"),("quitanieves","snowplow truck"),("teleférico","cable car trolley"),
+    ("canoa","canoe paddling"),("ferry","ferry boat"),("rickshaw","rickshaw vehicle"),
+    # Food
+    ("piña","pineapple fruit"),("sandía","watermelon fruit"),("fresa","strawberry fruit"),
+    ("coco","coconut tropical"),("aguacate","avocado fruit"),("brócoli","broccoli vegetable"),
+    ("coliflor","cauliflower vegetable"),("berenjena","eggplant vegetable"),
+    ("alcachofa","artichoke vegetable"),("espárragos","asparagus vegetable"),
+    ("baguette","baguette french bread"),("pretzel","pretzel snack"),("dona","donut pastry"),
+    ("croissant","croissant pastry"),("gofre","waffle breakfast"),("sushi","sushi japanese food"),
+    ("taco","taco mexican food"),("dumpling","dumpling chinese food"),
+    ("granada","pomegranate fruit"),("pitahaya","dragon fruit tropical"),
+    # Objects & tools
+    ("reloj de arena","hourglass sand timer"),("brújula","compass navigation tool"),
+    ("telescopio","telescope astronomy"),("microscopio","microscope science lab"),
+    ("linterna","lantern light"),("araña de luces","chandelier ceiling light"),
+    ("máquina de escribir","typewriter machine"),("gramófono","gramophone record player"),
+    ("trofeo","trophy award gold"),("globo terráqueo","globe world sphere"),
+    ("ábaco","abacus counting beads"),("periscopio","periscope instrument"),
+    ("caleidoscopio","kaleidoscope toy"),("metrónomo","metronome music"),("florero","flower vase"),
+    ("reloj solar","sundial time"),("termómetro","thermometer temperature"),
+    ("lupa","magnifying glass"),("yunque","anvil blacksmith"),("mortero","mortar and pestle kitchen"),
+    ("polea","pulley rope machine"),("fuelle","bellows fire tool"),("caballete","easel painting art"),
+    ("cincel","chisel woodcarving tool"),("mazo","wooden mallet"),("llave inglesa","wrench tool"),
+    ("paleta de albañil","trowel masonry tool"),("palanca","crowbar tool"),("alicates","pliers tool"),
+    ("sextante","sextant navigation"),
+    # Clothing
+    ("tiara","tiara crown headwear"),("turbante","turban headwear"),("sombrero","sombrero hat"),
+    ("boina","beret hat"),("kimono","kimono japanese clothing"),("sari","sari indian clothing"),
+    ("kilt","kilt scottish clothing"),("overol","overalls farming clothing"),
+    ("chistera","top hat magician"),("capa","cloak cape clothing"),
+    # Buildings
+    ("iglú","igloo ice house"),("pirámide","pyramid egypt"),("faro","lighthouse coast"),
+    ("molino de viento","windmill building"),("castillo","castle medieval"),
+    ("pagoda","pagoda asian temple"),("mezquita","mosque dome building"),
+    ("catedral","cathedral gothic church"),("invernadero","greenhouse glass garden"),
+    ("casa en el árbol","treehouse wood platform"),("granero","barn red farm building"),
+    ("silo","grain silo farm"),("acueducto","roman aqueduct"),("cenador","gazebo garden"),
+    ("tipi","teepee native american"),("yurta","yurt nomad home"),
+    ("cabaña de troncos","log cabin forest"),("coliseo","colosseum rome"),
+    ("esfinge","great sphinx egypt"),("puente levadizo","drawbridge castle"),
+    # Nature
+    ("volcán","volcano erupting lava"),("glaciar","glacier ice"),("cañón","canyon red rock"),
+    ("géiser","geyser steam water"),("estalactita","stalactite cave"),("iceberg","iceberg ocean"),
+    ("arrecife de coral","coral reef underwater"),("manglar","mangrove forest roots"),
+    ("fiordo","fjord norway"),("oasis","oasis desert palm trees"),("laguna","lagoon tropical water"),
+    ("meseta","mesa desert plateau"),("duna","sand dune desert"),("cascada","waterfall nature"),
+    ("cueva","cave underground"),("acantilado","cliff coastal rock"),("poza de marea","tide pool ocean"),
+    ("manantial caliente","hot spring geothermal pool"),
+    ("aurora boreal","aurora borealis northern lights"),("delta","river delta aerial view"),
+    # Plants
+    ("cactus","cactus desert"),("orquídea","orchid flower"),("loto","lotus flower water"),
+    ("bonsái","bonsai tree"),("bambú","bamboo plant"),
+    ("venus atrapamoscas","venus flytrap carnivorous plant"),("girasol","sunflower yellow"),
+    ("lavanda","lavender purple field"),("tulipán","tulip flower"),
+    ("magnolia","magnolia flower tree"),("seta venenosa","red toadstool mushroom"),
+    ("helecho","fern plant green"),("alga marina","seaweed ocean plant"),
+    ("diente de león","dandelion flower"),("amapola","poppy red flower"),
+    ("muérdago","mistletoe plant"),("planta jarro","pitcher plant carnivorous"),
+    ("piña de pino","pine cone nature"),("bellota","acorn oak nut"),("trébol","clover plant green"),
+    # Musical instruments
+    ("acordeón","accordion instrument"),("banjo","banjo instrument"),("violonchelo","cello instrument"),
+    ("clarinete","clarinet instrument"),("didyeridú","didgeridoo aboriginal instrument"),
+    ("trompa","french horn instrument"),("gong","gong percussion"),
+    ("armónica","harmonica instrument"),("arpa","harp instrument"),("laúd","lute instrument"),
+    ("maracas","maracas percussion"),("oboe","oboe instrument"),("sitar","sitar indian instrument"),
+    ("pandereta","tambourine percussion"),("trombón","trombone instrument"),
+    ("tuba","tuba instrument"),("ukelele","ukulele instrument"),("xilófono","xylophone instrument"),
+    ("gaita","bagpipes scottish instrument"),("cítara","zither instrument"),
+    # Sports
+    ("tiro con arco","archery bow arrow"),("bumerán","boomerang australia"),
+    ("curling","curling sport ice"),("esgrima","fencing sword sport"),
+    ("jabalina","javelin throw sport"),("lacrosse","lacrosse stick sport"),
+    ("monopatín","skateboard sport"),("tabla de surf","surfboard ocean wave"),
+    ("trampolín","trampoline jumping"),("disco","discus throw sport"),
+    ("luge","luge winter sport sled"),("bobsled","bobsled winter sport"),
+    ("polo","polo horse sport"),("shuffleboard","shuffleboard game"),("dardos","darts board game"),
+    # Space & science
+    ("asteroide","asteroid space rock"),("cometa","comet space tail"),
+    ("nebulosa","nebula space colorful"),("satélite","satellite orbit space"),
+    ("estación espacial","international space station"),("agujero negro","black hole illustration"),
+    ("meteoro","meteor shooting star"),("eclipse solar","solar eclipse"),
+    ("constelación","constellation star map"),("supernova","supernova explosion space"),
+    ("galaxia","spiral galaxy space"),("cráter","meteor impact crater"),
+    ("observatorio","telescope observatory dome"),("panel solar","solar panel energy"),
+    ("turbina eólica","wind turbine renewable energy"),
+    # Toys, games & misc
+    ("molinillo","pinwheel toy wind"),("cometa de papel","kite flying sky"),("yoyó","yo-yo toy"),
+    ("marioneta","marionette puppet"),("ajedrez","chess board pieces"),
+    ("dominó","dominoes game tiles"),("trompo","spinning top toy"),
+    ("origami","origami paper crane"),("atrapasueños","dreamcatcher wall hanging"),
+    ("mosaico","mosaic tile art"),("laberinto","labyrinth maze"),
+    ("piñata","pinata colorful party"),("títere","hand puppet toy"),
+    ("bloques de construcción","lego colorful bricks"),("ruleta","roulette wheel game"),
+]
+
+
+def _seed_vocab_base():
+    con = _vocab_conn()
+    cur = con.cursor()
+    for lang, words in (('en', VOCAB_BASE_EN), ('es', VOCAB_BASE_ES)):
+        cur.executemany(
+            "INSERT OR IGNORE INTO vocab_base (lang, idx, word, search) VALUES (?,?,?,?)",
+            [(lang, i, w, s) for i, (w, s) in enumerate(words)]
+        )
+    con.commit()
+    con.close()
+
+
 _vocab_init()
+_seed_vocab_base()
 
 
 def _vocab_get_images(search, n=4):
@@ -677,6 +965,26 @@ def list_spelling_sets():
     return jsonify({'sets': _load_spelling_sets()})
 
 
+@app.route('/api/spelling-sets/default', methods=['GET'])
+def get_default_spelling_set():
+    sets = _load_spelling_sets()
+    default = next((s for s in sets if s.get('id') == 'default'), None)
+    if not default:
+        default = {
+            'id': 'default', 'label': 'Default Word Set',
+            'words': ['ELEPHANT','GIRAFFE','PENGUIN','BUTTERFLY','PINEAPPLE',
+                      'VOLCANO','LIGHTHOUSE','ACCORDION','STRAWBERRY','TELESCOPE'],
+            'word_search': {
+                'ELEPHANT':'elephant animal','GIRAFFE':'giraffe animal',
+                'PENGUIN':'penguin bird','BUTTERFLY':'butterfly insect',
+                'PINEAPPLE':'pineapple fruit','VOLCANO':'volcano erupting',
+                'LIGHTHOUSE':'lighthouse coast','ACCORDION':'accordion instrument',
+                'STRAWBERRY':'strawberry fruit','TELESCOPE':'telescope astronomy',
+            }
+        }
+    return jsonify(default)
+
+
 @app.route('/api/spelling-sets', methods=['POST'])
 def create_spelling_set():
     data = request.get_json(force=True, silent=True) or {}
@@ -702,7 +1010,30 @@ def create_spelling_set():
         elif isinstance(v, str) and v:
             word_images[k] = [v]
 
+    # Optional per-word search terms: { "WORD": "search term" }
+    word_search_raw = data.get('word_search') or {}
+    if not isinstance(word_search_raw, dict):
+        word_search_raw = {}
+    word_search = {
+        k.upper().strip(): str(v).strip()
+        for k, v in word_search_raw.items()
+        if v and isinstance(v, str) and str(v).strip()
+    }
+
     sets = _load_spelling_sets()
+    # For the default set, update in place instead of appending
+    set_id_requested = data.get('id', '').strip()
+    if set_id_requested == 'default':
+        sets = [s for s in sets if s.get('id') != 'default']
+        new_set = {'id': 'default', 'label': label, 'words': clean}
+        if word_images:
+            new_set['word_images'] = word_images
+        if word_search:
+            new_set['word_search'] = word_search
+        sets.insert(0, new_set)
+        _save_spelling_sets(sets)
+        return jsonify(new_set), 201
+
     base_id = _slugify(label)
     existing_ids = {s['id'] for s in sets}
     set_id = base_id
@@ -713,6 +1044,8 @@ def create_spelling_set():
     new_set = {'id': set_id, 'label': label, 'words': clean}
     if word_images:
         new_set['word_images'] = word_images
+    if word_search:
+        new_set['word_search'] = word_search
     sets.append(new_set)
     _save_spelling_sets(sets)
     return jsonify(new_set), 201
@@ -1117,6 +1450,137 @@ def vocab_custom_set_round():
         random.shuffle(choices)
         rounds.append({'word': w['word'], 'display_word': w['word'], 'choices': choices})
 
+    return jsonify({'mode': mode, 'rounds': rounds})
+
+
+# ── Vocab base word library ───────────────────────────────────────────────────
+
+@app.route('/api/vocab/base-words')
+def vocab_base_words():
+    lang = request.args.get('lang', 'en').strip()
+    if lang not in ('en', 'es'):
+        lang = 'en'
+    try:
+        page = int(request.args.get('page', 0))
+    except ValueError:
+        page = 0
+    con = _vocab_conn()
+    rows = con.execute(
+        "SELECT idx, word, search, images_json FROM vocab_base WHERE lang=? ORDER BY idx LIMIT 30 OFFSET ?",
+        (lang, page * 30)
+    ).fetchall()
+    total = con.execute("SELECT COUNT(*) FROM vocab_base WHERE lang=?", (lang,)).fetchone()[0]
+    con.close()
+    words = [{'idx': r[0], 'word': r[1], 'search': r[2], 'images': json.loads(r[3])} for r in rows]
+    total_pages = max(1, (total + 29) // 30)
+    return jsonify({'words': words, 'total': total, 'page': page, 'total_pages': total_pages})
+
+
+@app.route('/api/vocab/base-words/save-page', methods=['POST'])
+def vocab_base_save_page():
+    data = request.get_json(force=True, silent=True) or {}
+    lang = data.get('lang', 'en').strip()
+    if lang not in ('en', 'es'):
+        return jsonify({'error': 'invalid lang'}), 400
+    words = data.get('words', [])
+    con = _vocab_conn()
+    for w in words:
+        try:
+            idx = int(w['idx'])
+        except (KeyError, ValueError, TypeError):
+            continue
+        word = (w.get('word') or '').strip()
+        search = (w.get('search') or '').strip()
+        images = w.get('images', [])
+        if not isinstance(images, list):
+            images = []
+        images = [u for u in images if isinstance(u, str) and u]
+        cached = [c for c in [_cache_image(u) for u in images] if c]
+        con.execute(
+            "UPDATE vocab_base SET word=?, search=?, images_json=? WHERE lang=? AND idx=?",
+            (word, search, json.dumps(cached), lang, idx)
+        )
+    con.commit()
+    con.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/vocab/select-round', methods=['POST'])
+def vocab_select_round():
+    import anthropic as _anthropic
+    data = request.get_json(force=True, silent=True) or {}
+    lang = data.get('lang', 'en').strip()
+    if lang not in ('en', 'es'):
+        lang = 'en'
+    mode = data.get('mode', 'easy').strip()
+    if mode not in ('easy', 'challenge'):
+        mode = 'easy'
+    perf = data.get('perf', {})
+
+    con = _vocab_conn()
+    rows = con.execute(
+        "SELECT word, search, images_json FROM vocab_base WHERE lang=? AND images_json != '[]'",
+        (lang,)
+    ).fetchall()
+    con.close()
+
+    if len(rows) < 6:
+        return jsonify({'error': 'Not enough approved words. Open Custom Items Builder → Base Word Library and approve images first.'}), 400
+
+    approved = [{'word': r[0], 'search': r[1], 'images': json.loads(r[2])} for r in rows]
+    approved_list = ', '.join(w['word'] for w in approved)
+    perf_lines = [
+        f"{wd}: {p.get('correct',0)}/{p.get('attempts',0)} ({p.get('first_try',0)} 1st-try)"
+        for wd, p in list(perf.items())[:60] if p.get('attempts', 0) > 0
+    ]
+    perf_str = '; '.join(perf_lines) if perf_lines else 'none yet'
+    n = min(5, len(approved) // 2)
+
+    prompt = (
+        f"You are selecting words for a children's vocabulary image-matching game.\n"
+        f"Language: {lang}. Mode: {mode} "
+        f"({'very different distractors' if mode=='easy' else 'similar-looking distractors'}).\n"
+        f"Approved words available: {approved_list}\n"
+        f"Past performance: {perf_str}\n\n"
+        f"Pick {n} target words. Prioritize unseen or low-accuracy words. "
+        f"For each target pick 2 distractors from the approved list "
+        f"({'very different objects' if mode=='easy' else 'visually similar objects'}).\n"
+        f"Return ONLY a JSON array (no markdown):\n"
+        f'[{{"target":"word","d1":"distractor1","d2":"distractor2"}}]'
+    )
+
+    try:
+        client = _anthropic.Anthropic()
+        msg = client.messages.create(
+            model='claude-haiku-4-5-20251001',
+            max_tokens=500,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        raw = msg.content[0].text.strip()
+        raw = re.sub(r'^```[a-z]*\n?', '', raw, flags=re.MULTILINE)
+        raw = re.sub(r'\n?```$', '', raw, flags=re.MULTILINE)
+        selections = json.loads(raw)
+    except Exception as e:
+        return jsonify({'error': f'AI selection failed: {e}'}), 500
+
+    word_map = {w['word']: w for w in approved}
+    rounds = []
+    for sel in selections[:n]:
+        t = word_map.get(sel.get('target'))
+        d1 = word_map.get(sel.get('d1'))
+        d2 = word_map.get(sel.get('d2'))
+        if not t or not d1 or not d2:
+            continue
+        choices = [
+            {'word': t['word'], 'display_word': t['word'], 'images': t['images'], 'correct': True},
+            {'word': d1['word'], 'display_word': d1['word'], 'images': d1['images'], 'correct': False},
+            {'word': d2['word'], 'display_word': d2['word'], 'images': d2['images'], 'correct': False},
+        ]
+        random.shuffle(choices)
+        rounds.append({'word': t['word'], 'display_word': t['word'], 'choices': choices})
+
+    if not rounds:
+        return jsonify({'error': 'Could not build rounds from AI selection.'}), 500
     return jsonify({'mode': mode, 'rounds': rounds})
 
 
