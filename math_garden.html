@@ -52,6 +52,8 @@ html, body {
 }
 .opt-btn.selected { background: rgba(255,255,255,.9); color: var(--ink); border-color: #fff; transform: scale(1.06); }
 .opt-btn:active { transform: scale(.97); }
+.splash-section { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
+.splash-section.hidden { display: none; }
 .btn-play {
   background: #fff; color: #6366f1; border: none; border-radius: 50px;
   font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 900;
@@ -264,6 +266,46 @@ html, body {
     <button class="opt-btn"          data-val="fill"  onclick="pickOpt(this,'mode')">Fill It 🌱</button>
   </div>
 
+  <div class="splash-section" id="sec-eq-display">
+    <div class="splash-label">Equation</div>
+    <div class="opt-row" id="eq-display-opts">
+      <button class="opt-btn selected" data-val="revealed" onclick="pickOpt(this,'eqDisplay')">Revealed 🔍</button>
+      <button class="opt-btn"          data-val="shown"    onclick="pickOpt(this,'eqDisplay')">Shown 🔢</button>
+    </div>
+  </div>
+
+  <div class="splash-section" id="sec-tap-order">
+    <div class="splash-label">Tap Order</div>
+    <div class="opt-row" id="tap-order-opts">
+      <button class="opt-btn selected" data-val="free"   onclick="pickOpt(this,'tapOrder')">Free 🔀</button>
+      <button class="opt-btn"          data-val="guided" onclick="pickOpt(this,'tapOrder')">Guided 1️⃣➡️2️⃣</button>
+    </div>
+  </div>
+
+  <div class="splash-section hidden" id="sec-fill-style">
+    <div class="splash-label">Fill Style</div>
+    <div class="opt-row" id="fill-style-opts">
+      <button class="opt-btn selected" data-val="free"    onclick="pickOpt(this,'fillStyle')">Both Free ❓➕❓</button>
+      <button class="opt-btn"          data-val="missing" onclick="pickOpt(this,'fillStyle')">Missing Addend 3➕❓</button>
+    </div>
+  </div>
+
+  <div class="splash-section hidden" id="sec-fixed-a">
+    <div class="splash-label">Group A Items</div>
+    <div class="opt-row" id="fixed-a-opts">
+      <button class="opt-btn selected" data-val="fixed"      onclick="pickOpt(this,'fixedA')">Fixed 🔒</button>
+      <button class="opt-btn"          data-val="adjustable" onclick="pickOpt(this,'fixedA')">Adjustable ✏️</button>
+    </div>
+  </div>
+
+  <div class="splash-section hidden" id="sec-known-size">
+    <div class="splash-label">Known Part</div>
+    <div class="opt-row" id="known-size-opts">
+      <button class="opt-btn selected" data-val="random"  onclick="pickOpt(this,'knownSize')">Random 🎲</button>
+      <button class="opt-btn"          data-val="smaller" onclick="pickOpt(this,'knownSize')">Smaller 📉</button>
+    </div>
+  </div>
+
   <div class="splash-label">Difficulty</div>
   <div class="opt-row" id="diff-opts">
     <button class="opt-btn selected" data-val="easy"   onclick="pickOpt(this,'diff')">Easy (≤ 5)</button>
@@ -323,7 +365,15 @@ html, body {
 <script>
 const $ = id => document.getElementById(id);
 
-const S = { op: 'add', mode: 'count', diff: 'easy', rounds: '10', itemSetIdA: 'emoji', itemSetIdB: 'emoji' };
+const S = {
+  op: 'add', mode: 'count', diff: 'easy', rounds: '10',
+  itemSetIdA: 'emoji', itemSetIdB: 'emoji',
+  eqDisplay: 'revealed',  // 'revealed' | 'shown'        (Count It only)
+  tapOrder:  'free',      // 'free' | 'guided'           (Count It only)
+  fillStyle: 'free',      // 'free' | 'missing'          (Fill It only)
+  fixedA:    'fixed',     // 'fixed' | 'adjustable'      (Fill It missing only)
+  knownSize: 'random',    // 'random' | 'smaller'        (Fill It missing only)
+};
 const DIFFS = { easy: 5, medium: 10, hard: 20 };
 
 let ITEM_SETS = [];
@@ -405,6 +455,8 @@ const G = {
   fillA: 0, fillB: 0, plantedPositions: [],
   // fill-sub mode
   startCount: 0, removed: 0,
+  // fill missing-addend mode
+  missingTarget: 0,
 };
 
 // ── Audio ──
@@ -438,6 +490,21 @@ function pickOpt(btn, key) {
   btn.closest('.opt-row').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
   S[key] = btn.dataset.val;
+  updateSplashVisibility();
+}
+
+function updateSplashVisibility() {
+  const isCount   = S.mode === 'count';
+  const isFill    = S.mode === 'fill';
+  const isMissing = S.fillStyle === 'missing';
+  function show(id, visible) {
+    document.getElementById(id).classList.toggle('hidden', !visible);
+  }
+  show('sec-eq-display',  isCount);
+  show('sec-tap-order',   isCount);
+  show('sec-fill-style',  isFill);
+  show('sec-fixed-a',     isFill && isMissing);
+  show('sec-known-size',  isFill && isMissing);
 }
 function ri(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
 function shuffle(arr) {
@@ -481,6 +548,10 @@ function nextRound() {
   if (G.op === '+') {
     G.numA = ri(1, max - 1);
     G.numB = ri(1, max - G.numA);
+    // Missing addend, smaller known: ensure the pre-planted group is the smaller addend
+    if (S.mode === 'fill' && S.fillStyle === 'missing' && S.knownSize === 'smaller' && G.numA > G.numB) {
+      [G.numA, G.numB] = [G.numB, G.numA];
+    }
   } else {
     G.numA = ri(2, max);
     G.numB = ri(1, G.numA - 1);
@@ -520,6 +591,11 @@ function buildCountRound() {
       const imgUrl = isA ? getImg(S.itemSetIdA) : getImg(S.itemSetIdB);
       const el = makeObj(isA ? G.emojiA : G.emojiB, pos, imgUrl);
       el.dataset.index = i;
+      el.dataset.group = isA ? 'a' : 'b';
+      if (!isA && S.tapOrder === 'guided') {
+        el.style.opacity = '0.35';
+        el.style.filter  = 'grayscale(50%)';
+      }
       el.addEventListener('click', () => tapItem(el, i, isA ? 'a' : 'b'));
       $('garden').appendChild(el);
     });
@@ -549,9 +625,25 @@ function buildCountRound() {
 
 function tapItem(el, i, type) {
   if (G.tappedIndices.has(i)) return;
+  if (S.tapOrder === 'guided' && type === 'b' && G.tappedA < G.numA) {
+    el.classList.add('shake');
+    setTimeout(() => el.classList.remove('shake'), 400);
+    return;
+  }
   G.tappedIndices.add(i);
   el.classList.add('counted');
-  if (type === 'a') G.tappedA++; else G.tappedB++;
+  el.style.opacity = '1'; el.style.filter = '';
+  if (type === 'a') {
+    G.tappedA++;
+    if (S.tapOrder === 'guided' && G.tappedA === G.numA) {
+      document.querySelectorAll('.garden-obj[data-group="b"]').forEach(e => {
+        e.style.opacity = '1'; e.style.filter = '';
+        e.style.transition = 'opacity 0.3s, filter 0.3s';
+      });
+    }
+  } else {
+    G.tappedB++;
+  }
 
   const total = G.tappedA + G.tappedB;
   $('count-display').textContent = total;
@@ -565,14 +657,18 @@ function tapItem(el, i, type) {
 }
 
 function updateCountEq() {
-  const a = G.tappedA, b = G.tappedB;
   const iconA = G.repImgA ? `<img src="${G.repImgA}" class="eq-img">` : G.emojiA;
   const iconB = G.repImgB ? `<img src="${G.repImgB}" class="eq-img">` : G.emojiB;
   if (G.op === '+') {
-    const sum  = a + b;
-    const aHtml = a ? `<span class="eq-numA">${a}</span>` : `<span class="eq-blank">?</span>`;
-    const bHtml = b ? `<span class="eq-numB">${b}</span>` : `<span class="eq-blank">?</span>`;
-    const sHtml = (a && b) ? `<span class="eq-ans">${sum}</span>` : `<span class="eq-blank">?</span>`;
+    const shown = S.eqDisplay === 'shown';
+    const a = shown ? G.numA : G.tappedA;
+    const b = shown ? G.numB : G.tappedB;
+    const sum = G.tappedA + G.tappedB;
+    const allTapped = sum === G.numA + G.numB;
+    const aHtml = (shown || G.tappedA) ? `<span class="eq-numA">${a}</span>` : `<span class="eq-blank">?</span>`;
+    const bHtml = (shown || G.tappedB) ? `<span class="eq-numB">${b}</span>` : `<span class="eq-blank">?</span>`;
+    const showSum = shown ? allTapped : (G.tappedA > 0 && G.tappedB > 0);
+    const sHtml = showSum ? `<span class="eq-ans">${sum}</span>` : `<span class="eq-blank">?</span>`;
     $('equation').innerHTML = `${aHtml}${iconA} <span class="eq-op">+</span> ${bHtml}${iconB} <span class="eq-eq">=</span> ${sHtml}`;
   } else {
     const counted = G.tappedA;
@@ -622,27 +718,64 @@ function buildFillRound() {
 
   if (G.op === '+') {
     const target = G.numA + G.numB;
+    G.missingTarget = target;
     const setA = getSetById(S.itemSetIdA);
     const setB = getSetById(S.itemSetIdB);
     const labelA = setA ? `Plant ${setA.label}` : `Plant ${G.emojiA}`;
     const labelB = setB ? `Plant ${setB.label}` : `Plant ${G.emojiB}`;
-    $('hint-text').textContent = `Plant items to reach ${target}!`;
-    updateFillEq(target);
 
-    const btnA = document.createElement('button');
-    btnA.className = 'btn-plant';
-    btnA.id = 'btn-plant-a';
-    btnA.textContent = labelA;
-    btnA.onclick = () => plantItem('a', target);
+    if (S.fillStyle === 'missing') {
+      // Pre-plant G.numA type-A items as the known addend
+      G.fillA = G.numA;
+      $('hint-text').textContent = `Plant ${G.emojiB} to complete the equation!`;
+      updateFillEq(target);
 
-    const btnB = document.createElement('button');
-    btnB.className = 'btn-plant type-b';
-    btnB.id = 'btn-plant-b';
-    btnB.textContent = labelB;
-    btnB.onclick = () => plantItem('b', target);
+      const seedPositions = safePositions(G.numA);
+      seedPositions.forEach(pos => {
+        const imgUrl = getImg(S.itemSetIdA);
+        const el = makeObj(G.emojiA, pos, imgUrl);
+        el.classList.add('counted');
+        el.dataset.preseeded = '1';
+        if (S.fixedA === 'adjustable') {
+          el.addEventListener('click', () => removePreseeded(el, target));
+        } else {
+          el.style.pointerEvents = 'none';
+          el.style.opacity = '0.85';
+        }
+        $('garden').appendChild(el);
+      });
 
-    const done = makeCheckBtn('DONE ✅', checkFillAdd);
-    $('bottom-area').append(btnA, btnB, done);
+      if (S.fixedA === 'adjustable') {
+        const btnA = document.createElement('button');
+        btnA.className = 'btn-plant'; btnA.id = 'btn-plant-a';
+        btnA.textContent = labelA;
+        btnA.onclick = () => plantItem('a', target);
+        $('bottom-area').appendChild(btnA);
+      }
+      const btnB = document.createElement('button');
+      btnB.className = 'btn-plant type-b'; btnB.id = 'btn-plant-b';
+      btnB.textContent = labelB;
+      btnB.onclick = () => plantItem('b', target);
+      const done = makeCheckBtn('DONE ✅', checkFillAdd);
+      $('bottom-area').append(btnB, done);
+
+    } else {
+      $('hint-text').textContent = `Plant items to reach ${target}!`;
+      updateFillEq(target);
+
+      const btnA = document.createElement('button');
+      btnA.className = 'btn-plant'; btnA.id = 'btn-plant-a';
+      btnA.textContent = labelA;
+      btnA.onclick = () => plantItem('a', target);
+
+      const btnB = document.createElement('button');
+      btnB.className = 'btn-plant type-b'; btnB.id = 'btn-plant-b';
+      btnB.textContent = labelB;
+      btnB.onclick = () => plantItem('b', target);
+
+      const done = makeCheckBtn('DONE ✅', checkFillAdd);
+      $('bottom-area').append(btnA, btnB, done);
+    }
 
   } else {
     const target = G.numA - G.numB;
@@ -688,22 +821,41 @@ function plantItem(type, target) {
   updateFillEq(target);
 
   if (G.fillA + G.fillB >= target) {
-    $('btn-plant-a').disabled = true;
-    $('btn-plant-b').disabled = true;
+    const ba = $('btn-plant-a'), bb = $('btn-plant-b');
+    if (ba) ba.disabled = true;
+    if (bb) bb.disabled = true;
   }
 }
 
+function removePreseeded(el, target) {
+  el.remove();
+  G.fillA--;
+  playTick(G.fillA + G.fillB);
+  updateFillEq(target);
+  const ba = $('btn-plant-a'), bb = $('btn-plant-b');
+  if (ba) ba.disabled = false;
+  if (bb) bb.disabled = false;
+}
+
 function updateFillEq(target) {
-  const a = G.fillA, b = G.fillB, sum = a + b;
   const iconA = G.repImgA ? `<img src="${G.repImgA}" class="eq-img">` : G.emojiA;
   const iconB = G.repImgB ? `<img src="${G.repImgB}" class="eq-img">` : G.emojiB;
-  const aHtml = a ? `<span class="eq-numA">${a}</span>` : `<span class="eq-blank">_</span>`;
-  const bHtml = b ? `<span class="eq-numB">${b}</span>` : `<span class="eq-blank">_</span>`;
-  const sHtml = sum ? `<span class="eq-ans">${sum}</span>` : `<span class="eq-blank">_</span>`;
-  $('equation').innerHTML =
-    `${aHtml}${iconA} <span class="eq-op">+</span> ${bHtml}${iconB} ` +
-    `<span class="eq-eq">=</span> ${sHtml} ` +
-    `<span class="eq-goal">(goal: ${target})</span>`;
+  if (S.fillStyle === 'missing') {
+    const aHtml = `<span class="eq-numA">${G.fillA}</span>`;
+    const bHtml = G.fillB ? `<span class="eq-numB">${G.fillB}</span>` : `<span class="eq-blank">_</span>`;
+    $('equation').innerHTML =
+      `${aHtml}${iconA} <span class="eq-op">+</span> ${bHtml}${iconB} ` +
+      `<span class="eq-eq">=</span> <span class="eq-ans">${target}</span>`;
+  } else {
+    const a = G.fillA, b = G.fillB, sum = a + b;
+    const aHtml = a ? `<span class="eq-numA">${a}</span>` : `<span class="eq-blank">_</span>`;
+    const bHtml = b ? `<span class="eq-numB">${b}</span>` : `<span class="eq-blank">_</span>`;
+    const sHtml = sum ? `<span class="eq-ans">${sum}</span>` : `<span class="eq-blank">_</span>`;
+    $('equation').innerHTML =
+      `${aHtml}${iconA} <span class="eq-op">+</span> ${bHtml}${iconB} ` +
+      `<span class="eq-eq">=</span> ${sHtml} ` +
+      `<span class="eq-goal">(goal: ${target})</span>`;
+  }
 }
 
 function checkFillAdd() {
@@ -717,10 +869,30 @@ function checkFillAdd() {
     playWrong();
     showFeedback(false, target, `You planted ${G.fillA + G.fillB}. Need ${target}.`, () => {
       $('garden').querySelectorAll('.garden-obj').forEach(e => e.remove());
-      G.fillA = 0; G.fillB = 0; G.plantedPositions = [];
+      G.fillB = 0; G.plantedPositions = [];
+      const ba = $('btn-plant-a'), bb = $('btn-plant-b');
+      if (ba) ba.disabled = false;
+      if (bb) bb.disabled = false;
+      if (S.fillStyle === 'missing') {
+        // Re-place the fixed preseeded group A items
+        G.fillA = G.numA;
+        safePositions(G.numA).forEach(pos => {
+          const imgUrl = getImg(S.itemSetIdA);
+          const el = makeObj(G.emojiA, pos, imgUrl);
+          el.classList.add('counted');
+          el.dataset.preseeded = '1';
+          if (S.fixedA === 'adjustable') {
+            el.addEventListener('click', () => removePreseeded(el, target));
+          } else {
+            el.style.pointerEvents = 'none';
+            el.style.opacity = '0.85';
+          }
+          $('garden').appendChild(el);
+        });
+      } else {
+        G.fillA = 0;
+      }
       updateFillEq(target);
-      $('btn-plant-a').disabled = false;
-      $('btn-plant-b').disabled = false;
     });
   }
 }
