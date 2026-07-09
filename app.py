@@ -818,6 +818,16 @@ def serve_audio(filename):
     return send_from_directory(audio_dir, filename)
 
 
+@app.route('/images/<path:filename>')
+def serve_image(filename):
+    if not re.fullmatch(r'[a-z0-9_\-]+\.(png|jpg|jpeg|gif|webp|svg)', filename):
+        abort(404)
+    img_dir = os.path.join(BASE_DIR, 'images')
+    if not os.path.isfile(os.path.join(img_dir, filename)):
+        abort(404)
+    return send_from_directory(img_dir, filename)
+
+
 @app.route('/img-cache/<filename>')
 def serve_img_cache(filename):
     if not re.fullmatch(r'[a-f0-9]{32}\.(jpg|png|gif|webp)', filename):

@@ -290,18 +290,6 @@ html, body {
     <button class="opt-btn"          data-val="off" onclick="pickOpt(this,'readAloud')">Off 🔇</button>
   </div>
 
-  <div class="splash-label">Show Number</div>
-  <div class="opt-row" id="shownum-opts">
-    <button class="opt-btn selected" data-val="off" onclick="pickOpt(this,'showNum')">Hidden 🙈</button>
-    <button class="opt-btn"          data-val="on"  onclick="pickOpt(this,'showNum')">Visible 🔢</button>
-  </div>
-
-  <div class="splash-label">Two Groups (Count It)</div>
-  <div class="opt-row" id="twogroups-opts">
-    <button class="opt-btn selected" data-val="off" onclick="pickOpt(this,'twoGroups')">Off</button>
-    <button class="opt-btn"          data-val="on"  onclick="pickOpt(this,'twoGroups')">On 🌻+🐸</button>
-  </div>
-
   <button class="btn-play" onclick="startGame()">PLAY</button>
 </div>
 
@@ -359,7 +347,7 @@ html, body {
 <script>
 const $ = id => document.getElementById(id);
 
-const S = { mode: 'count', diff: 'easy', skip: '1', rounds: '10', readAloud: 'on', itemSetId: 'emoji', showNum: 'off', twoGroups: 'off' };
+const S = { mode: 'count', diff: 'easy', skip: '1', rounds: '10', readAloud: 'on', itemSetId: 'emoji' };
 
 const DIFFS = {
   easy:   { min: 1, max: 5 },
@@ -377,8 +365,6 @@ const G = {
   fillCount: 0,
   totalRounds: 10,
   fillEmoji: '',
-  groupASplit: 0, groupATapped: 0,
-  emojiA: '', emojiB: '',
 };
 
 let ITEM_SETS = [];
@@ -526,9 +512,6 @@ function nextRound() {
   G.fillCount = 0;
   plantedPositions = [];
   G.firstTryThisRound = true;
-  G.groupASplit = 0;
-  G.groupATapped = 0;
-
   const diff = DIFFS[S.diff];
   G.step = parseInt(S.skip);
 
@@ -561,36 +544,14 @@ function buildGarden() {
     $('question-hint').textContent = 'Tap each one to count!';
     $('check-btn').textContent = 'DONE ✅';
     $('count-counter').textContent = '';
-
-    if (S.twoGroups === 'on' && G.target >= 2) {
-      const a = 1 + Math.floor(Math.random() * (G.target - 1));
-      const b = G.target - a;
-      G.groupASplit = a;
-      G.groupATapped = 0;
-      const emojis = shuffle(EMOJIS);
-      G.emojiA = emojis[0];
-      G.emojiB = emojis[1];
-      $('question-text').textContent = 'How many in all?';
-      $('question-num').textContent = S.showNum === 'on' ? `${a} + ${b} = ?` : '';
-      const positions = safePositions(G.target);
-      positions.forEach((pos, i) => {
-        const isA = i < a;
-        const el = makeItemEl(pos, isA ? G.emojiA : G.emojiB);
-        el.dataset.group = isA ? 'a' : 'b';
-        if (!isA) { el.style.opacity = '0.45'; el.style.filter = 'grayscale(40%)'; }
-        el.addEventListener('click', () => tapObject(el, i));
-        garden.appendChild(el);
-      });
-    } else {
-      $('question-text').textContent = 'How many are there?';
-      $('question-num').textContent = S.showNum === 'on' ? G.target : '';
-      const positions = safePositions(G.target);
-      positions.forEach((pos, i) => {
-        const el = makeItemEl(pos, emoji);
-        el.addEventListener('click', () => tapObject(el, i));
-        garden.appendChild(el);
-      });
-    }
+    $('question-text').textContent = 'How many are there?';
+    $('question-num').textContent = '';
+    const positions = safePositions(G.target);
+    positions.forEach((pos, i) => {
+      const el = makeItemEl(pos, emoji);
+      el.addEventListener('click', () => tapObject(el, i));
+      garden.appendChild(el);
+    });
     setTimeout(() => playClip('count_it_prompt'), 300);
 
   } else if (S.mode === 'skip') {
@@ -644,26 +605,9 @@ function buildGarden() {
 // ── Count It mode ──
 function tapObject(el, i) {
   if (G.tappedIndices.has(i)) return;
-  // Two-group locking: block group B until group A is fully counted
-  if (S.twoGroups === 'on' && el.dataset.group === 'b' && G.groupATapped < G.groupASplit) {
-    el.classList.add('shake');
-    setTimeout(() => el.classList.remove('shake'), 400);
-    return;
-  }
   G.tappedIndices.add(i);
   G.userCount++;
   el.classList.add('counted');
-  el.style.opacity = '1';
-  el.style.filter = '';
-
-  if (S.twoGroups === 'on' && el.dataset.group === 'a') {
-    G.groupATapped++;
-    if (G.groupATapped === G.groupASplit) {
-      document.querySelectorAll('.garden-obj[data-group="b"]').forEach(e => {
-        e.style.opacity = '1'; e.style.filter = ''; e.style.transition = 'opacity 0.3s';
-      });
-    }
-  }
 
   const bubble = document.createElement('div');
   bubble.className = 'count-bubble';
