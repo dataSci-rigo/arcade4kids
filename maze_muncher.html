@@ -760,5 +760,61 @@ bindOpts(); // wire the title screen toggles
   btn.parentNode.insertBefore(div,btn);
 })();
 </script>
+
+<!-- arcade-touch-dpad: on-screen directional pad for touch devices.
+     Swipe-on-canvas was the only mobile control, which is imprecise in a
+     grid maze and hard for small hands — a mistimed swipe sends the muncher
+     down the wrong corridor. The pad sets P.nextDir exactly as the arrow
+     keys do, so game logic is untouched. Hidden on non-touch devices. -->
+<style>
+#dpad { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  #dpad {
+    display: grid;
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: max(12px, env(safe-area-inset-bottom));
+    grid-template-columns: repeat(3, 58px);
+    grid-template-rows: repeat(3, 58px);
+    gap: 6px; z-index: 60; touch-action: none;
+  }
+  #dpad button {
+    font-family: 'Courier New', monospace; font-size: 22px; font-weight: bold;
+    color: #ffee00; background: rgba(10,20,50,.82);
+    border: 2px solid #445577; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+  }
+  #dpad button:active { background: #445577; color: #fff; }
+  #dpad .sp { visibility: hidden; }
+}
+</style>
+<div id="dpad" aria-label="Direction pad">
+  <span class="sp"></span>
+  <button type="button" data-dir="up"    aria-label="Up">▲</button>
+  <span class="sp"></span>
+  <button type="button" data-dir="left"  aria-label="Left">◀</button>
+  <button type="button" data-dir="time"  aria-label="Buy time">+10</button>
+  <button type="button" data-dir="right" aria-label="Right">▶</button>
+  <span class="sp"></span>
+  <button type="button" data-dir="down"  aria-label="Down">▼</button>
+  <span class="sp"></span>
+</div>
+<script>
+(function () {
+  const DIRS = { up:{x:0,y:-1}, down:{x:0,y:1}, left:{x:-1,y:0}, right:{x:1,y:0} };
+  document.querySelectorAll('#dpad button').forEach(b => {
+    const act = (e) => {
+      e.preventDefault();
+      const d = b.dataset.dir;
+      if (d === 'time') { if (gstate === 'playing') buyTime(); return; }
+      if (gstate === 'title') { startGame(); return; }
+      if (gstate !== 'playing') return;
+      P.nextDir = { ...DIRS[d] };
+    };
+    b.addEventListener('touchstart', act, { passive: false });
+    b.addEventListener('click', act);
+  });
+})();
+</script>
 </body>
 </html>

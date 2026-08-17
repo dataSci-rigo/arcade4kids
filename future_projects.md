@@ -1,5 +1,9 @@
 # Future Projects
 
+Raw content waiting for a game to put it in. For ranked game ideas — including
+**Sing-Along Studio**, which would use the songs below — see
+[game_proposals.md](game_proposals.md).
+
 ---
 
 ## Bat Songs (Twinkle Little Star reimagined)

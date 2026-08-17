@@ -9,6 +9,9 @@ import sqlite3
 import urllib.request
 import urllib.parse
 from flask import Flask, render_template, send_from_directory, abort, request, jsonify
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -810,7 +813,8 @@ def serve_game(filename):
 
 @app.route('/audio/<path:filename>')
 def serve_audio(filename):
-    if not re.fullmatch(r'[a-z0-9_]+\.mp3', filename):
+    # Sound Speller pulls phonemes from audio/phonemes/ and digraphs are uppercase (SH, TH, OA…)
+    if not re.fullmatch(r'(phonemes/)?[A-Za-z0-9_]+\.mp3', filename):
         abort(404)
     audio_dir = os.path.join(BASE_DIR, 'audio')
     if not os.path.isfile(os.path.join(audio_dir, filename)):

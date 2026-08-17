@@ -571,5 +571,93 @@ document.getElementById('start-btn').addEventListener('click', startBook);
 document.getElementById('read-btn').addEventListener('click', () => speak(PAGES[G.page].text));
 document.getElementById('again-btn').addEventListener('click', startBook);
 </script>
+
+<!-- arcade-keyboard-layer: keyboard parity for mouse/touch controls.
+     Arrows move a visible highlight across the on-screen choices, Enter or
+     Space activates, 1-9 jump straight to a choice, Escape goes back.
+     Additive by design — it dispatches .click() on the same elements a tap
+     hits, so game logic below is untouched. -->
+<style>
+.kb-focus {
+  outline: 4px solid #2D2D3A !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 8px rgba(255,230,109,.55) !important;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kb-focus { transition: outline-offset .12s ease; }
+}
+</style>
+<script>
+(function () {
+  const TARGETS = '.num-btn, button';
+  const BACK    = '.back-btn';
+  let idx = -1;
+
+  const live = () => {
+    const scr = document.querySelector('.screen.active')
+             || [...document.querySelectorAll('.screen')]
+                  .find(s => getComputedStyle(s).display !== 'none')
+             || document.body;
+    return [...scr.querySelectorAll(TARGETS)].filter(el =>
+      el.offsetParent !== null && !el.disabled &&
+      getComputedStyle(el).visibility !== 'hidden');
+  };
+
+  // Make click-only divs reachable, without disturbing real buttons.
+  const tag = (el) => {
+    if (!el.hasAttribute('tabindex') && !/^(BUTTON|A|INPUT)$/.test(el.tagName)) {
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+    }
+  };
+
+  // Tag eagerly, not on first keypress: a player who reaches for Tab before
+  // an arrow key must still be able to reach the controls.
+  const tagAll = () => { try { live().forEach(tag); } catch (e) {} };
+  document.addEventListener('DOMContentLoaded', tagAll);
+  new MutationObserver(tagAll).observe(document.documentElement,
+    { childList: true, subtree: true, attributes: true,
+      attributeFilter: ['class', 'style'] });
+  tagAll();
+
+  const paint = (els) => els.forEach((el, i) => {
+    tag(el);
+    el.classList.toggle('kb-focus', i === idx);
+    if (i === idx) try { el.focus({ preventScroll: true }); } catch (e) {}
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+
+    if (e.key === 'Escape') {
+      const b = document.querySelector(BACK);
+      if (b) { b.click(); e.preventDefault(); }
+      return;
+    }
+
+    const els = live();
+    if (!els.length) return;
+
+    if (e.key >= '1' && e.key <= '9') {
+      const n = +e.key - 1;
+      if (n < els.length) { idx = n; paint(els); els[n].click(); e.preventDefault(); }
+      return;
+    }
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      idx = (idx + 1) % els.length; paint(els); e.preventDefault();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      idx = (idx - 1 + els.length) % els.length; paint(els); e.preventDefault();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      // A focused <button> activates natively; don't fire it twice.
+      if (document.activeElement && document.activeElement.tagName === 'BUTTON') return;
+      if (idx >= 0 && idx < els.length) { els[idx].click(); e.preventDefault(); }
+    }
+  });
+})();
+</script>
+
 </body>
 </html>

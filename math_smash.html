@@ -642,7 +642,12 @@
     <div id="scene-decos"></div>
     <div id="round-badge">Round <span id="rnum">1</span> / 5</div>
     <button id="tts-btn" onclick="toggleTTS()" title="Toggle Read Aloud">🔊</button>
-    <div id="speech-bubble" onclick="tapBubble()"></div>
+    <!-- Focusable so Tab reaches it and screen readers announce it; the
+         dialogue was already advanceable with Shift (see the keydown handler
+         below), but the control itself was pointer-only. -->
+    <div id="speech-bubble" onclick="tapBubble()" tabindex="0" role="button"
+         aria-label="Story dialogue — press to continue"
+         onkeydown="if(event.key==='Enter'){event.preventDefault();tapBubble();}"></div>
     <div id="char-wrap">
       <div id="char-circle">
         <div id="char-emoji">🧙‍♀️</div>

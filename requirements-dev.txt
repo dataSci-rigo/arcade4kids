@@ -1,0 +1,11 @@
+-r requirements.txt
+
+# Test suite. Run the fast tiers with `pytest`; the browser tier with
+# `pytest -m browser` (needs `playwright install chromium` once).
+pytest>=7.4
+playwright>=1.40
+beautifulsoup4>=4.12
+
+# NOTE: pytest-playwright is deliberately NOT used. Its current release needs
+# pytest>=8, and the browser fixtures this suite needs (session-scoped browser,
+# live Flask server on an ephemeral port) are ~20 lines in tests/conftest.py.
