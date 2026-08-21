@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sing-Along Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --coral:  #FF6B6B;
+  --pink:   #FF6B9D;
+  --teal:   #4ECDC4;
+  --yellow: #FFE66D;
+  --mint:   #A8E6CF;
+  --purple: #C3A6FF;
+  --bg:     #FFF9F0;
+  --ink:    #2D2D3A;
+  --gold:   #FFD93D;
+}
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  font-family: 'Nunito', sans-serif;
+  color: var(--ink);
+  touch-action: manipulation;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Screens ── */
+.screen { display: none; position: fixed; inset: 0; flex-direction: column; align-items: center; justify-content: center; }
+.screen.active { display: flex; }
+
+/* ── Splash ── */
+#splash {
+  background: linear-gradient(150deg, #FF6B9D 0%, #FFD93D 100%);
+  gap: 16px; padding: 24px 20px;
+  overflow-y: auto;
+}
+.splash-title {
+  font-size: clamp(34px, 11vw, 58px); font-weight: 900;
+  color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15);
+  text-align: center; line-height: 1.1; letter-spacing: -1px;
+}
+.splash-emoji-row { font-size: clamp(26px, 8vw, 42px); letter-spacing: 6px; }
+.splash-label {
+  font-size: 13px; font-weight: 800; color: rgba(255,255,255,.75);
+  text-transform: uppercase; letter-spacing: 2px; text-align: center;
+}
+#song-grid {
+  display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+  max-width: 640px;
+}
+.song-card {
+  background: rgba(255,255,255,.25); border: 2.5px solid rgba(255,255,255,.5);
+  border-radius: 18px; color: #fff; text-align: center;
+  padding: 12px 14px; cursor: pointer; min-width: 108px;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.song-card .sc-emoji { font-size: clamp(26px, 7vw, 36px); }
+.song-card .sc-title { font-size: 13px; font-weight: 800; line-height: 1.2; margin-top: 4px; }
+.song-card .sc-stars { font-size: 12px; margin-top: 3px; min-height: 15px; }
+.song-card.selected {
+  background: rgba(255,255,255,.92); color: var(--ink);
+  border-color: #fff; transform: scale(1.06);
+}
+.song-card:active { transform: scale(.97); }
+.opt-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.opt-btn {
+  background: rgba(255,255,255,.25); border: 2.5px solid rgba(255,255,255,.5);
+  border-radius: 40px; color: #fff; font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 800; padding: 10px 20px; cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.opt-btn.selected {
+  background: rgba(255,255,255,.9); color: var(--ink);
+  border-color: #fff; transform: scale(1.06);
+}
+.opt-btn:active { transform: scale(.97); }
+.btn-play {
+  background: #fff; color: var(--pink); border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 900;
+  padding: 16px 60px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s; letter-spacing: 1px;
+}
+.btn-play:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Game ── */
+#game { background: var(--bg); justify-content: flex-start; gap: 0; padding: 0; }
+#song-header {
+  width: 100%; padding: 14px 60px; flex-shrink: 0;
+  background: linear-gradient(90deg, var(--pink), var(--gold));
+  text-align: center;
+}
+#song-header .sh-title { font-size: clamp(18px, 5vw, 26px); font-weight: 900; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.12); }
+#song-header .sh-progress { font-size: 12px; font-weight: 800; color: rgba(255,255,255,.85); letter-spacing: 1px; }
+
+#lyrics-wrap {
+  flex: 1; width: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 14px 18px;
+  overflow: hidden;
+}
+#lyrics { width: 100%; max-width: 620px; display: flex; flex-direction: column; gap: 8px; }
+.line {
+  font-size: clamp(16px, 4.6vw, 24px); font-weight: 700;
+  color: var(--ink); opacity: .38; text-align: center;
+  padding: 6px 12px; border-radius: 14px; line-height: 1.25;
+  position: relative; transition: opacity .25s, transform .25s, background .25s;
+}
+.line.done { opacity: .6; }
+.line.current {
+  opacity: 1; font-weight: 900; transform: scale(1.05);
+  background: #fff; box-shadow: 0 4px 0 rgba(0,0,0,.07);
+}
+.line.current::before {
+  content: '🎵';
+  position: absolute; left: -4px; top: -16px; font-size: 18px;
+  animation: ballBounce .5s ease-in-out infinite alternate;
+}
+@keyframes ballBounce {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-8px); }
+}
+.line-bar {
+  position: absolute; left: 12px; bottom: 2px; height: 4px; width: 0;
+  background: linear-gradient(90deg, var(--pink), var(--gold));
+  border-radius: 2px; max-width: calc(100% - 24px);
+}
+
+/* ── Beat dots ── */
+#beat-dots { display: flex; gap: 14px; justify-content: center; padding: 8px 0 4px; flex-shrink: 0; }
+.dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--purple);
+  transition: background .12s, transform .12s;
+}
+.dot.filled {
+  background: var(--gold); border-color: var(--pink);
+  animation: dotPop .3s ease;
+}
+@keyframes dotPop {
+  0% { transform: scale(.6); }
+  60% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* ── Tap pad ── */
+#tap-pad {
+  width: calc(100% - 32px); max-width: 620px; flex-shrink: 0;
+  margin: 6px 16px 16px;
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  border-radius: 26px; cursor: pointer;
+  padding: clamp(20px, 5vh, 40px) 16px;
+  text-align: center; color: #fff;
+  font-size: clamp(22px, 6vw, 32px); font-weight: 900; letter-spacing: 1px;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .08s, box-shadow .08s;
+}
+#tap-pad:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+#tap-pad.pulse { animation: padPulse .22s ease; }
+@keyframes padPulse {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+#tap-pad .tp-sub { font-size: 13px; font-weight: 700; opacity: .8; letter-spacing: 2px; }
+
+#star-meter {
+  font-size: 14px; font-weight: 800; color: var(--ink);
+  padding: 0 0 8px; flex-shrink: 0; opacity: .75;
+}
+
+/* ── Win ── */
+#win {
+  background: linear-gradient(150deg, #FF6B9D 0%, #FFD93D 100%);
+  gap: 18px; padding: 24px 20px; text-align: center;
+}
+.win-title { font-size: clamp(34px, 11vw, 56px); font-weight: 900; color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.15); }
+.win-stars { font-size: clamp(40px, 13vw, 64px); letter-spacing: 6px; animation: starsIn .6s ease; }
+@keyframes starsIn {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.win-sub { font-size: 18px; font-weight: 700; color: rgba(255,255,255,.9); }
+.win-stat {
+  background: rgba(255,255,255,.25); border-radius: 20px;
+  padding: 12px 28px; color: #fff; font-weight: 800; font-size: 16px;
+}
+.btn-again {
+  background: #fff; color: var(--pink); border: none; border-radius: 50px;
+  font-family: 'Nunito', sans-serif; font-size: 22px; font-weight: 900;
+  padding: 14px 48px; cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-again:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+.back-btn {
+  position: fixed; top: 12px; left: 12px;
+  background: rgba(255,255,255,.3); border: none; border-radius: 50%;
+  width: 40px; height: 40px; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; z-index: 50;
+  transition: background .15s;
+}
+.back-btn:active { background: rgba(255,255,255,.5); }
+
+/* ── Particles ── */
+.confetti {
+  position: fixed; pointer-events: none; border-radius: 3px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+/* ── Toast ── */
+.beat-toast {
+  position: fixed; top: 38%; left: 50%;
+  transform: translateX(-50%) scale(0);
+  background: linear-gradient(135deg, #FF6B9D, #FFD93D);
+  color: #fff; font-size: clamp(20px,5.5vw,30px); font-weight: 900;
+  padding: 10px 26px; border-radius: 50px;
+  pointer-events: none; z-index: 100;
+  animation: toastPop 0.85s ease forwards;
+}
+@keyframes toastPop {
+  0%   { transform: translateX(-50%) scale(0);    opacity: 0; }
+  30%  { transform: translateX(-50%) scale(1.15); opacity: 1; }
+  65%  { transform: translateX(-50%) scale(1);    opacity: 1; }
+  100% { transform: translateX(-50%) scale(.85) translateY(-36px); opacity: 0; }
+}
+
+@media (max-width: 600px) {
+  .line { padding: 4px 10px; }
+  #lyrics { gap: 5px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── SPLASH ── -->
+<div id="splash" class="screen active">
+  <div class="splash-title">Sing-Along<br>Studio</div>
+  <div class="splash-emoji-row">🎤🎵🎶</div>
+
+  <div class="splash-label">Pick a Song</div>
+  <div id="song-grid">
+    <div class="song-card selected" data-song="flitter" onclick="pickSong(this)">
+      <div class="sc-emoji">🦇</div>
+      <div class="sc-title">Flitter,<br>Little Bat</div>
+      <div class="sc-stars" data-stars="flitter"></div>
+    </div>
+    <div class="song-card" data-song="squeaky" onclick="pickSong(this)">
+      <div class="sc-emoji">🦇</div>
+      <div class="sc-title">Squeaky<br>Little Bat</div>
+      <div class="sc-stars" data-stars="squeaky"></div>
+    </div>
+    <div class="song-card" data-song="carlitos" onclick="pickSong(this)">
+      <div class="sc-emoji">👦</div>
+      <div class="sc-title">Carlitos<br>Lunagen</div>
+      <div class="sc-stars" data-stars="carlitos"></div>
+    </div>
+    <div class="song-card" data-song="rice" onclick="pickSong(this)">
+      <div class="sc-emoji">🍚</div>
+      <div class="sc-title">Rice Is<br>Nice</div>
+      <div class="sc-stars" data-stars="rice"></div>
+    </div>
+    <div class="song-card" data-song="naptime" onclick="pickSong(this)">
+      <div class="sc-emoji">😴</div>
+      <div class="sc-title">Naptime<br>Adventure</div>
+      <div class="sc-stars" data-stars="naptime"></div>
+    </div>
+  </div>
+
+  <div class="splash-label">Mode</div>
+  <div class="opt-row" id="mode-opts">
+    <button class="opt-btn selected" data-val="sing"   onclick="pickOpt(this,'mode')">Sing Along 🎤</button>
+    <button class="opt-btn"          data-val="listen" onclick="pickOpt(this,'mode')">Just Listen 🎧</button>
+  </div>
+
+  <div class="splash-label">Intro Music</div>
+  <div class="opt-row" id="music-opts">
+    <button class="opt-btn selected" data-val="on"  onclick="pickOpt(this,'music')">On 🎹</button>
+    <button class="opt-btn"          data-val="off" onclick="pickOpt(this,'music')">Off 🔇</button>
+  </div>
+
+  <button class="btn-play" onclick="startGame()">SING!</button>
+</div>
+
+<!-- ── GAME ── -->
+<div id="game" class="screen">
+  <button class="back-btn" onclick="stopSong(); showScreen('splash')">←</button>
+
+  <div id="song-header">
+    <div class="sh-title" id="sh-title">Song</div>
+    <div class="sh-progress" id="sh-progress">VERSE 1</div>
+  </div>
+
+  <div id="lyrics-wrap">
+    <div id="lyrics"></div>
+  </div>
+
+  <div id="beat-dots"></div>
+  <div id="star-meter"></div>
+
+  <div id="tap-pad" onclick="registerTap()">
+    TAP! 🎵
+    <div class="tp-sub">TAP THE BEAT — OR PRESS SPACE</div>
+  </div>
+</div>
+
+<!-- ── WIN ── -->
+<div id="win" class="screen">
+  <div class="win-title" id="win-title">Wonderful!</div>
+  <div class="win-stars" id="win-stars">⭐⭐⭐</div>
+  <div class="win-sub"   id="win-sub"></div>
+  <div class="win-stat"  id="win-stat"></div>
+  <button class="btn-again" onclick="startGame()">SING AGAIN</button>
+  <button class="btn-again" style="background:rgba(255,255,255,.3);color:#fff;box-shadow:none;font-size:17px;padding:12px 32px" onclick="showScreen('splash')">PICK A SONG</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ── Song data ─────────────────────────────────────────────────────────────────
+// Lyric lines match the clips generated by tts_build.py (sing_{song}_{i}.mp3).
+const TWINKLE  = [[262,.3],[262,.3],[392,.3],[392,.3],[440,.3],[440,.3],[392,.55]];
+const FINNEGAN = [[294,.22],[294,.22],[294,.22],[294,.22],[330,.26],[349,.26],[330,.26],[294,.45]];
+const GENERIC  = [[262,.22],[330,.22],[392,.22],[330,.22],[523,.5]];
+
+const SONGS = {
+  flitter: {
+    title: 'Flitter, Little Bat', emoji: '🦇', verseLen: 6, jingle: TWINKLE,
+    lines: [
+      "Flitter, little bat,", "How I wonder where you're at,",
+      "Up above the world so high,", "Like a shadow in the sky,",
+      "Flitter, little bat,", "How I wonder where you're at.",
+      "When the blazing sun is gone,", "When it nothing shines upon,",
+      "Then you show your little wings,", "Then you hunt for flying things,",
+      "Flitter, little bat,", "How I wonder where you're at.",
+      "Through the dark you swoop and dive,", "Catching insects all alive,",
+      "With your sonar calls so bright,", "You can see throughout the night,",
+      "Flitter, little bat,", "How I wonder where you're at.",
+    ],
+  },
+  squeaky: {
+    title: 'Squeaky, Squeaky Little Bat', emoji: '🦇', verseLen: 6, jingle: TWINKLE,
+    lines: [
+      "Squeaky, squeaky little bat,", "Hanging where the cave is at,",
+      "Upside down you love to sleep,", "Tucked away in slumber deep,",
+      "Squeaky, squeaky little bat,", "Hanging where the cave is at.",
+      "When the dusk begins to fall,", "You awaken, wings and all,",
+      "Out you flutter, swift and free,", "Darting past each silent tree,",
+      "Squeaky, squeaky little bat,", "Hanging where the cave is at.",
+      "Listening for echoes near,", "Sounds too high for us to hear,",
+      "Guiding you through inky black,", "Home again you'll soon swoop back,",
+      "Squeaky, squeaky little bat,", "Hanging where the cave is at.",
+    ],
+  },
+  carlitos: {
+    title: 'Carlitos Lunagen', emoji: '👦', verseLen: 4, jingle: FINNEGAN,
+    lines: [
+      "There was a little boy named Carlitos Lunagen,", "He had dimples on his chin-agen,",
+      "With his bright eyes and his big wide grin-agen,", "Poor little Carlitos Lunagen, begin again!",
+      "He loves to jump and dance and spin-agen,", "Makes his family all laugh and grin-agen,",
+      "Full of energy from within-agen,", "Poor little Carlitos Lunagen, begin again!",
+      "Building blocks up to the ceiling-agen,", "Watch them topple with a feeling-agen,",
+      "Then he starts the whole rebuilding-agen,", "Poor little Carlitos Lunagen, begin again!",
+      "Tells the funniest stories ever-agen,", "Clever little boy so clever-agen,",
+      "Making memories to treasure forever-agen,", "Poor little Carlitos Lunagen, begin again!",
+    ],
+  },
+  rice: {
+    title: 'Rice Is Nice', emoji: '🍚', verseLen: 4, jingle: GENERIC,
+    lines: [
+      "Little grains of rice in my bowl,", "Some are white, some are gold!",
+      "Brown rice crunchy, wild rice too,", "So many kinds to crunch and chew!",
+      "Rice is nice, rice is yum!", "Put it in my hungry tum!",
+      "Little grains all in a pile,", "Eating rice makes me smile!",
+      "Brown rice healthy, wild rice fun,", "Eating grains till meal is done!",
+      "Mix with veggies, mix with cheese,", "Rice of any kind will please!",
+      "Rice is nice, rice is yum!", "Put it in my hungry tum!",
+      "Little grains all in a pile,", "Eating rice makes me smile!",
+    ],
+  },
+  naptime: {
+    title: 'Naptime Adventure', emoji: '😴', verseLen: 4, jingle: GENERIC,
+    lines: [
+      "Jump like frogs and zoom like cars,", "Now let's rest and count the stars!",
+      "Not because we're tired, no way!", "Just taking a break in our day.",
+      "Cuddle up with teddy bear,", "Dreams are waiting everywhere.",
+      "Rest your head on pillows soft,", "While your thoughts float up aloft.",
+      "Naps help us grow big and tall,", "Give us energy for it all!",
+      "It's not that we're tired, you see,", "Just charging up our energy!",
+      "When we wake we'll be so strong,", "Ready for games all day long!",
+      "Naptime hugs and naptime sighs,", "Naptime is a lovely surprise!",
+    ],
+  },
+};
+
+const DOTS_PER_LINE = 4;
+
+// ── Settings & game state ─────────────────────────────────────────────────────
+const S = { song: 'flitter', mode: 'sing', music: 'on' };
+
+const G = {
+  line: 0,
+  dotsFilled: 0,
+  dotsTotal: 0,
+  tapsThisLine: 0,
+  playing: false,        // a line clip is currently playing
+  active: false,         // song in progress (between startGame and finish/stop)
+  audio: null,
+  fallbackTimer: null,
+  gapTimer: null,
+  jingleTimer: null,
+};
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, type, dur, vol = 0.18, endFreq = null) {
+  try {
+    const ac = getAudio();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ac.currentTime);
+    if (endFreq) osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + dur);
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch {}
+}
+function playCorrect() {
+  [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.18, 0.22), i * 90));
+}
+function playWrong() { playTone(200, 'square', 0.15, 0.15); }
+function playCelebrate() {
+  const melody = [523, 587, 659, 698, 784, 880, 988, 1046];
+  melody.forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.22, 0.25), i * 80));
+}
+function playTick() { playTone(880, 'sine', 0.09, 0.2, 660); }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function pickOpt(btn, key) {
+  btn.closest('.opt-row').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  S[key] = btn.dataset.val;
+}
+function pickSong(card) {
+  document.querySelectorAll('.song-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  S.song = card.dataset.song;
+}
+
+// ── Best stars (localStorage) ─────────────────────────────────────────────────
+function loadBestStars() {
+  try { return JSON.parse(localStorage.getItem('sing_along_stars') || '{}'); } catch { return {}; }
+}
+function saveBestStars(song, stars) {
+  try {
+    const best = loadBestStars();
+    if ((best[song] || 0) < stars) { best[song] = stars; localStorage.setItem('sing_along_stars', JSON.stringify(best)); }
+  } catch {}
+}
+function renderStarBadges() {
+  const best = loadBestStars();
+  document.querySelectorAll('.sc-stars').forEach(el => {
+    const n = best[el.dataset.stars] || 0;
+    el.textContent = n > 0 ? '⭐'.repeat(n) : '';
+  });
+}
+renderStarBadges();
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+const BEAT_TOASTS = ['🌟 Great rhythm!','🎵 Nice beat!','🥁 You got it!','✨ Super taps!','🎶 Wonderful!','🥳 Keep singing!'];
+function showToast() {
+  const el = document.createElement('div');
+  el.className = 'beat-toast';
+  el.textContent = BEAT_TOASTS[Math.floor(Math.random() * BEAT_TOASTS.length)];
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
+
+// ── Game flow ─────────────────────────────────────────────────────────────────
+function startGame() {
+  stopSong();
+  getAudio();  // unlock inside the user gesture
+  const song = SONGS[S.song];
+
+  G.line = 0;
+  G.dotsFilled = 0;
+  G.tapsThisLine = 0;
+  G.dotsTotal = S.mode === 'sing' ? song.lines.length * DOTS_PER_LINE : 0;
+  G.active = true;
+  G.playing = false;
+
+  $('sh-title').textContent = `${song.emoji} ${song.title}`;
+  $('beat-dots').style.display = S.mode === 'sing' ? 'flex' : 'none';
+  $('star-meter').style.display = S.mode === 'sing' ? 'block' : 'none';
+  $('tap-pad').style.display = S.mode === 'sing' ? 'block' : 'none';
+  updateStarMeter();
+
+  showScreen('game');
+  playJingle(song, () => { if (G.active) playLine(0); });
+}
+
+function playJingle(song, done) {
+  if (S.music !== 'on') { done(); return; }
+  let t = 0;
+  for (const [freq, dur] of song.jingle) {
+    setTimeout(() => { if (G.active) playTone(freq, 'triangle', dur * 1.1, 0.2); }, t * 1000);
+    t += dur;
+  }
+  G.jingleTimer = setTimeout(done, t * 1000 + 350);
+}
+
+function renderVerse() {
+  const song = SONGS[S.song];
+  const verseIdx = Math.floor(G.line / song.verseLen);
+  const start = verseIdx * song.verseLen;
+  const lines = song.lines.slice(start, start + song.verseLen);
+  const totalVerses = Math.ceil(song.lines.length / song.verseLen);
+  $('sh-progress').textContent = `VERSE ${verseIdx + 1} OF ${totalVerses}`;
+
+  const wrap = $('lyrics');
+  wrap.innerHTML = '';
+  lines.forEach((txt, i) => {
+    const abs = start + i;
+    const el = document.createElement('div');
+    el.className = 'line' + (abs === G.line ? ' current' : abs < G.line ? ' done' : '');
+    el.textContent = txt;
+    if (abs === G.line) {
+      const bar = document.createElement('div');
+      bar.className = 'line-bar';
+      bar.id = 'line-bar';
+      el.appendChild(bar);
+    }
+    wrap.appendChild(el);
+  });
+}
+
+function renderDots() {
+  const wrap = $('beat-dots');
+  wrap.innerHTML = '';
+  for (let i = 0; i < DOTS_PER_LINE; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i < G.tapsThisLine ? ' filled' : '');
+    wrap.appendChild(d);
+  }
+}
+
+function updateStarMeter() {
+  if (S.mode !== 'sing') return;
+  $('star-meter').textContent = `🎵 ${G.dotsFilled} / ${G.dotsTotal} beats`;
+}
+
+function startLineBar(duration) {
+  const bar = $('line-bar');
+  if (!bar || !isFinite(duration) || duration <= 0) return;
+  bar.style.transition = `width ${duration}s linear`;
+  requestAnimationFrame(() => { bar.style.width = 'calc(100% - 24px)'; });
+}
+
+function playLine(i) {
+  if (!G.active) return;
+  const song = SONGS[S.song];
+  G.line = i;
+  G.tapsThisLine = 0;
+  G.playing = true;
+  renderVerse();
+  if (S.mode === 'sing') renderDots();
+
+  // Single-channel: cancel any previous clip
+  if (G.audio) { try { G.audio.pause(); G.audio.currentTime = 0; } catch {} G.audio = null; }
+  clearTimeout(G.fallbackTimer);
+
+  let advanced = false;
+  const advance = () => {
+    if (advanced || !G.active || G.line !== i) return;
+    advanced = true;
+    lineDone();
+  };
+
+  // Missing/broken clip → advance after a short beat instead of freezing
+  const fail = () => { clearTimeout(G.fallbackTimer); G.fallbackTimer = setTimeout(advance, 2500); };
+
+  try {
+    const a = new Audio(`/audio/sing_${S.song}_${i}.mp3`);
+    G.audio = a;
+    a.addEventListener('playing', () => startLineBar(a.duration));
+    a.addEventListener('ended', advance);
+    a.addEventListener('error', fail);
+    a.play().catch(fail);
+    // Safety net: never let a stuck clip freeze the song
+    G.fallbackTimer = setTimeout(advance, 15000);
+  } catch {
+    fail();
+  }
+}
+
+function lineDone() {
+  G.playing = false;
+  clearTimeout(G.fallbackTimer);
+  const song = SONGS[S.song];
+  const gap = S.mode === 'sing' ? 350 : 250;
+  G.gapTimer = setTimeout(() => {
+    if (!G.active) return;
+    if (G.line + 1 < song.lines.length) playLine(G.line + 1);
+    else finishSong();
+  }, gap);
+}
+
+function registerTap() {
+  if (S.mode !== 'sing' || !G.active) return;
+  const pad = $('tap-pad');
+  pad.classList.remove('pulse');
+  void pad.offsetWidth;  // retrigger animation
+  pad.classList.add('pulse');
+
+  if (!G.playing || G.tapsThisLine >= DOTS_PER_LINE) { playTick(); return; }
+
+  G.tapsThisLine++;
+  G.dotsFilled++;
+  playTick();
+  renderDots();
+  updateStarMeter();
+  if (G.tapsThisLine === DOTS_PER_LINE) {
+    playCorrect();
+    showToast();
+  }
+}
+
+function stopSong() {
+  G.active = false;
+  G.playing = false;
+  if (G.audio) { try { G.audio.pause(); G.audio.currentTime = 0; } catch {} G.audio = null; }
+  clearTimeout(G.fallbackTimer);
+  clearTimeout(G.gapTimer);
+  clearTimeout(G.jingleTimer);
+}
+
+function finishSong() {
+  const song = SONGS[S.song];
+  G.active = false;
+  playCelebrate();
+  spawnConfetti();
+
+  if (S.mode === 'sing') {
+    const pct = G.dotsTotal > 0 ? G.dotsFilled / G.dotsTotal : 0;
+    const stars = pct >= 0.7 ? 3 : pct >= 0.4 ? 2 : G.dotsFilled > 0 ? 1 : 1;
+    saveBestStars(S.song, stars);
+    renderStarBadges();
+    $('win-title').textContent = pct >= 0.7 ? '🎤 Superstar!' : pct >= 0.4 ? '🎵 Wonderful!' : '🎶 Great Singing!';
+    $('win-stars').textContent = '⭐'.repeat(stars);
+    $('win-sub').textContent = G.dotsFilled > 0
+      ? `You tapped ${G.dotsFilled} of ${G.dotsTotal} beats!`
+      : 'Great listening! Tap along next time!';
+    $('win-stat').textContent = `${song.emoji} ${song.title}`;
+  } else {
+    $('win-title').textContent = '🎧 Lovely!';
+    $('win-stars').textContent = '🎵🎶🎵';
+    $('win-sub').textContent = 'What a lovely listen!';
+    $('win-stat').textContent = `${song.emoji} ${song.title}`;
+  }
+  showScreen('win');
+}
+
+// ── Confetti ──────────────────────────────────────────────────────────────────
+function spawnConfetti() {
+  const colors = ['#FF6B6B','#4ECDC4','#FFE66D','#FF6B9D','#C3A6FF','#A8E6CF'];
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      const size = 6 + Math.random() * 8;
+      el.style.cssText = `
+        left:${Math.random()*100}vw; top:-20px;
+        width:${size}px; height:${size * (1 + Math.random())}px;
+        background:${colors[Math.floor(Math.random()*colors.length)]};
+        animation-duration:${1.2 + Math.random() * 1.4}s;
+      `;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2800);
+    }, i * 28);
+  }
+}
+
+// ── Gameplay keyboard: Space/Enter taps the beat while singing ────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!$('game').classList.contains('active')) return;
+  if (e.key === ' ' || e.key === 'Enter') {
+    registerTap();
+    e.preventDefault();
+    // Keep the generic keyboard layer from also "clicking" a highlighted
+    // control mid-song — Space/Enter means TAP here, nothing else.
+    e.stopImmediatePropagation();
+  }
+});
+</script>
+
+<!-- arcade-keyboard-layer: keyboard parity for mouse/touch controls.
+     Arrows move a visible highlight across the on-screen choices, Enter or
+     Space activates, 1-9 jump straight to a choice, Escape goes back.
+     Additive by design — it dispatches .click() on the same elements a tap
+     hits, so game logic below is untouched. -->
+<style>
+.kb-focus {
+  outline: 4px solid #2D2D3A !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 8px rgba(255,230,109,.55) !important;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kb-focus { transition: outline-offset .12s ease; }
+}
+</style>
+<script>
+(function () {
+  const TARGETS = '.song-card, #tap-pad, button';
+  const BACK    = '.back-btn';
+  let idx = -1;
+
+  const live = () => {
+    const scr = document.querySelector('.screen.active')
+             || [...document.querySelectorAll('.screen')]
+                  .find(s => getComputedStyle(s).display !== 'none')
+             || document.body;
+    return [...scr.querySelectorAll(TARGETS)].filter(el =>
+      el.offsetParent !== null && !el.disabled &&
+      getComputedStyle(el).visibility !== 'hidden');
+  };
+
+  // Make click-only divs reachable, without disturbing real buttons.
+  const tag = (el) => {
+    if (!el.hasAttribute('tabindex') && !/^(BUTTON|A|INPUT)$/.test(el.tagName)) {
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+    }
+  };
+
+  // Tag eagerly, not on first keypress: a player who reaches for Tab before
+  // an arrow key must still be able to reach the controls.
+  const tagAll = () => { try { live().forEach(tag); } catch (e) {} };
+  document.addEventListener('DOMContentLoaded', tagAll);
+  new MutationObserver(tagAll).observe(document.documentElement,
+    { childList: true, subtree: true, attributes: true,
+      attributeFilter: ['class', 'style'] });
+  tagAll();
+
+  const paint = (els) => els.forEach((el, i) => {
+    tag(el);
+    el.classList.toggle('kb-focus', i === idx);
+    if (i === idx) try { el.focus({ preventScroll: true }); } catch (e) {}
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+
+    if (e.key === 'Escape') {
+      const b = document.querySelector(BACK);
+      if (b) { b.click(); e.preventDefault(); }
+      return;
+    }
+
+    const els = live();
+    if (!els.length) return;
+
+    if (e.key >= '1' && e.key <= '9') {
+      const n = +e.key - 1;
+      if (n < els.length) { idx = n; paint(els); els[n].click(); e.preventDefault(); }
+      return;
+    }
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      idx = (idx + 1) % els.length; paint(els); e.preventDefault();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      idx = (idx - 1 + els.length) % els.length; paint(els); e.preventDefault();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      // A focused <button> activates natively; don't fire it twice.
+      if (document.activeElement && document.activeElement.tagName === 'BUTTON') return;
+      if (idx >= 0 && idx < els.length) { els[idx].click(); e.preventDefault(); }
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

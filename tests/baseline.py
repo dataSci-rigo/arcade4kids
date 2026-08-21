@@ -17,7 +17,7 @@ TIER_EDU = {
     'counting_game.html', 'math_garden.html', 'math_smash.html',
     'memory_match.html', 'shape_shift.html', 'sort_game.html',
     'sound_speller.html', 'spelling_adventure.html', 'vocab_builder.html',
-    'letter_draw.html', 'pip_the_bear.html',
+    'letter_draw.html', 'pip_the_bear.html', 'sing_along.html',
 }
 
 # Admin tool: no screens, no back button, no viewport lock. Not a game.
@@ -44,7 +44,7 @@ PALETTE_EXEMPT = TIER_ARCADE | TIER_ADMIN | {'shape_shift.html', 'vocab_builder.
 # is a product decision, not a test failure.
 CELEBRATION_REQUIRED = {
     'counting_game.html', 'math_garden.html', 'memory_match.html',
-    'pip_the_bear.html', 'sort_game.html',
+    'pip_the_bear.html', 'sort_game.html', 'sing_along.html',
 }
 
 # ── Audio ────────────────────────────────────────────────────────────────────
@@ -61,6 +61,11 @@ CLIP_FAMILIES = {
                  for c in ('finn', 'lily', 'zara', 'rex')],
     # counting_game.html:588  playClip(`skip_by_${G.step}`)
     'skip_by': [f'skip_by_{n}' for n in (1, 2, 3, 4)],
+    # sing_along.html playLine: new Audio(`/audio/sing_${S.song}_${i}.mp3`)
+    'sing': [f'sing_{k}_{i}'
+             for k, n in (('flitter', 18), ('squeaky', 18), ('carlitos', 16),
+                          ('rice', 16), ('naptime', 16))
+             for i in range(n)],
 }
 
 # ── Screen / control selectors, per game ─────────────────────────────────────
@@ -107,6 +112,8 @@ GAMES = [
          keyboard=['1', '2', '3', 'Backspace'], tap='.nb'),
     Game('spelling_adventure.html', _START, '#splash', '#game',
          keyboard=['a', 'b', 'Enter'], tap='.key'),
+    Game('sing_along.html', _START, '#splash', '#game',
+         keyboard=['Space', 'Enter'], tap='#tap-pad'),
 
     # ── Educational: NO keyboard support (the gap being fixed) ──
     Game('counting_game.html', _START, '#splash', '#game',

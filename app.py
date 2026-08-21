@@ -158,6 +158,15 @@ GAMES = [
         'color':    '#8B5A2B',
         'stripe':   'linear-gradient(90deg,#2a3f5f,#5e4b8e)',
     },
+    {
+        'key':      'sing_along',
+        'title':    'SING-ALONG STUDIO',
+        'desc':     ['TAP THE BEAT · EARN STARS', '5 SONGS · KARAOKE FUN'],
+        'desktop':  'sing_along.html',
+        'mobile':   'sing_along.html',
+        'color':    '#FFD93D',
+        'stripe':   'linear-gradient(90deg,#FF6B9D,#FFD93D)',
+    },
 ]
 
 # Only files explicitly registered above can be served

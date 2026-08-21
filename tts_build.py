@@ -132,6 +132,79 @@ MS_CELEB = [
     "UNBELIEVABLE!",
 ]
 
+# ── Sing-Along Studio: one clip per lyric line (sing_{song}_{i}.mp3) ──────────
+# Lines copied verbatim from future_projects.md; order must match the SONGS
+# object in sing_along.html exactly.
+SING_SONGS = {
+    'flitter': {
+        'voice': 'en-US-JennyNeural',
+        'lines': [
+            "Flitter, little bat,", "How I wonder where you're at,",
+            "Up above the world so high,", "Like a shadow in the sky,",
+            "Flitter, little bat,", "How I wonder where you're at.",
+            "When the blazing sun is gone,", "When it nothing shines upon,",
+            "Then you show your little wings,", "Then you hunt for flying things,",
+            "Flitter, little bat,", "How I wonder where you're at.",
+            "Through the dark you swoop and dive,", "Catching insects all alive,",
+            "With your sonar calls so bright,", "You can see throughout the night,",
+            "Flitter, little bat,", "How I wonder where you're at.",
+        ],
+    },
+    'squeaky': {
+        'voice': 'en-IE-EmilyNeural',
+        'lines': [
+            "Squeaky, squeaky little bat,", "Hanging where the cave is at,",
+            "Upside down you love to sleep,", "Tucked away in slumber deep,",
+            "Squeaky, squeaky little bat,", "Hanging where the cave is at.",
+            "When the dusk begins to fall,", "You awaken, wings and all,",
+            "Out you flutter, swift and free,", "Darting past each silent tree,",
+            "Squeaky, squeaky little bat,", "Hanging where the cave is at.",
+            "Listening for echoes near,", "Sounds too high for us to hear,",
+            "Guiding you through inky black,", "Home again you'll soon swoop back,",
+            "Squeaky, squeaky little bat,", "Hanging where the cave is at.",
+        ],
+    },
+    'carlitos': {
+        'voice': 'en-US-AvaNeural',
+        'lines': [
+            "There was a little boy named Carlitos Lunagen,", "He had dimples on his chin-agen,",
+            "With his bright eyes and his big wide grin-agen,", "Poor little Carlitos Lunagen, begin again!",
+            "He loves to jump and dance and spin-agen,", "Makes his family all laugh and grin-agen,",
+            "Full of energy from within-agen,", "Poor little Carlitos Lunagen, begin again!",
+            "Building blocks up to the ceiling-agen,", "Watch them topple with a feeling-agen,",
+            "Then he starts the whole rebuilding-agen,", "Poor little Carlitos Lunagen, begin again!",
+            "Tells the funniest stories ever-agen,", "Clever little boy so clever-agen,",
+            "Making memories to treasure forever-agen,", "Poor little Carlitos Lunagen, begin again!",
+        ],
+    },
+    'rice': {
+        'voice': 'en-GB-SoniaNeural',
+        'lines': [
+            "Little grains of rice in my bowl,", "Some are white, some are gold!",
+            "Brown rice crunchy, wild rice too,", "So many kinds to crunch and chew!",
+            "Rice is nice, rice is yum!", "Put it in my hungry tum!",
+            "Little grains all in a pile,", "Eating rice makes me smile!",
+            "Brown rice healthy, wild rice fun,", "Eating grains till meal is done!",
+            "Mix with veggies, mix with cheese,", "Rice of any kind will please!",
+            "Rice is nice, rice is yum!", "Put it in my hungry tum!",
+            "Little grains all in a pile,", "Eating rice makes me smile!",
+        ],
+    },
+    'naptime': {
+        'voice': 'en-US-JennyNeural',
+        'lines': [
+            "Jump like frogs and zoom like cars,", "Now let's rest and count the stars!",
+            "Not because we're tired, no way!", "Just taking a break in our day.",
+            "Cuddle up with teddy bear,", "Dreams are waiting everywhere.",
+            "Rest your head on pillows soft,", "While your thoughts float up aloft.",
+            "Naps help us grow big and tall,", "Give us energy for it all!",
+            "It's not that we're tired, you see,", "Just charging up our energy!",
+            "When we wake we'll be so strong,", "Ready for games all day long!",
+            "Naptime hugs and naptime sighs,", "Naptime is a lovely surprise!",
+        ],
+    },
+}
+
 
 async def build(clip_id, text, voice, force=False):
     import edge_tts
@@ -172,6 +245,13 @@ async def amain(force):
     # Math Smash — celebration messages
     print("\n── Math Smash: celebration clips ──")
     tasks = [build(f"ms_celeb_{i}", txt, SHARED_VOICE, force) for i, txt in enumerate(MS_CELEB)]
+    await asyncio.gather(*tasks)
+
+    # Sing-Along Studio — one clip per lyric line
+    print("\n── Sing-Along Studio: lyric line clips ──")
+    tasks = [build(f"sing_{key}_{i}", line, cfg['voice'], force)
+             for key, cfg in SING_SONGS.items()
+             for i, line in enumerate(cfg['lines'])]
     await asyncio.gather(*tasks)
 
     print(f"\nDone. Clips in {AUDIO_DIR}")
