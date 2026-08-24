@@ -63,3 +63,34 @@ def test_hub_renders_every_registered_game(client, app_module):
 
 def test_unknown_paths_404(client):
     assert client.get('/definitely-not-a-route').status_code == 404
+
+
+# ── Guest mode (`python app.py --guest` / ARCADE_GUEST=1) ────────────────────
+
+@pytest.fixture
+def guest(client, app_module, monkeypatch):
+    monkeypatch.setattr(app_module, 'GUEST_MODE', True)
+    return client
+
+
+def test_guest_blocks_builder_and_writes(guest):
+    assert guest.get('/games/sort_set_builder.html').status_code == 403
+    assert 'CUSTOM ITEMS BUILDER' not in guest.get('/').get_data(as_text=True)
+    # Every write API refuses…
+    assert guest.post('/api/settings', json={}).status_code == 403
+    assert guest.post('/api/custom-sets', json={}).status_code == 403
+    assert guest.delete('/api/custom-sets/x').status_code == 403
+    assert guest.post('/api/item-sets', json={}).status_code == 403
+    assert guest.post('/api/spelling-sets', json={}).status_code == 403
+    assert guest.post('/api/ss-word-sets', json={}).status_code == 403
+    assert guest.post('/api/vocab/custom-sets', json={}).status_code == 403
+    assert guest.post('/api/vocab/generate-level', json={}).status_code == 403
+    # …while the reads games depend on stay open.
+    assert guest.get('/api/settings').status_code == 200
+    assert guest.get('/api/custom-sets').status_code == 200
+    assert guest.get('/api/item-sets').status_code == 200
+
+
+def test_guest_off_by_default(client, app_module):
+    assert app_module.GUEST_MODE is False
+    assert client.get('/games/sort_set_builder.html').status_code == 200

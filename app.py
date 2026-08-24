@@ -6,6 +6,7 @@ import re
 import random
 import hashlib
 import sqlite3
+import sys
 import urllib.request
 import urllib.parse
 from flask import Flask, render_template, send_from_directory, abort, request, jsonify
@@ -806,11 +807,48 @@ def _save_ss_word_sets(sets):
         json.dump(data, f, indent=2)
 
 
+# ── Guest mode ────────────────────────────────────────────────────────────────
+# `python app.py --guest` (or ARCADE_GUEST=1 for gunicorn/systemd) locks the
+# arcade to play-only: the Custom Items Builder disappears from the hub and
+# won't serve, and every API that writes stored content returns 403. Read
+# endpoints and the per-round AI gameplay calls (/api/recognize-letter,
+# /api/vocab/select-round) stay open.
+GUEST_MODE = '--guest' in sys.argv or os.environ.get('ARCADE_GUEST', '') == '1'
+
+# Non-GET requests to these prefixes mutate settings.json / custom_sets.json /
+# vocab.db (or drive builder-only external image fetches) — all blocked.
+_GUEST_WRITE_PREFIXES = (
+    '/api/settings',
+    '/api/custom-sets',
+    '/api/spelling-sets',
+    '/api/item-sets',
+    '/api/ss-word-sets',
+    '/api/images/search',
+    '/api/vocab/custom-sets',
+    '/api/vocab/base-words/save-page',
+    '/api/vocab/generate-level',
+)
+
+
+@app.before_request
+def _guest_guard():
+    if not GUEST_MODE:
+        return None
+    if request.path == '/games/sort_set_builder.html':
+        abort(403)
+    if request.method != 'GET' and request.path.startswith(_GUEST_WRITE_PREFIXES):
+        return jsonify({'error': 'Arcade is in guest mode — content editing is disabled'}), 403
+    return None
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
-    return render_template('index.html', games=GAMES)
+    games = GAMES
+    if GUEST_MODE:
+        games = [g for g in GAMES if g['key'] != 'sort_builder']
+    return render_template('index.html', games=games)
 
 
 @app.route('/games/<path:filename>')
@@ -1608,4 +1646,6 @@ def vocab_select_round():
 
 
 if __name__ == '__main__':
+    if GUEST_MODE:
+        print(' * GUEST MODE: builder hidden, content editing disabled')
     app.run(debug=True, host='0.0.0.0', port=5000)
