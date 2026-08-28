@@ -22,7 +22,7 @@ This is a children's educational arcade served by a single Flask app (`app.py`).
 | `GET /api/ss-word-sets` | Sound Speller — custom phonics word sets |
 | `GET /api/letter-words` | Letter Draw — words associated with each letter |
 | `GET /audio/<id>.mp3` | All games — pre-recorded narration clips |
-| `POST /api/recognize-letter` | Letter Draw — Claude Haiku letter recognition |
+| `POST /api/recognize-letter` | Letter Draw, Number Draw — Claude Haiku letter/digit recognition |
 
 ---
 
@@ -205,6 +205,10 @@ Custom sets are stored in `custom_sets.json`. Images are fetched from DuckDuckGo
 | `shape_shift.html` | Shape Shift | Educational |
 | `vocab_builder.html` | Vocab Builder | Educational |
 | `sound_speller.html` | Sound Speller | Educational |
+| `pip_the_bear.html` | Pip the Bear | Story |
+| `sing_along.html` | Sing-Along Studio | Educational |
+| `number_draw.html` | Number Draw | Educational |
+| `pattern_party.html` | Pattern Party | Educational |
 
 ---
 

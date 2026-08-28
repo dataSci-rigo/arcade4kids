@@ -110,13 +110,22 @@ def test_recognize_letter_requires_image(client):
     assert resp.status_code == 400
 
 
-def test_recognize_letter_requires_single_alpha_target(client):
-    """Guarding this now, because relaxing it to accept digits is a proposed
-    change (Number Draw) and the constraint should be explicit first."""
-    tiny_png = (
-        'data:image/png;base64,'
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
-    )
-    resp = client.post('/api/recognize-letter',
-                       json={'image': tiny_png, 'target': '7', 'stroke_count': 1})
-    assert resp.status_code == 400, 'digits are currently rejected by design'
+TINY_PNG = (
+    'data:image/png;base64,'
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+)
+
+
+def test_recognize_letter_accepts_single_alpha_or_digit_target(client):
+    """Number Draw relaxed the guard: single letters AND single digits pass
+    validation (both then reach the Anthropic call, which no_anthropic stubs
+    to a 500 — anything but 400 proves validation accepted the target)."""
+    for target in ('A', '7', '0'):
+        resp = client.post('/api/recognize-letter',
+                           json={'image': TINY_PNG, 'target': target, 'stroke_count': 1})
+        assert resp.status_code != 400, f'target {target!r} should pass validation'
+    # Multi-char and symbol targets are still rejected.
+    for target in ('AB', '12', '$', ''):
+        resp = client.post('/api/recognize-letter',
+                           json={'image': TINY_PNG, 'target': target, 'stroke_count': 1})
+        assert resp.status_code == 400, f'target {target!r} should be rejected'

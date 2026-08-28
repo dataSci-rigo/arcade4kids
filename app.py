@@ -168,6 +168,24 @@ GAMES = [
         'color':    '#FFD93D',
         'stripe':   'linear-gradient(90deg,#FF6B9D,#FFD93D)',
     },
+    {
+        'key':      'number_draw',
+        'title':    'NUMBER DRAW',
+        'desc':     ['WRITE THE NUMBERS 0-9', 'COUNT IT · DRAW IT · CHECK IT'],
+        'desktop':  'number_draw.html',
+        'mobile':   'number_draw.html',
+        'color':    '#2FA79E',
+        'stripe':   'linear-gradient(90deg,#4ECDC4,#C3A6FF)',
+    },
+    {
+        'key':      'pattern_party',
+        'title':    'PATTERN PARTY',
+        'desc':     ['WHAT COMES NEXT?', 'EMOJI · LETTERS · NUMBERS'],
+        'desktop':  'pattern_party.html',
+        'mobile':   'pattern_party.html',
+        'color':    '#FF8E53',
+        'stripe':   'linear-gradient(90deg,#FF8E53,#FFE66D)',
+    },
 ]
 
 # Only files explicitly registered above can be served
@@ -1260,12 +1278,14 @@ def recognize_letter():
     target = (data.get('target') or '').strip().upper()
     stroke_count = data.get('stroke_count', '?')
 
-    if not (len(target) == 1 and target.isalpha()):
-        return jsonify({'error': 'missing target letter'}), 400
+    # Letters (Letter Draw) and digits 0-9 (Number Draw) share this route.
+    if not (len(target) == 1 and (target.isalpha() or target.isdigit())):
+        return jsonify({'error': 'missing target letter or digit'}), 400
 
+    what = f"digit '{target}'" if target.isdigit() else f"uppercase letter '{target}'"
     prompt = (
         f"A young child (pre-K/kindergarten, age 3-6) is practicing writing the "
-        f"uppercase letter '{target}'. They used {stroke_count} stroke(s). "
+        f"{what}. They used {stroke_count} stroke(s). "
         f"Does this drawing show a reasonable attempt at '{target}'? "
         f"Be encouraging and lenient — wobbly or partial shapes count if the "
         f"general form is recognizable. Reply with exactly one word: YES or NO."

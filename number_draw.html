@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Number Draw</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & base ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --coral:  #FF6B9D;
+  --teal:   #4ECDC4;
+  --yellow: #FFE66D;
+  --mint:   #A8E6CF;
+  --purple: #C3A6FF;
+  --bg:     #FFF9F0;
+  --ink:    #2D2D3A;
+}
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  font-family: 'Nunito', sans-serif;
+  color: var(--ink);
+  touch-action: manipulation;
+  overflow: hidden;
+}
+
+/* ── Screen management ─────────────────────────────────────────── */
+.screen {
+  display: none;
+  position: fixed; inset: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.screen.active { display: flex; }
+
+/* ── Splash ────────────────────────────────────────────────────── */
+#splash {
+  background: linear-gradient(160deg, #4ECDC4 0%, #C3A6FF 100%);
+  gap: 24px;
+}
+.splash-title {
+  font-size: clamp(42px, 14vw, 72px);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 4px 0 rgba(0,0,0,.15);
+  letter-spacing: -1px;
+  text-align: center;
+  line-height: 1.1;
+}
+.splash-subtitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255,255,255,.85);
+  text-align: center;
+}
+.splash-digits {
+  font-size: clamp(24px, 8vw, 40px);
+  font-weight: 900;
+  color: rgba(255,255,255,.6);
+  letter-spacing: 4px;
+  text-align: center;
+}
+.btn-play {
+  background: #fff;
+  color: #2FA79E;
+  border: none;
+  border-radius: 50px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  padding: 18px 64px;
+  cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  transition: transform .1s, box-shadow .1s;
+  letter-spacing: 1px;
+}
+.btn-play:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+
+/* ── Game ──────────────────────────────────────────────────────── */
+#game {
+  background: var(--bg);
+  padding: 0;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+/* Progress bar */
+.progress-bar-wrap {
+  width: 100%;
+  background: #EEE;
+  height: 8px;
+}
+.progress-bar-fill {
+  height: 8px;
+  background: linear-gradient(90deg, var(--teal), var(--purple));
+  transition: width .4s ease;
+}
+.progress-label {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #999;
+  padding: 6px 0 2px;
+}
+
+/* Digit + quantity hint strip */
+.hint-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 10px 20px 4px;
+  width: 100%;
+}
+.digit-badge {
+  font-size: clamp(72px, 22vw, 120px);
+  font-weight: 900;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--teal), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  flex-shrink: 0;
+  user-select: none;
+}
+.count-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 46vw;
+}
+.count-objects {
+  font-size: clamp(20px, 6vw, 30px);
+  line-height: 1.25;
+  text-align: center;
+  letter-spacing: 2px;
+  min-height: 30px;
+}
+.count-objects .obj {
+  display: inline-block;
+  animation: popIn .3s ease backwards;
+}
+@keyframes popIn {
+  from { transform: scale(0); }
+  to   { transform: scale(1); }
+}
+.count-label {
+  font-size: 16px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--ink);
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+/* Writing tip strip (shows when guide is on) */
+.guide-tip {
+  width: 100%;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal);
+  min-height: 20px;
+  padding: 0 16px 2px;
+  opacity: 0;
+  transition: opacity .25s;
+  line-height: 1.3;
+}
+.guide-tip.show { opacity: 1; }
+
+/* Drawing area */
+.canvas-wrap {
+  flex: 1;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 16px 0;
+}
+#draw-canvas {
+  width: 100%;
+  flex: 1;
+  border: 3px dashed #DDD;
+  border-radius: 20px;
+  background: #fff;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+#draw-canvas.shake {
+  animation: shake .4s ease;
+}
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-8px)}
+  40%{transform:translateX(8px)}
+  60%{transform:translateX(-6px)}
+  80%{transform:translateX(6px)}
+}
+
+/* Feedback message */
+.feedback-msg {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--coral);
+  text-align: center;
+  min-height: 28px;
+  padding: 4px 0;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.feedback-msg.show { opacity: 1; }
+
+/* Success toast */
+.win-toast {
+  position: fixed; top: 40%; left: 50%;
+  transform: translateX(-50%) scale(0);
+  background: linear-gradient(135deg, var(--teal), var(--purple));
+  color: #fff; font-size: clamp(20px,5.5vw,30px); font-weight: 900;
+  padding: 10px 26px; border-radius: 50px;
+  pointer-events: none; z-index: 100;
+  animation: toastPop 0.9s ease forwards;
+}
+@keyframes toastPop {
+  0%   { transform: translateX(-50%) scale(0);    opacity: 0; }
+  30%  { transform: translateX(-50%) scale(1.15); opacity: 1; }
+  65%  { transform: translateX(-50%) scale(1);    opacity: 1; }
+  100% { transform: translateX(-50%) scale(.85) translateY(-36px); opacity: 0; }
+}
+
+/* Button row */
+.btn-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 16px 14px;
+  width: 100%;
+}
+.btn-help, .btn-clear, .btn-check {
+  border: none;
+  border-radius: 16px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  min-height: 56px;
+  cursor: pointer;
+  transition: transform .1s, box-shadow .1s, background .2s;
+  letter-spacing: .4px;
+}
+.btn-help {
+  flex: 0.75;
+  background: #EAF9F8;
+  color: var(--teal);
+  border: 2px solid var(--teal);
+  font-size: 18px;
+}
+.btn-help.on {
+  background: var(--teal);
+  color: #fff;
+}
+.btn-clear {
+  flex: 1;
+  background: #F0F0F0;
+  color: #888;
+  font-size: 19px;
+  box-shadow: 0 4px 0 #DDD;
+}
+.btn-check {
+  flex: 1.3;
+  background: linear-gradient(135deg, var(--teal), #2FA79E);
+  color: #fff;
+  font-size: 19px;
+  box-shadow: 0 4px 0 #1f8078;
+}
+.btn-check:disabled {
+  background: #DDD;
+  color: #AAA;
+  box-shadow: 0 4px 0 #CCC;
+  cursor: default;
+}
+.btn-help:active, .btn-clear:active:not(:disabled), .btn-check:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0,0,0,.1);
+}
+
+/* ── Win screen ────────────────────────────────────────────────── */
+#win {
+  background: linear-gradient(160deg, #C3A6FF 0%, #A8E6CF 100%);
+  gap: 20px;
+}
+.win-stars {
+  font-size: 56px;
+  letter-spacing: 8px;
+}
+.win-title {
+  font-size: clamp(36px, 12vw, 60px);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0,0,0,.12);
+  text-align: center;
+}
+.win-subtitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(0,0,0,.45);
+  text-align: center;
+}
+.btn-again {
+  background: #fff;
+  color: #7C5CBF;
+  border: none;
+  border-radius: 50px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  padding: 16px 52px;
+  cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,.1);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-again:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0,0,0,.1); }
+
+/* ── Particles ─────────────────────────────────────────────────── */
+.confetti {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 3px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+.star-burst {
+  position: fixed;
+  pointer-events: none;
+  font-size: 32px;
+  animation: burst .6s ease-out forwards;
+}
+@keyframes burst {
+  0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+  60%  { transform: scale(1.4) rotate(30deg); opacity: 1; }
+  100% { transform: scale(0.8) rotate(-10deg); opacity: 0; }
+}
+
+/* ── Loading overlay ───────────────────────────────────────────── */
+#loading {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(255,249,240,.9);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--teal);
+}
+#loading.show { display: flex; }
+.spinner {
+  width: 48px; height: 48px;
+  border: 5px solid #D7F3F1;
+  border-top-color: var(--teal);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <span id="loading-msg">Checking…</span>
+</div>
+
+<!-- Splash -->
+<div id="splash" class="screen active">
+  <div class="splash-digits">1 2 3 4 5</div>
+  <div class="splash-title">Number<br>Draw!</div>
+  <div class="splash-subtitle">Write the number with your finger</div>
+  <button class="btn-play" onclick="startGame()">PLAY!</button>
+</div>
+
+<!-- Game -->
+<div id="game" class="screen">
+  <div class="progress-bar-wrap">
+    <div class="progress-bar-fill" id="prog-fill" style="width:0%"></div>
+  </div>
+  <div class="progress-label" id="prog-label">Number 1 of 5</div>
+
+  <div class="hint-strip">
+    <div class="digit-badge" id="digit-badge">4</div>
+    <div class="count-hint">
+      <div class="count-objects" id="count-objects"></div>
+      <div class="count-label" id="count-label">four</div>
+    </div>
+  </div>
+
+  <div class="guide-tip" id="guide-tip"></div>
+
+  <div class="canvas-wrap">
+    <canvas id="draw-canvas"></canvas>
+    <div class="feedback-msg" id="feedback-msg">Try again! 💪</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-help" id="btn-help" onclick="toggleGuide()">💡 Guide</button>
+    <button class="btn-clear" onclick="clearCanvas()">🗑️ Clear</button>
+    <button class="btn-check" id="btn-check" onclick="checkDigit()" disabled>✅ Check</button>
+  </div>
+</div>
+
+<!-- Win -->
+<div id="win" class="screen">
+  <div class="win-stars" id="win-stars">⭐⭐⭐</div>
+  <div class="win-title">Amazing!</div>
+  <div class="win-subtitle" id="win-subtitle">You drew all 5 numbers!</div>
+  <button class="btn-again" onclick="startGame()">Play Again!</button>
+</div>
+
+<script>
+// ── State ───────────────────────────────────────────────────────────────────
+const G = {
+  digits: [],
+  idx: 0,
+  total: 0,
+  stars: 0,
+  attempts: 0,
+  inputOn: true,
+  hasInk: false,
+  guideOn: false,
+  strokes: [],
+  currentStroke: [],
+  emoji: '🍎',
+};
+
+const ENCOURAGEMENTS = [
+  'Try again! 💪',
+  'Almost there! ⭐',
+  'You got this! 🎉',
+  'So close! 🌟',
+  'Keep going! 🚀',
+  'Nice try! One more! 🎈',
+];
+let encIdx = 0;
+
+const PRAISE = ['Amazing!','Great job!','You got it!','Excellent!','Super!','Wonderful!'];
+const PRAISE_EMOJI = ['🌟','🎉','⭐','🌻','🥳'];
+
+// ── Digit writing hints ──────────────────────────────────────────────────────
+// Concise stroke-direction tips readable by a parent helping a young child
+const DIGIT_HINTS = {
+  0: 'One big oval ○  all the way around',
+  1: 'Line straight down ↓',
+  2: 'Curve around to the right ↷  then a line right along the bottom →',
+  3: 'Two bumps to the right →)  top bump, then bottom bump',
+  4: 'Line down ↓  turn right →  then a tall line down through it ↓',
+  5: 'Short line down ↓  big bump to the right )  then a hat across the top —',
+  6: 'Big curve down ↙  then close the little circle at the bottom ○',
+  7: 'Bar across the top —  then slant down-left ↙',
+  8: 'Make a snake S  then close it up — two circles stacked ○○',
+  9: 'Little circle at the top ○  then line straight down ↓',
+};
+
+const NUMBER_WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine'];
+const OBJECT_POOL = ['🍎','🌟','🎈','🐞','🌼','🚗','🐠','🍪','🦋','🍓'];
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+function showLoading(msg) {
+  $('loading-msg').textContent = msg;
+  $('loading').classList.add('show');
+}
+function hideLoading() {
+  $('loading').classList.remove('show');
+}
+
+// ── Canvas setup ─────────────────────────────────────────────────────────────
+const canvas = $('draw-canvas');
+const ctx = canvas.getContext('2d');
+let drawing = false;
+let lastX = 0, lastY = 0;
+
+function resizeCanvas() {
+  const wrap = canvas.parentElement;
+  const w = wrap.clientWidth - 32;
+  const h = wrap.clientHeight - 40;
+  if (canvas.width === w && canvas.height === h) return;
+  canvas.width = w;
+  canvas.height = h;
+  fillWhite();
+}
+
+function fillWhite() {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (G.guideOn) _drawGuideGlyph();
+}
+
+function _drawGuideGlyph() {
+  const digit = G.digits[G.idx];
+  if (digit === undefined) return;
+  const size = Math.min(canvas.width, canvas.height) * 0.82;
+  ctx.save();
+  ctx.globalAlpha = 0.09;
+  ctx.fillStyle = '#4ECDC4';
+  ctx.font = `900 ${size}px 'Nunito', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(digit), canvas.width / 2, canvas.height / 2);
+  ctx.restore();
+}
+
+function clearCanvas() {
+  G.hasInk = false;
+  G.strokes = [];
+  G.currentStroke = [];
+  $('btn-check').disabled = true;
+  hideFeedback();
+  fillWhite();
+}
+
+function toggleGuide() {
+  G.guideOn = !G.guideOn;
+  const btn = $('btn-help');
+  btn.textContent = G.guideOn ? '🙈 Hide' : '💡 Guide';
+  btn.classList.toggle('on', G.guideOn);
+
+  const tipEl = $('guide-tip');
+  const digit = G.digits[G.idx];
+  if (G.guideOn && digit !== undefined) {
+    tipEl.textContent = DIGIT_HINTS[digit] || '';
+    tipEl.classList.add('show');
+  } else {
+    tipEl.classList.remove('show');
+  }
+
+  // Redraw canvas to add/remove guide glyph (clears user strokes)
+  clearCanvas();
+}
+
+function getPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const src = e.changedTouches ? e.changedTouches[0] : e;
+  return { x: (src.clientX - r.left) * (canvas.width / r.width),
+           y: (src.clientY - r.top)  * (canvas.height / r.height) };
+}
+
+function startStroke(e) {
+  if (!G.inputOn) return;
+  e.preventDefault();
+  drawing = true;
+  G.currentStroke = [];
+  const {x, y} = getPos(e);
+  lastX = x; lastY = y;
+}
+
+function moveStroke(e) {
+  if (!drawing || !G.inputOn) return;
+  e.preventDefault();
+  const {x, y} = getPos(e);
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 22;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  G.currentStroke.push([Math.round(x), Math.round(y)]);
+  lastX = x; lastY = y;
+  if (!G.hasInk) {
+    G.hasInk = true;
+    $('btn-check').disabled = false;
+  }
+}
+
+function endStroke() {
+  if (G.currentStroke.length) G.strokes.push([...G.currentStroke]);
+  G.currentStroke = [];
+  drawing = false;
+}
+
+canvas.addEventListener('pointerdown',   startStroke, {passive: false});
+canvas.addEventListener('pointermove',   moveStroke,  {passive: false});
+canvas.addEventListener('pointerup',     endStroke,   {passive: false});
+canvas.addEventListener('pointercancel', endStroke,   {passive: false});
+
+// ── Game flow ────────────────────────────────────────────────────────────────
+function startGame() {
+  const all = [0,1,2,3,4,5,6,7,8,9];
+  G.digits = shuffle(all).slice(0, 5);
+  G.idx = 0;
+  G.total = G.digits.length;
+  G.stars = 0;
+  G.guideOn = false;
+  G.strokes = [];
+  G.currentStroke = [];
+  $('btn-help').textContent = '💡 Guide';
+  $('btn-help').classList.remove('on');
+  $('guide-tip').classList.remove('show');
+  showScreen('game');
+  startRound();
+}
+
+function startRound() {
+  G.attempts = 0;
+  G.hasInk = false;
+  G.inputOn = true;
+  hideFeedback();
+
+  const digit = G.digits[G.idx];
+  G.emoji = OBJECT_POOL[Math.floor(Math.random() * OBJECT_POOL.length)];
+
+  $('prog-fill').style.width = (G.idx / G.total * 100) + '%';
+  $('prog-label').textContent = `Number ${G.idx + 1} of ${G.total}`;
+  $('digit-badge').textContent = digit;
+
+  // Quantity hint: N objects for digit N — the symbol ↔ quantity link
+  const objs = $('count-objects');
+  if (digit === 0) {
+    objs.innerHTML = '<span class="obj">🧺</span>';
+    $('count-label').textContent = 'zero — the basket is empty!';
+  } else {
+    objs.innerHTML = Array.from({length: digit}, (_, i) =>
+      `<span class="obj" style="animation-delay:${i * 90}ms">${G.emoji}</span>`
+    ).join('');
+    $('count-label').textContent = `${NUMBER_WORDS[digit]} ${digit === 1 ? 'thing' : 'things'}`;
+  }
+
+  // Update guide tip text for the new digit
+  if (G.guideOn) {
+    const tipEl = $('guide-tip');
+    tipEl.textContent = DIGIT_HINTS[digit] || '';
+    tipEl.classList.add('show');
+  }
+
+  resizeCanvas();
+  clearCanvas();
+}
+
+async function checkDigit() {
+  if (!G.inputOn || !G.hasInk) return;
+  G.inputOn = false;
+  $('btn-check').disabled = true;
+  showLoading('Checking…');
+
+  const b64 = canvas.toDataURL('image/png');
+  const target = String(G.digits[G.idx]);
+  let result;
+  try {
+    const res = await fetch('/api/recognize-letter', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        image: b64,
+        target,
+        stroke_count: G.strokes.length,
+      }),
+    });
+    result = await res.json();
+  } catch {
+    hideLoading();
+    G.inputOn = true;
+    $('btn-check').disabled = false;
+    return;
+  }
+  hideLoading();
+
+  const accepted = result.accepted === true;
+
+  if (accepted) {
+    const firstTry = G.attempts === 0;
+    G.stars += firstTry ? 3 : 1;
+    showToast();
+    if (firstTry) spawnConfetti(); else smallStars();
+    playCorrect();
+    setTimeout(() => nextRound(), firstTry ? 2000 : 1400);
+  } else {
+    G.attempts++;
+    playWrong();
+    showFeedback(ENCOURAGEMENTS[encIdx % ENCOURAGEMENTS.length]);
+    encIdx++;
+    canvas.classList.add('shake');
+    setTimeout(() => canvas.classList.remove('shake'), 450);
+    G.inputOn = true;
+    $('btn-check').disabled = false;
+  }
+}
+
+function nextRound() {
+  G.idx++;
+  if (G.idx >= G.total) {
+    showWin();
+  } else {
+    startRound();
+  }
+}
+
+function showWin() {
+  const starCount = Math.min(3, Math.round(G.stars / G.total));
+  $('win-stars').textContent = '⭐'.repeat(Math.max(1, starCount));
+  $('win-subtitle').textContent = `You drew all ${G.total} numbers!`;
+  showScreen('win');
+  playCelebrate();
+  spawnConfetti();
+}
+
+// ── Feedback ─────────────────────────────────────────────────────────────────
+function showFeedback(msg) {
+  const el = $('feedback-msg');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function hideFeedback() {
+  $('feedback-msg').classList.remove('show');
+}
+
+function showToast() {
+  const el = document.createElement('div');
+  el.className = 'win-toast';
+  el.textContent =
+    PRAISE_EMOJI[Math.floor(Math.random() * PRAISE_EMOJI.length)] + ' ' +
+    PRAISE[Math.floor(Math.random() * PRAISE.length)];
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 950);
+}
+
+// ── Celebrations ──────────────────────────────────────────────────────────────
+const COLORS = ['#FF6B9D','#4ECDC4','#FFE66D','#A8E6CF','#C3A6FF','#FF8E53','#7FDBFF'];
+
+function spawnConfetti() {
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      const size = 6 + Math.random() * 10;
+      el.style.cssText = `
+        left: ${Math.random() * 100}vw;
+        top: -20px;
+        width: ${size}px; height: ${size * (1 + Math.random())}px;
+        background: ${COLORS[Math.floor(Math.random() * COLORS.length)]};
+        animation-duration: ${1.2 + Math.random() * 1.2}s;
+      `;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2600);
+    }, i * 18);
+  }
+}
+
+function smallStars() {
+  const emojis = ['⭐','🌟','✨'];
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 3;
+  for (let i = 0; i < 8; i++) {
+    const el = document.createElement('div');
+    el.className = 'star-burst';
+    el.textContent = emojis[i % emojis.length];
+    const angle = (i / 8) * Math.PI * 2;
+    const r = 60 + Math.random() * 40;
+    el.style.cssText = `left:${cx + Math.cos(angle)*r}px;top:${cy + Math.sin(angle)*r}px;transform-origin:center`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 700);
+  }
+}
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, type, dur, vol = 0.18, endFreq = null) {
+  try {
+    const ac = getAudio();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ac.currentTime);
+    if (endFreq) osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + dur);
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch {}
+}
+function playCorrect() {
+  [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.18, 0.22), i * 90));
+}
+function playWrong() { playTone(200, 'square', 0.15, 0.15); }
+function playCelebrate() {
+  [523, 587, 659, 698, 784, 880, 988, 1046].forEach((f, i) =>
+    setTimeout(() => playTone(f, 'sine', 0.22, 0.25), i * 80));
+}
+
+// ── Gameplay keyboard: Enter checks, Backspace/C clears, G toggles guide ─────
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!$('game').classList.contains('active')) return;
+  if (e.key === 'Enter') {
+    if (G.hasInk && G.inputOn) { checkDigit(); e.preventDefault(); e.stopImmediatePropagation(); }
+  } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'c' || e.key === 'C') {
+    clearCanvas();
+    e.preventDefault();
+  } else if (e.key === 'g' || e.key === 'G') {
+    toggleGuide();
+    e.preventDefault();
+  }
+});
+
+// ── Utility ──────────────────────────────────────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+window.addEventListener('resize', () => {
+  if ($('game').classList.contains('active')) resizeCanvas();
+});
+</script>
+
+<!-- arcade-keyboard-layer: keyboard parity for mouse/touch controls.
+     Arrows move a visible highlight across the on-screen choices, Enter or
+     Space activates, 1-9 jump straight to a choice, Escape goes back.
+     Additive by design — it dispatches .click() on the same elements a tap
+     hits, so game logic below is untouched. -->
+<style>
+.kb-focus {
+  outline: 4px solid #2D2D3A !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 8px rgba(255,230,109,.55) !important;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kb-focus { transition: outline-offset .12s ease; }
+}
+</style>
+<script>
+(function () {
+  const TARGETS = 'button';
+  const BACK    = '.back-btn';
+  let idx = -1;
+
+  const live = () => {
+    const scr = document.querySelector('.screen.active')
+             || [...document.querySelectorAll('.screen')]
+                  .find(s => getComputedStyle(s).display !== 'none')
+             || document.body;
+    return [...scr.querySelectorAll(TARGETS)].filter(el =>
+      el.offsetParent !== null && !el.disabled &&
+      getComputedStyle(el).visibility !== 'hidden');
+  };
+
+  // Make click-only divs reachable, without disturbing real buttons.
+  const tag = (el) => {
+    if (!el.hasAttribute('tabindex') && !/^(BUTTON|A|INPUT)$/.test(el.tagName)) {
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+    }
+  };
+
+  // Tag eagerly, not on first keypress: a player who reaches for Tab before
+  // an arrow key must still be able to reach the controls.
+  const tagAll = () => { try { live().forEach(tag); } catch (e) {} };
+  document.addEventListener('DOMContentLoaded', tagAll);
+  new MutationObserver(tagAll).observe(document.documentElement,
+    { childList: true, subtree: true, attributes: true,
+      attributeFilter: ['class', 'style'] });
+  tagAll();
+
+  const paint = (els) => els.forEach((el, i) => {
+    tag(el);
+    el.classList.toggle('kb-focus', i === idx);
+    if (i === idx) try { el.focus({ preventScroll: true }); } catch (e) {}
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+
+    if (e.key === 'Escape') {
+      const b = document.querySelector(BACK);
+      if (b) { b.click(); e.preventDefault(); }
+      return;
+    }
+
+    const els = live();
+    if (!els.length) return;
+
+    if (e.key >= '1' && e.key <= '9') {
+      const n = +e.key - 1;
+      if (n < els.length) { idx = n; paint(els); els[n].click(); e.preventDefault(); }
+      return;
+    }
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      idx = (idx + 1) % els.length; paint(els); e.preventDefault();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      idx = (idx - 1 + els.length) % els.length; paint(els); e.preventDefault();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      // A focused <button> activates natively; don't fire it twice.
+      if (document.activeElement && document.activeElement.tagName === 'BUTTON') return;
+      if (idx >= 0 && idx < els.length) { els[idx].click(); e.preventDefault(); }
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

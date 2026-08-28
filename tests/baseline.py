@@ -18,6 +18,7 @@ TIER_EDU = {
     'memory_match.html', 'shape_shift.html', 'sort_game.html',
     'sound_speller.html', 'spelling_adventure.html', 'vocab_builder.html',
     'letter_draw.html', 'pip_the_bear.html', 'sing_along.html',
+    'number_draw.html', 'pattern_party.html',
 }
 
 # Admin tool: no screens, no back button, no viewport lock. Not a game.
@@ -45,6 +46,7 @@ PALETTE_EXEMPT = TIER_ARCADE | TIER_ADMIN | {'shape_shift.html', 'vocab_builder.
 CELEBRATION_REQUIRED = {
     'counting_game.html', 'math_garden.html', 'memory_match.html',
     'pip_the_bear.html', 'sort_game.html', 'sing_along.html',
+    'number_draw.html', 'pattern_party.html',
 }
 
 # ── Audio ────────────────────────────────────────────────────────────────────
@@ -114,6 +116,12 @@ GAMES = [
          keyboard=['a', 'b', 'Enter'], tap='.key'),
     Game('sing_along.html', _START, '#splash', '#game',
          keyboard=['Space', 'Enter'], tap='#tap-pad'),
+    # Enter checks, Backspace/C clears, G toggles guide; canvas is pointer-only
+    Game('number_draw.html', _START, '#splash', '#game',
+         keyboard=['g', 'Backspace']),
+    # startGame() opens the level menu; letters/numbers tiers take typed input
+    Game('pattern_party.html', _START, '#splash', '#menu',
+         keyboard=['ArrowRight', 'Enter'], tap='.tier-level'),
 
     # ── Educational: NO keyboard support (the gap being fixed) ──
     Game('counting_game.html', _START, '#splash', '#game',
